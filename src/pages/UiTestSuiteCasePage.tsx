@@ -1,0 +1,2116 @@
+import { ArrowLeftOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Switch, Tag, Tooltip, Typography, message } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import {
+  api,
+  type CreateUiTestCasePayload,
+  type UiTestCase,
+  type UiTestCaseRun,
+  type UiTestCaseRunStepResult,
+  type UiTestSuiteRunItem,
+  type UiTestSuiteRunReport,
+  type UiTestSuiteRunSummary,
+} from '../services/api'
+import {
+  formatTime,
+  getErrorMessage,
+  normalizeUiTestCaseId,
+  pickCreatedAt,
+} from '../utils/format'
+import { buildUiTestCaseUpdatePayload } from '../utils/updatePayload'
+
+const { Text, Title } = Typography
+const DRAFT_CASE_ID = '__draft_ui_test_case__'
+const EMPTY_UI_TEST_CASES: UiTestCase[] = []
+
+const uiTestKeywordOptions = [
+  { label: 'open · 打开页面', value: 'open' },
+  { label: 'reload · 刷新页面', value: 'reload' },
+  { label: 'click · 点击元素', value: 'click' },
+  { label: 'dblclick · 双击元素', value: 'dblclick' },
+  { label: 'input · 输入内容', value: 'input' },
+  { label: 'clear · 清空输入框', value: 'clear' },
+  { label: 'press · 键盘输入', value: 'press' },
+  { label: 'wait_visible · 等待元素可见', value: 'wait_visible' },
+  { label: 'wait_hidden · 等待元素隐藏', value: 'wait_hidden' },
+  { label: 'wait_text · 等待文本出现', value: 'wait_text' },
+  { label: 'assert_text · 断言元素文本', value: 'assert_text' },
+  { label: 'assert_visible · 断言元素可见', value: 'assert_visible' },
+  { label: 'assert_url · 断言当前 URL', value: 'assert_url' },
+  { label: 'screenshot · 截图', value: 'screenshot' },
+  { label: 'sleep · 固定等待', value: 'sleep' },
+]
+
+const uiTestLocatorTypeOptions = [
+  { label: 'css', value: 'css' },
+  { label: 'xpath', value: 'xpath' },
+  { label: 'text', value: 'text' },
+  { label: 'placeholder', value: 'placeholder' },
+  { label: 'label', value: 'label' },
+  { label: 'test_id', value: 'test_id' },
+  { label: 'testid', value: 'testid' },
+  { label: 'role', value: 'role' },
+]
+
+const uiTestComparatorOptions = [
+  { label: 'contains', value: 'contains' },
+  { label: 'eq', value: 'eq' },
+]
+
+const uiStepOperationKeywords = new Set(['open', 'input', 'press', 'wait_text', 'screenshot', 'sleep'])
+const uiStepExpectKeywords = new Set(['wait_text', 'assert_text', 'assert_url'])
+
+const uiStepLocatorRequiredKeywords = new Set([
+  'click',
+  'dblclick',
+  'input',
+  'clear',
+  'wait_visible',
+  'wait_hidden',
+  'wait_text',
+  'assert_text',
+  'assert_visible',
+])
+
+const uiStepComparatorKeywords = new Set(['assert_text', 'assert_url'])
+
+type UiStepFieldMeta = {
+  locatorHint?: string
+  operationLabel?: string
+  operationPlaceholder?: string
+  operationHint?: string
+  expectLabel?: string
+  expectPlaceholder?: string
+  expectHint?: string
+}
+
+const uiStepFieldMetaMap: Record<string, UiStepFieldMeta> = {
+  open: {
+    operationLabel: '页面 URL',
+    operationPlaceholder: '例如：https://test.example.com/login',
+    operationHint: 'open 步骤必须填写完整 URL。',
+  },
+  input: {
+    locatorHint: 'input 一般需要先定位到输入框。',
+    operationLabel: '输入值',
+    operationPlaceholder: '例如：tester',
+    operationHint: 'input 使用操作值作为输入内容。',
+  },
+  press: {
+    operationLabel: '按键名',
+    operationPlaceholder: '例如：Enter',
+    operationHint: 'press 使用操作值传按键名。',
+  },
+  wait_text: {
+    locatorHint: 'wait_text 一般需要先定位到目标元素。',
+    operationLabel: '回退文本',
+    operationPlaceholder: '例如：登录成功',
+    operationHint: '优先使用期望值；如果期望值为空，会回退到操作值。',
+    expectLabel: '期望文本',
+    expectPlaceholder: '例如：登录成功',
+    expectHint: 'wait_text 会优先读取期望值。',
+  },
+  assert_text: {
+    locatorHint: 'assert_text 需要定位到目标元素。',
+    expectLabel: '期望文本',
+    expectPlaceholder: '例如：登录成功',
+    expectHint: 'assert_text 使用期望值作为断言内容。',
+  },
+  assert_url: {
+    expectLabel: '期望 URL',
+    expectPlaceholder: '例如：https://test.example.com/dashboard',
+    expectHint: 'assert_url 使用期望值作为断言内容。',
+  },
+  screenshot: {
+    operationLabel: '文件名',
+    operationPlaceholder: '例如：login-page.png',
+    operationHint: '可选；不填时后端会自动生成截图文件名。',
+  },
+  sleep: {
+    operationLabel: '等待时长(ms)',
+    operationPlaceholder: '例如：1000',
+    operationHint: 'sleep 使用操作值传毫秒数。',
+  },
+}
+
+type UiTestStepFormValue = {
+  orderNo?: number
+  stepName?: string
+  keyword?: string
+  locatorType?: string
+  locatorValue?: string
+  operationValue?: string
+  expectValue?: string
+  comparator?: string
+  timeoutMs?: number
+  continueOnFailure?: boolean
+  enabled?: boolean
+  description?: string
+}
+
+type UiTestCaseFormValues = {
+  name: string
+  description?: string
+  enabled?: boolean
+  steps?: UiTestStepFormValue[]
+}
+
+type UiTestRunView = 'steps' | 'snapshot'
+type UiSuiteRunReportView = 'items' | 'snapshot'
+
+const uiTestRunViewOptions: Array<{ label: string; value: UiTestRunView }> = [
+  { label: '步骤结果', value: 'steps' },
+  { label: '运行快照', value: 'snapshot' },
+]
+
+const uiSuiteRunReportViewOptions: Array<{ label: string; value: UiSuiteRunReportView }> = [
+  { label: '用例明细', value: 'items' },
+  { label: '运行快照', value: 'snapshot' },
+]
+
+function createDefaultUiTestCaseFormValues(): UiTestCaseFormValues {
+  return {
+    name: '',
+    description: '',
+    enabled: true,
+    steps: [],
+  }
+}
+
+function getUiStepFieldMeta(keyword?: string) {
+  return (keyword ? uiStepFieldMetaMap[keyword] : undefined) ?? {}
+}
+
+function requiresUiStepLocator(keyword?: string) {
+  return Boolean(keyword && uiStepLocatorRequiredKeywords.has(keyword))
+}
+
+function usesUiStepComparator(keyword?: string) {
+  return Boolean(keyword && uiStepComparatorKeywords.has(keyword))
+}
+
+function usesUiStepOperation(keyword?: string) {
+  return Boolean(keyword && uiStepOperationKeywords.has(keyword))
+}
+
+function usesUiStepExpect(keyword?: string) {
+  return Boolean(keyword && uiStepExpectKeywords.has(keyword))
+}
+
+function normalizeStepValue(step: Partial<UiTestStepFormValue>, index: number): UiTestStepFormValue {
+  const orderNo = typeof step.orderNo === 'number' && Number.isFinite(step.orderNo) ? step.orderNo : index + 1
+
+  return {
+    orderNo,
+    stepName: step.stepName ?? '',
+    keyword: step.keyword ?? '',
+    locatorType: step.locatorType ?? '',
+    locatorValue: step.locatorValue ?? '',
+    operationValue: step.operationValue ?? '',
+    expectValue: step.expectValue ?? '',
+    comparator: step.comparator ?? '',
+    timeoutMs: typeof step.timeoutMs === 'number' && Number.isFinite(step.timeoutMs) ? step.timeoutMs : undefined,
+    continueOnFailure: Boolean(step.continueOnFailure),
+    enabled: step.enabled ?? true,
+    description: step.description ?? '',
+  }
+}
+
+function parseStepsJson(value?: string) {
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((item, index) => normalizeStepValue((item ?? {}) as Partial<UiTestStepFormValue>, index))
+      .sort((left, right) => (left.orderNo ?? Number.MAX_SAFE_INTEGER) - (right.orderNo ?? Number.MAX_SAFE_INTEGER))
+  } catch {
+    return []
+  }
+}
+
+function hasMeaningfulStepContent(step: UiTestStepFormValue) {
+  return Boolean(
+    step.stepName?.trim() ||
+      step.keyword?.trim() ||
+      step.locatorType?.trim() ||
+      step.locatorValue?.trim() ||
+      step.operationValue?.trim() ||
+      step.expectValue?.trim() ||
+      step.comparator?.trim() ||
+      step.description?.trim() ||
+      step.timeoutMs,
+  )
+}
+
+function serializeSteps(steps?: UiTestStepFormValue[]) {
+  const normalizedSteps = (steps ?? [])
+    .map((step, index) => normalizeStepValue(step ?? {}, index))
+    .filter(hasMeaningfulStepContent)
+    .map((step, index) => ({
+      orderNo: index + 1,
+      ...(step.stepName?.trim() ? { stepName: step.stepName.trim() } : {}),
+      ...(step.keyword?.trim() ? { keyword: step.keyword.trim() } : {}),
+      ...(step.locatorType?.trim() ? { locatorType: step.locatorType.trim() } : {}),
+      ...(step.locatorValue?.trim() ? { locatorValue: step.locatorValue.trim() } : {}),
+      ...(step.operationValue?.trim() ? { operationValue: step.operationValue.trim() } : {}),
+      ...(step.expectValue?.trim() ? { expectValue: step.expectValue.trim() } : {}),
+      ...(usesUiStepComparator(step.keyword?.trim()) && step.comparator?.trim() ? { comparator: step.comparator.trim() } : {}),
+      ...(typeof step.timeoutMs === 'number' && Number.isFinite(step.timeoutMs) ? { timeoutMs: step.timeoutMs } : {}),
+      continueOnFailure: Boolean(step.continueOnFailure),
+      enabled: step.enabled ?? true,
+      ...(step.description?.trim() ? { description: step.description.trim() } : {}),
+    }))
+
+  return JSON.stringify(normalizedSteps)
+}
+
+function serializeUiTestCaseValues(values: UiTestCaseFormValues): CreateUiTestCasePayload {
+  return {
+    name: values.name,
+    description: values.description,
+    enabled: values.enabled,
+    stepsJson: serializeSteps(values.steps),
+  }
+}
+
+function buildUiTestCaseFormValues(uiTestCase: UiTestCase): UiTestCaseFormValues {
+  return {
+    ...createDefaultUiTestCaseFormValues(),
+    name: uiTestCase.name ?? '',
+    description: uiTestCase.description ?? '',
+    enabled: uiTestCase.enabled ?? true,
+    steps: parseStepsJson(uiTestCase.stepsJson),
+  }
+}
+
+function getUiTestCaseOrderNo(uiTestCase: UiTestCase) {
+  return uiTestCase.orderNo ?? Number.MAX_SAFE_INTEGER
+}
+
+function getUiTestCaseCreatedTime(uiTestCase: UiTestCase) {
+  const createdAt = pickCreatedAt(uiTestCase)
+  const timestamp = createdAt ? new Date(createdAt).getTime() : 0
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+function sortUiTestCases(uiTestCases: UiTestCase[]) {
+  return [...uiTestCases].sort(
+    (left, right) =>
+      getUiTestCaseOrderNo(left) - getUiTestCaseOrderNo(right) ||
+      getUiTestCaseCreatedTime(left) - getUiTestCaseCreatedTime(right) ||
+      normalizeUiTestCaseId(left).localeCompare(normalizeUiTestCaseId(right)),
+  )
+}
+
+function getUiTestCaseStepCount(uiTestCase: UiTestCase) {
+  return parseStepsJson(uiTestCase.stepsJson).length
+}
+
+function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const next = [...items]
+  const [item] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, item)
+  return next
+}
+
+function moveExpandedStepIndex(index: number, fromIndex: number, toIndex: number) {
+  if (index === fromIndex) return toIndex
+
+  if (fromIndex < toIndex && index > fromIndex && index <= toIndex) {
+    return index - 1
+  }
+
+  if (fromIndex > toIndex && index >= toIndex && index < fromIndex) {
+    return index + 1
+  }
+
+  return index
+}
+
+function parseMaybeJsonValue(value: unknown) {
+  if (typeof value !== 'string') return value
+  if (!value.trim()) return ''
+
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
+function prettyPrintValue(value: unknown) {
+  const normalized = parseMaybeJsonValue(value)
+
+  if (normalized === '' || normalized === undefined || normalized === null) {
+    return ''
+  }
+
+  if (typeof normalized === 'string') {
+    return normalized
+  }
+
+  try {
+    return JSON.stringify(normalized, null, 2)
+  } catch {
+    return String(normalized)
+  }
+}
+
+function formatOptionalValue(value: unknown) {
+  if (value === undefined || value === null || value === '') return '-'
+  return String(value)
+}
+
+function formatViewportText(width?: number, height?: number) {
+  if (!width || !height) return '-'
+  return `${width} x ${height}`
+}
+
+function formatOptionalMs(value?: number | null) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value} ms` : '-'
+}
+
+function buildUiSuiteDebugRunPayload(uiTestSuite?: {
+  headless?: boolean
+  slowMoMs?: number
+  viewportWidth?: number
+  viewportHeight?: number
+  defaultStepTimeoutMs?: number
+} | null) {
+  const payload: {
+    headless?: boolean
+    slowMoMs?: number
+    viewportWidth?: number
+    viewportHeight?: number
+    defaultStepTimeoutMs?: number
+  } = {}
+
+  if (uiTestSuite?.headless !== undefined) payload.headless = uiTestSuite.headless
+  if (uiTestSuite?.slowMoMs !== undefined) payload.slowMoMs = uiTestSuite.slowMoMs
+  if (uiTestSuite?.viewportWidth !== undefined) payload.viewportWidth = uiTestSuite.viewportWidth
+  if (uiTestSuite?.viewportHeight !== undefined) payload.viewportHeight = uiTestSuite.viewportHeight
+  if (uiTestSuite?.defaultStepTimeoutMs !== undefined) payload.defaultStepTimeoutMs = uiTestSuite.defaultStepTimeoutMs
+
+  return payload
+}
+
+function getExecutionStatusMeta(status?: string) {
+  switch (status) {
+    case 'pending':
+      return { color: 'default' as const, label: '等待中' }
+    case 'claimed':
+      return { color: 'processing' as const, label: '准备中' }
+    case 'running':
+      return { color: 'processing' as const, label: '运行中' }
+    case 'success':
+      return { color: 'success' as const, label: '成功' }
+    case 'failed':
+      return { color: 'error' as const, label: '失败' }
+    case 'error':
+      return { color: 'volcano' as const, label: '异常' }
+    case 'canceled':
+      return { color: 'default' as const, label: '已取消' }
+    case 'skipped':
+      return { color: 'default' as const, label: '跳过' }
+    default:
+      return { color: 'default' as const, label: status || '-' }
+  }
+}
+
+function isUiRunPollingStatus(status?: string) {
+  return status === 'pending' || status === 'claimed' || status === 'running'
+}
+
+function getUiTestCaseRunId(run?: UiTestCaseRun | null) {
+  return run?.runId ?? run?.uiTestCaseRunId ?? ''
+}
+
+function getUiTestSuiteRunId(run?: UiTestSuiteRunSummary | UiTestSuiteRunReport | null) {
+  return run?.suiteRunId ?? ''
+}
+
+function getUiTestSuiteRunItemKey(item: UiTestSuiteRunItem, index: number) {
+  return item.itemId ?? item.caseId ?? `ui-suite-run-item-${index}`
+}
+
+export function UiTestSuiteCasePage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { suiteId = '' } = useParams<{ suiteId: string }>()
+  const [selectedCaseId, setSelectedCaseId] = useState('')
+  const [caseSearch, setCaseSearch] = useState('')
+  const [draftCaseValues, setDraftCaseValues] = useState<UiTestCaseFormValues | null>(null)
+  const [editingCase, setEditingCase] = useState<UiTestCase | null>(null)
+  const [caseOrderIds, setCaseOrderIds] = useState<string[]>([])
+  const [draggingCaseId, setDraggingCaseId] = useState<string | null>(null)
+  const [expandedStepIndexes, setExpandedStepIndexes] = useState<number[]>([])
+  const [draggingStepIndex, setDraggingStepIndex] = useState<number | null>(null)
+  const [selectedRunId, setSelectedRunId] = useState('')
+  const [uiRunView, setUiRunView] = useState<UiTestRunView>('steps')
+  const [suiteRunHistoryOpen, setSuiteRunHistoryOpen] = useState(false)
+  const [suiteRunReportOpen, setSuiteRunReportOpen] = useState(false)
+  const [selectedSuiteRunId, setSelectedSuiteRunId] = useState('')
+  const [activePollingSuiteRunId, setActivePollingSuiteRunId] = useState('')
+  const [loadingSuiteRunHistoryId, setLoadingSuiteRunHistoryId] = useState('')
+  const [refreshingSuiteRunReport, setRefreshingSuiteRunReport] = useState(false)
+  const [suiteRunReportView, setSuiteRunReportView] = useState<UiSuiteRunReportView>('items')
+  const [expandedSuiteRunItemIds, setExpandedSuiteRunItemIds] = useState<string[]>([])
+  const [caseForm] = Form.useForm<UiTestCaseFormValues>()
+  const caseOrderRollbackRef = useRef<string[]>([])
+
+  const suiteQuery = useQuery({
+    queryKey: ['uiTestSuite', suiteId],
+    queryFn: () => api.getUiTestSuite(suiteId),
+    enabled: Boolean(suiteId),
+  })
+
+  const requirementId = suiteQuery.data?.requirementId ?? suiteQuery.data?.requirement_id ?? ''
+
+  const requirementQuery = useQuery({
+    queryKey: ['requirement', requirementId],
+    queryFn: () => api.getRequirement(requirementId),
+    enabled: Boolean(requirementId),
+  })
+
+  const sprintId = requirementQuery.data?.sprintId ?? requirementQuery.data?.sprint_id ?? ''
+
+  const sprintQuery = useQuery({
+    queryKey: ['sprint', sprintId],
+    queryFn: () => api.getSprint(sprintId),
+    enabled: Boolean(sprintId),
+  })
+
+  const casesQuery = useQuery({
+    queryKey: ['uiTestCases', suiteId],
+    queryFn: () => api.getUiTestCases(suiteId),
+    enabled: Boolean(suiteId),
+  })
+
+  const uiTestCases = casesQuery.data ?? EMPTY_UI_TEST_CASES
+  const activeCaseId = selectedCaseId && selectedCaseId !== DRAFT_CASE_ID ? selectedCaseId : ''
+  const selectedCaseDetailQuery = useQuery({
+    queryKey: ['uiTestCase', activeCaseId],
+    queryFn: () => api.getUiTestCase(activeCaseId),
+    enabled: Boolean(activeCaseId),
+    refetchOnWindowFocus: false,
+  })
+  const uiTestCaseRunQuery = useQuery({
+    queryKey: ['uiTestCaseRun', selectedRunId],
+    queryFn: () => api.getUiTestCaseRun(selectedRunId),
+    enabled: Boolean(selectedRunId),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as UiTestCaseRun | undefined
+      return isUiRunPollingStatus(data?.status) || (!data && Boolean(selectedRunId)) ? 2000 : false
+    },
+  })
+  const suiteRunHistoryQuery = useQuery({
+    queryKey: ['uiTestSuiteRuns', suiteId],
+    queryFn: () => api.getUiTestSuiteRuns(suiteId),
+    enabled: suiteRunHistoryOpen && Boolean(suiteId),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as UiTestSuiteRunSummary[] | undefined
+      return suiteRunHistoryOpen && (data ?? []).some((item) => isUiRunPollingStatus(item.status)) ? 3000 : false
+    },
+  })
+  const activeSuiteRunQuery = useQuery({
+    queryKey: ['uiTestSuiteRun', activePollingSuiteRunId],
+    queryFn: () => api.getUiTestSuiteRun(activePollingSuiteRunId),
+    enabled: Boolean(activePollingSuiteRunId),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as UiTestSuiteRunSummary | undefined
+      return isUiRunPollingStatus(data?.status) || (!data && Boolean(activePollingSuiteRunId)) ? 3000 : false
+    },
+  })
+  const suiteRunReportQuery = useQuery({
+    queryKey: ['uiTestSuiteRunReport', selectedSuiteRunId],
+    queryFn: () => api.getUiTestSuiteRunReport(selectedSuiteRunId),
+    enabled: suiteRunReportOpen && Boolean(selectedSuiteRunId),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as UiTestSuiteRunReport | undefined
+      return suiteRunReportOpen && (isUiRunPollingStatus(data?.status) || (!data && Boolean(selectedSuiteRunId))) ? 3000 : false
+    },
+  })
+
+  const isCreatingCase = selectedCaseId === DRAFT_CASE_ID
+  const watchedSteps = Form.useWatch('steps', { form: caseForm, preserve: true }) ?? []
+
+  function getCompleteCaseFormValues() {
+    const allValues = caseForm.getFieldsValue(true) as Partial<UiTestCaseFormValues>
+    return {
+      ...createDefaultUiTestCaseFormValues(),
+      ...allValues,
+      steps: allValues.steps ?? [],
+    } satisfies UiTestCaseFormValues
+  }
+
+  function syncCaseDetailState(nextCase: UiTestCase) {
+    const caseId = normalizeUiTestCaseId(nextCase)
+    if (!caseId) return
+
+    setEditingCase(nextCase)
+    setSelectedCaseId(caseId)
+    caseForm.setFieldsValue(buildUiTestCaseFormValues(nextCase))
+    queryClient.setQueryData(['uiTestCase', caseId], nextCase)
+  }
+
+  function toggleStepPanel(index: number) {
+    setExpandedStepIndexes((current) => (current.includes(index) ? current.filter((item) => item !== index) : [...current, index]))
+  }
+
+  function addStep(add: (defaultValue?: UiTestStepFormValue, insertIndex?: number) => void, stepCount: number) {
+    add(
+      {
+        enabled: true,
+        continueOnFailure: false,
+      },
+      stepCount,
+    )
+    setExpandedStepIndexes((current) => [...current, stepCount])
+  }
+
+  function removeStep(remove: (index: number | number[]) => void, index: number) {
+    remove(index)
+    setExpandedStepIndexes((current) =>
+      current
+        .filter((item) => item !== index)
+        .map((item) => (item > index ? item - 1 : item)),
+    )
+  }
+
+  function moveStep(move: (from: number, to: number) => void, fromIndex: number, toIndex: number) {
+    move(fromIndex, toIndex)
+    setExpandedStepIndexes((current) => current.map((item) => moveExpandedStepIndex(item, fromIndex, toIndex)))
+  }
+
+  function handleStepDragStart(event: DragEvent<HTMLDivElement>, index: number) {
+    setDraggingStepIndex(index)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+
+  function handleStepDrop(move: (from: number, to: number) => void, targetIndex: number) {
+    if (draggingStepIndex === null || draggingStepIndex === targetIndex) return
+
+    moveStep(move, draggingStepIndex, targetIndex)
+    setDraggingStepIndex(null)
+  }
+
+  const createCaseMutation = useMutation({
+    mutationFn: (values: UiTestCaseFormValues) =>
+      api.createUiTestCase(suiteId, (() => {
+        const currentOrderIds = (caseOrderIds.length > 0 ? caseOrderIds : sortUiTestCases(uiTestCases).map((item) => normalizeUiTestCaseId(item))).filter(Boolean)
+        return {
+          ...serializeUiTestCaseValues(values),
+          orderNo: currentOrderIds.length + 1,
+        }
+      })()),
+    onSuccess: (createdCase) => {
+      const createdCaseId = normalizeUiTestCaseId(createdCase)
+      const currentOrderIds = (caseOrderIds.length > 0 ? caseOrderIds : sortUiTestCases(uiTestCases).map((item) => normalizeUiTestCaseId(item))).filter(Boolean)
+      const nextOrderIds = [...currentOrderIds.filter((id) => id !== createdCaseId), createdCaseId]
+      message.success('UI测试用例已创建')
+      setDraftCaseValues(null)
+      if (createdCaseId) {
+        queryClient.setQueryData(['uiTestCase', createdCaseId], createdCase)
+      }
+      syncCaseDetailState(createdCase)
+      caseOrderRollbackRef.current = caseOrderIds
+      setCaseOrderIds(nextOrderIds)
+      reorderCasesMutation.mutate(nextOrderIds)
+      queryClient.invalidateQueries({ queryKey: ['uiTestCases', suiteId] })
+    },
+  })
+
+  const updateCaseMutation = useMutation({
+    mutationFn: (values: UiTestCaseFormValues) => {
+      const payload = buildUiTestCaseUpdatePayload(editingCase!, {
+        name: values.name,
+        description: editingCase?.description,
+        enabled: values.enabled,
+        orderNo: editingCase?.orderNo,
+        stepsJson: serializeSteps(values.steps),
+      })
+
+      if (Object.keys(payload).length === 0) {
+        return Promise.resolve(editingCase!)
+      }
+
+      return api.updateUiTestCase(activeCaseId, payload)
+    },
+    onSuccess: (updatedCase) => {
+      message.success('UI测试用例已更新')
+      syncCaseDetailState(updatedCase)
+      queryClient.invalidateQueries({ queryKey: ['uiTestCases', suiteId] })
+    },
+  })
+
+  const deleteCaseMutation = useMutation({
+    mutationFn: (caseId: string) => api.deleteUiTestCase(caseId),
+    onSuccess: (_, caseId) => {
+      message.success('UI测试用例已删除')
+      setCaseOrderIds((current) => current.filter((id) => id !== caseId))
+      if (selectedCaseId === caseId) {
+        setSelectedCaseId('')
+        setEditingCase(null)
+        caseForm.setFieldsValue(createDefaultUiTestCaseFormValues())
+      }
+      queryClient.removeQueries({ queryKey: ['uiTestCase', caseId], exact: true })
+      queryClient.invalidateQueries({ queryKey: ['uiTestCases', suiteId] })
+    },
+  })
+
+  const debugRunMutation = useMutation({
+    mutationFn: () => {
+      if (!activeCaseId) {
+        throw new Error('未选择可运行的 UI测试用例')
+      }
+
+      return api.debugRunUiTestCase(activeCaseId, buildUiSuiteDebugRunPayload(suiteQuery.data))
+    },
+    onSuccess: (runRecord) => {
+      const runId = getUiTestCaseRunId(runRecord)
+      if (!runId) {
+        message.error('未获取到运行记录 ID')
+        return
+      }
+
+      queryClient.setQueryData(['uiTestCaseRun', runId], runRecord)
+      setSelectedRunId(runId)
+      setUiRunView('steps')
+      message.success(isUiRunPollingStatus(runRecord.status) ? '已开始调试运行' : '调试运行记录已创建')
+    },
+  })
+  const runSuiteMutation = useMutation({
+    mutationFn: () => {
+      if (!suiteId) {
+        throw new Error('未找到可运行的 UI测试集')
+      }
+
+      return api.runUiTestSuite(suiteId)
+    },
+    onSuccess: (runRecord) => {
+      const suiteRunId = getUiTestSuiteRunId(runRecord)
+      if (!suiteRunId) {
+        message.error('未获取到运行记录 ID')
+        return
+      }
+
+      queryClient.setQueryData<UiTestSuiteRunSummary[]>(['uiTestSuiteRuns', suiteId], (current) => {
+        const currentItems = current ?? []
+        return [runRecord, ...currentItems.filter((item) => item.suiteRunId !== suiteRunId)]
+      })
+
+      setSelectedSuiteRunId(suiteRunId)
+      setActivePollingSuiteRunId(suiteRunId)
+      setSuiteRunReportOpen(true)
+      setSuiteRunHistoryOpen(false)
+      setLoadingSuiteRunHistoryId('')
+      setSearchParams({ suiteRunId }, { replace: true })
+      message.success(isUiRunPollingStatus(runRecord.status) ? '已开始运行测试集' : '测试集运行记录已创建')
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['uiTestSuiteRuns', suiteId] })
+    },
+  })
+
+  const reorderCasesMutation = useMutation({
+    mutationFn: async (nextOrderIds: string[]) => {
+      const caseMap = new Map(uiTestCases.map((item) => [normalizeUiTestCaseId(item), item]))
+
+      await Promise.all(
+        nextOrderIds.map((caseId, index) => {
+          const targetCase = caseMap.get(caseId)
+          const nextOrderNo = index + 1
+
+          if (targetCase?.orderNo === nextOrderNo) return Promise.resolve()
+          return api.updateUiTestCase(caseId, { orderNo: nextOrderNo })
+        }),
+      )
+    },
+    onSuccess: () => {
+      message.success('用例顺序已更新')
+      queryClient.invalidateQueries({ queryKey: ['uiTestCases', suiteId] })
+    },
+    onError: (error) => {
+      setCaseOrderIds(caseOrderRollbackRef.current)
+      message.error(getErrorMessage(error))
+    },
+    onSettled: () => {
+      caseOrderRollbackRef.current = []
+      setDraggingCaseId(null)
+    },
+  })
+
+  const filteredCases = useMemo(() => {
+    const keyword = caseSearch.trim().toLowerCase()
+    if (!keyword) return uiTestCases
+
+    return uiTestCases.filter((item) =>
+      [item.name, item.description, item.stepsJson]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(keyword)),
+    )
+  }, [caseSearch, uiTestCases])
+
+  const orderedByRuleCases = useMemo(() => sortUiTestCases(filteredCases), [filteredCases])
+
+  const draftCase = useMemo<UiTestCase | null>(
+    () =>
+      draftCaseValues
+        ? {
+            caseId: DRAFT_CASE_ID,
+            name: draftCaseValues.name?.trim() || '未保存用例',
+            description: draftCaseValues.description,
+            enabled: draftCaseValues.enabled,
+            stepsJson: serializeSteps(draftCaseValues.steps),
+          }
+        : null,
+    [draftCaseValues],
+  )
+
+  const orderedCases = useMemo(() => {
+    if (caseOrderIds.length === 0) return orderedByRuleCases
+
+    const caseMap = new Map(orderedByRuleCases.map((item) => [normalizeUiTestCaseId(item), item]))
+    const ordered = caseOrderIds.map((caseId) => caseMap.get(caseId)).filter(Boolean) as UiTestCase[]
+    const missing = orderedByRuleCases.filter((item) => !caseOrderIds.includes(normalizeUiTestCaseId(item)))
+    return [...ordered, ...missing]
+  }, [caseOrderIds, orderedByRuleCases])
+
+  const sidebarCases = useMemo(() => (draftCase ? [...orderedCases, draftCase] : orderedCases), [draftCase, orderedCases])
+  const canReorder = caseSearch.trim().length === 0
+
+  const suiteMeta = useMemo(
+    () => [
+      { label: '测试集', value: suiteQuery.data?.name || '-' },
+      { label: '需求', value: requirementQuery.data?.name || requirementId || '-' },
+      { label: '迭代', value: sprintQuery.data?.name || sprintId || '-' },
+      { label: '运行模式', value: suiteQuery.data?.headless === undefined ? '-' : suiteQuery.data.headless ? '无头模式' : '可视模式' },
+      { label: '慢放延迟', value: formatOptionalMs(suiteQuery.data?.slowMoMs) },
+      { label: '视口', value: formatViewportText(suiteQuery.data?.viewportWidth, suiteQuery.data?.viewportHeight) },
+      { label: '步骤超时', value: formatOptionalMs(suiteQuery.data?.defaultStepTimeoutMs) },
+    ],
+    [requirementId, requirementQuery.data?.name, sprintId, sprintQuery.data?.name, suiteQuery.data],
+  )
+
+  useEffect(() => {
+    setSelectedCaseId('')
+    setCaseSearch('')
+    setDraftCaseValues(null)
+    setEditingCase(null)
+    setExpandedStepIndexes([])
+    setDraggingStepIndex(null)
+    setSelectedRunId('')
+    setUiRunView('steps')
+    setSuiteRunHistoryOpen(false)
+    setSuiteRunReportOpen(false)
+    setSelectedSuiteRunId('')
+    setActivePollingSuiteRunId('')
+    setLoadingSuiteRunHistoryId('')
+    setRefreshingSuiteRunReport(false)
+    setSuiteRunReportView('items')
+    setExpandedSuiteRunItemIds([])
+    caseForm.setFieldsValue(createDefaultUiTestCaseFormValues())
+  }, [caseForm, suiteId])
+
+  useEffect(() => {
+    const nextSuiteRunId = searchParams.get('suiteRunId') ?? ''
+    if (!nextSuiteRunId) return
+
+    setSelectedSuiteRunId((current) => (current === nextSuiteRunId ? current : nextSuiteRunId))
+    setActivePollingSuiteRunId(nextSuiteRunId)
+    setSuiteRunReportOpen(true)
+  }, [searchParams])
+
+  useEffect(() => {
+    setExpandedStepIndexes([])
+    setDraggingStepIndex(null)
+    setSelectedRunId('')
+    setUiRunView('steps')
+  }, [selectedCaseId])
+
+  useEffect(() => {
+    const currentRun = activeSuiteRunQuery.data
+    if (!currentRun?.suiteRunId) return
+
+    queryClient.setQueryData<UiTestSuiteRunSummary[]>(['uiTestSuiteRuns', suiteId], (current) => {
+      const currentItems = current ?? []
+      return [currentRun, ...currentItems.filter((item) => item.suiteRunId !== currentRun.suiteRunId)]
+    })
+
+    if (!isUiRunPollingStatus(currentRun.status)) {
+      setActivePollingSuiteRunId((current) => (current === currentRun.suiteRunId ? '' : current))
+    }
+  }, [activeSuiteRunQuery.data, queryClient, suiteId])
+
+  useEffect(() => {
+    if (!selectedSuiteRunId) {
+      if (loadingSuiteRunHistoryId) setLoadingSuiteRunHistoryId('')
+      return
+    }
+
+    if (suiteRunReportQuery.isFetching) return
+    if (loadingSuiteRunHistoryId === selectedSuiteRunId) {
+      setLoadingSuiteRunHistoryId('')
+    }
+  }, [loadingSuiteRunHistoryId, selectedSuiteRunId, suiteRunReportQuery.isFetching])
+
+  useEffect(() => {
+    setSuiteRunReportView('items')
+    setExpandedSuiteRunItemIds([])
+  }, [suiteRunReportQuery.data?.suiteRunId])
+
+  useEffect(() => {
+    if (selectedCaseId !== DRAFT_CASE_ID) return
+
+    setEditingCase(null)
+    caseForm.setFieldsValue(draftCaseValues ?? createDefaultUiTestCaseFormValues())
+  }, [caseForm, draftCaseValues, selectedCaseId, uiTestCases])
+
+  useEffect(() => {
+    if (!activeCaseId || !selectedCaseDetailQuery.data) return
+
+    setEditingCase(selectedCaseDetailQuery.data)
+    caseForm.setFieldsValue(buildUiTestCaseFormValues(selectedCaseDetailQuery.data))
+  }, [activeCaseId, caseForm, selectedCaseDetailQuery.data])
+
+  useEffect(() => {
+    if (reorderCasesMutation.isPending) return
+
+    const nextIds = sortUiTestCases(uiTestCases)
+      .map((item) => normalizeUiTestCaseId(item))
+      .filter(Boolean)
+
+    setCaseOrderIds((current) => {
+      if (nextIds.length === 0) return current.length === 0 ? current : []
+      if (current.length === 0) return nextIds
+
+      const currentFiltered = current.filter((id) => nextIds.includes(id))
+      if (currentFiltered.length === nextIds.length && currentFiltered.every((id, index) => id === nextIds[index])) {
+        return currentFiltered
+      }
+
+      return nextIds
+    })
+  }, [uiTestCases])
+
+  useEffect(() => {
+    if (sidebarCases.length === 0) {
+      if (selectedCaseId) {
+        setSelectedCaseId('')
+        setEditingCase(null)
+      }
+      return
+    }
+
+    const exists = sidebarCases.some((item) => normalizeUiTestCaseId(item) === selectedCaseId)
+    if (!selectedCaseId || !exists) {
+      setSelectedCaseId(normalizeUiTestCaseId(sidebarCases[0]))
+    }
+  }, [selectedCaseId, sidebarCases])
+
+  function openCreateCase() {
+    const nextDraft = draftCaseValues ?? createDefaultUiTestCaseFormValues()
+    setDraftCaseValues(nextDraft)
+    setSelectedCaseId(DRAFT_CASE_ID)
+    setEditingCase(null)
+    caseForm.setFieldsValue(nextDraft)
+  }
+
+  function handleDebugRun() {
+    if (!activeCaseId || isCreatingCase) return
+
+    if (hasUnsavedCaseChanges) {
+      message.warning('当前页面还有未保存修改，调试运行会基于最近一次保存的用例内容。')
+    }
+
+    debugRunMutation.mutate()
+  }
+
+  function handleRunSuite() {
+    if (!suiteId || uiTestCases.length === 0) return
+
+    if (hasUnsavedCaseChanges) {
+      message.warning('当前页面还有未保存修改，正式运行会基于最近一次保存的用例内容。')
+    }
+
+    runSuiteMutation.mutate()
+  }
+
+  function handleOpenSuiteRunHistoryItem(runSummary: UiTestSuiteRunSummary) {
+    const suiteRunId = getUiTestSuiteRunId(runSummary)
+    setLoadingSuiteRunHistoryId(suiteRunId)
+    setSelectedSuiteRunId(suiteRunId)
+    setSuiteRunReportOpen(true)
+    setSuiteRunHistoryOpen(false)
+    if (isUiRunPollingStatus(runSummary.status) && suiteRunId) {
+      setActivePollingSuiteRunId(suiteRunId)
+    }
+    if (suiteRunId) {
+      setSearchParams({ suiteRunId }, { replace: true })
+    }
+  }
+
+  function closeSuiteRunReport() {
+    setActivePollingSuiteRunId((current) => (current === selectedSuiteRunId ? '' : current))
+    setSuiteRunReportOpen(false)
+    setSelectedSuiteRunId('')
+    setLoadingSuiteRunHistoryId('')
+    setSearchParams({}, { replace: true })
+  }
+
+  function toggleSuiteRunItem(itemKey: string) {
+    setExpandedSuiteRunItemIds((current) => (current.includes(itemKey) ? current.filter((item) => item !== itemKey) : [...current, itemKey]))
+  }
+
+  async function handleRefreshSuiteRunReport() {
+    if (!selectedSuiteRunId) return
+
+    setRefreshingSuiteRunReport(true)
+    try {
+      await suiteRunReportQuery.refetch()
+      await queryClient.invalidateQueries({ queryKey: ['uiTestSuiteRun', selectedSuiteRunId] })
+      await queryClient.invalidateQueries({ queryKey: ['uiTestSuiteRuns', suiteId] })
+      message.success('报告已刷新')
+    } finally {
+      setRefreshingSuiteRunReport(false)
+    }
+  }
+
+  function handleDiscardDraft() {
+    setDraftCaseValues(null)
+    const fallbackCase = orderedCases[0] ?? null
+    if (fallbackCase) {
+      setSelectedCaseId(normalizeUiTestCaseId(fallbackCase))
+      return
+    }
+
+    setSelectedCaseId('')
+    setEditingCase(null)
+    caseForm.setFieldsValue(createDefaultUiTestCaseFormValues())
+  }
+
+  function handleCaseDragStart(event: DragEvent<HTMLDivElement>, caseId: string) {
+    if (!canReorder || caseId === DRAFT_CASE_ID) return
+    setDraggingCaseId(caseId)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', caseId)
+  }
+
+  function handleCaseDrop(targetCaseId: string) {
+    if (!draggingCaseId || draggingCaseId === targetCaseId || !canReorder) return
+    if (draggingCaseId === DRAFT_CASE_ID || targetCaseId === DRAFT_CASE_ID) return
+
+    const baseOrderIds = (caseOrderIds.length > 0 ? caseOrderIds : orderedCases.map((item) => normalizeUiTestCaseId(item)).filter(Boolean)).filter(
+      (caseId) => caseId !== DRAFT_CASE_ID,
+    )
+    const fromIndex = baseOrderIds.indexOf(draggingCaseId)
+    const toIndex = baseOrderIds.indexOf(targetCaseId)
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
+
+    const nextOrderIds = moveArrayItem(baseOrderIds, fromIndex, toIndex)
+    caseOrderRollbackRef.current = caseOrderIds
+    setCaseOrderIds(nextOrderIds)
+    reorderCasesMutation.mutate(nextOrderIds)
+  }
+
+  async function handleRefreshUiRunDetail() {
+    if (!selectedRunId) return
+    await uiTestCaseRunQuery.refetch()
+  }
+
+  const showEditorForm = isCreatingCase || (Boolean(activeCaseId) && Boolean(editingCase) && normalizeUiTestCaseId(editingCase!) === activeCaseId)
+  const hasUnsavedCaseChanges = !isCreatingCase && caseForm.isFieldsTouched()
+  const currentRun = uiTestCaseRunQuery.data ?? null
+  const currentRunStatusMeta = getExecutionStatusMeta(currentRun?.status)
+  const currentRunStepResults = useMemo(
+    () =>
+      [...(currentRun?.stepResults ?? [])].sort(
+        (left, right) => (left.orderNo ?? Number.MAX_SAFE_INTEGER) - (right.orderNo ?? Number.MAX_SAFE_INTEGER),
+      ),
+    [currentRun?.stepResults],
+  )
+  const suiteRunHistory = useMemo(
+    () =>
+      [...(suiteRunHistoryQuery.data ?? [])].sort((left, right) => {
+        const leftTime = new Date(left.startedAt || left.createdAt || left.updatedAt || '').getTime()
+        const rightTime = new Date(right.startedAt || right.createdAt || right.updatedAt || '').getTime()
+        return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
+      }),
+    [suiteRunHistoryQuery.data],
+  )
+  const suiteRunReport = suiteRunReportQuery.data ?? null
+  const selectedSuiteRunSummary = useMemo(
+    () =>
+      (selectedSuiteRunId && activeSuiteRunQuery.data?.suiteRunId === selectedSuiteRunId ? activeSuiteRunQuery.data : undefined) ??
+      suiteRunHistory.find((item) => item.suiteRunId === selectedSuiteRunId) ??
+      null,
+    [activeSuiteRunQuery.data, selectedSuiteRunId, suiteRunHistory],
+  )
+  const orderedSuiteRunItems = useMemo(
+    () =>
+      [...(suiteRunReport?.items ?? [])].sort(
+        (left, right) =>
+          (left.orderNo ?? Number.MAX_SAFE_INTEGER) - (right.orderNo ?? Number.MAX_SAFE_INTEGER) ||
+          (left.caseName ?? '').localeCompare(right.caseName ?? ''),
+      ),
+    [suiteRunReport?.items],
+  )
+
+  function renderUiRunStepResult(stepResult: UiTestCaseRunStepResult, index: number) {
+    const stepStatus = getExecutionStatusMeta(stepResult.status)
+
+    return (
+      <div key={`${stepResult.orderNo ?? index}-${stepResult.stepName ?? index}`} className={`api-case-run-result-row${stepResult.success === false ? ' failed' : ''}`}>
+        <div className="api-case-run-result-row-title">
+          <strong>{stepResult.stepName?.trim() || `步骤 ${stepResult.orderNo ?? index + 1}`}</strong>
+          <Tag color={stepStatus.color}>{stepStatus.label}</Tag>
+          {typeof stepResult.success === 'boolean' ? (
+            <Tag color={stepResult.success ? 'success' : 'error'}>{stepResult.success ? '通过' : '失败'}</Tag>
+          ) : null}
+        </div>
+        <div className="api-case-run-result-row-meta">
+          <span className="api-case-run-result-meta-item">
+            <strong>顺序</strong>
+            <span>{formatOptionalValue(stepResult.orderNo)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>关键字</strong>
+            <span>{formatOptionalValue(stepResult.keyword)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>开始</strong>
+            <span>{formatTime(stepResult.startedAt)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>结束</strong>
+            <span>{formatTime(stepResult.finishedAt)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>耗时</strong>
+            <span>{formatOptionalValue(stepResult.durationMs ? `${stepResult.durationMs} ms` : stepResult.durationMs)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>实际值</strong>
+            <span>{formatOptionalValue(stepResult.actualValue)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>截图</strong>
+            <span>{formatOptionalValue(stepResult.screenshotPath)}</span>
+          </span>
+          <span className="api-case-run-result-meta-item">
+            <strong>信息</strong>
+            <span>{formatOptionalValue(stepResult.errorMessage)}</span>
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  function renderUiRunStepResultList(stepResults: UiTestCaseRunStepResult[], emptyDescription: string) {
+    const orderedStepResults = [...stepResults].sort(
+      (left, right) => (left.orderNo ?? Number.MAX_SAFE_INTEGER) - (right.orderNo ?? Number.MAX_SAFE_INTEGER),
+    )
+
+    if (orderedStepResults.length === 0) {
+      return <Empty description={emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+    }
+
+    return <div className="api-case-run-result-list">{orderedStepResults.map(renderUiRunStepResult)}</div>
+  }
+
+  function renderUiRunContent() {
+    if (!currentRun) {
+      return <Empty description="运行详情加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+    }
+
+    if (uiRunView === 'snapshot') {
+      const snapshotSections = [
+        { label: '浏览器信息', value: currentRun.snapshot?.browser },
+        { label: '运行配置', value: currentRun.snapshot?.options },
+      ].filter((item) => item.value !== undefined && item.value !== null)
+
+      if (snapshotSections.length === 0) {
+        return <Empty description="暂无运行快照" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      }
+
+      return (
+        <div className="api-case-run-result-list">
+          {snapshotSections.map((section) => (
+            <div key={section.label} className="api-case-run-result-row">
+              <div className="api-case-run-result-row-title">
+                <strong>{section.label}</strong>
+              </div>
+              <pre className="api-case-run-result-pre compact">{prettyPrintValue(section.value)}</pre>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    if (currentRunStepResults.length === 0) {
+      return (
+        <Empty
+          description={isUiRunPollingStatus(currentRun.status) ? '步骤结果生成中...' : '暂无步骤结果'}
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      )
+    }
+
+    return renderUiRunStepResultList(currentRunStepResults, isUiRunPollingStatus(currentRun.status) ? '步骤结果生成中...' : '暂无步骤结果')
+  }
+
+  return (
+    <div className="workbench-page api-automation-page">
+      <div className="api-automation-content">
+        <div className="page-frame api-collection-detail-frame">
+          <div className="api-collection-detail-layout ui-suite-case-layout">
+            {suiteQuery.error ? <Alert showIcon type="error" message={getErrorMessage(suiteQuery.error)} /> : null}
+            {casesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(casesQuery.error)} /> : null}
+            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" message={getErrorMessage(selectedCaseDetailQuery.error)} /> : null}
+            {requirementQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementQuery.error)} /> : null}
+            {sprintQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintQuery.error)} /> : null}
+
+            <aside className="workbench-panel api-case-sidebar ui-suite-case-sidebar">
+              <div className="panel-header api-case-sidebar-header">
+                <div className="api-case-sidebar-title">
+                  <Button
+                    type="text"
+                    icon={<ArrowLeftOutlined />}
+                    className="api-case-back-button"
+                    onClick={() => navigate('/ui-automation')}
+                    aria-label="返回 UI测试集列表"
+                  />
+                  <div className="api-case-sidebar-title-copy">
+                    <Title level={5}>UI测试用例</Title>
+                    <Text type="secondary" className="api-case-sidebar-count">
+                      {sidebarCases.length} 个用例
+                    </Text>
+                  </div>
+                </div>
+                <div className="api-case-sidebar-meta">
+                  <Tooltip title="新建用例">
+                    <Button
+                      type="text"
+                      className="action-btn-create"
+                      icon={<PlusOutlined />}
+                      aria-label="新建 UI测试用例"
+                      onClick={openCreateCase}
+                      disabled={!suiteId}
+                    />
+                  </Tooltip>
+                </div>
+              </div>
+
+              <div className="api-case-sidebar-toolbar">
+                <Input.Search
+                  placeholder="搜索用例名称 / 描述 / 步骤"
+                  allowClear
+                  value={caseSearch}
+                  onChange={(event) => setCaseSearch(event.target.value)}
+                />
+              </div>
+
+              <div className="api-case-sidebar-scroll">
+                {casesQuery.isLoading ? (
+                  <div className="sprint-card-loading">
+                    <Empty description="UI测试用例加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  </div>
+                ) : sidebarCases.length === 0 ? (
+                  <div className="ui-suite-case-empty-list">
+                    <Empty description="当前测试集还没有 UI测试用例">
+                      <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateCase}>
+                        新建用例
+                      </Button>
+                    </Empty>
+                  </div>
+                ) : (
+                  <div className="api-case-nav-list">
+                    {sidebarCases.map((item) => {
+                      const caseId = normalizeUiTestCaseId(item)
+                      const selected = caseId === selectedCaseId
+                      const stepCount = getUiTestCaseStepCount(item)
+
+                      return (
+                        <div
+                          key={caseId}
+                          className={`api-case-nav-item${selected ? ' selected' : ''}${draggingCaseId === caseId ? ' dragging' : ''}${canReorder ? ' can-drag' : ''}`}
+                          role="button"
+                          tabIndex={0}
+                          draggable={canReorder && caseId !== DRAFT_CASE_ID}
+                          onDragStart={(event) => handleCaseDragStart(event, caseId)}
+                          onDragOver={(event) => {
+                            if (!canReorder || caseId === DRAFT_CASE_ID) return
+                            event.preventDefault()
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault()
+                            handleCaseDrop(caseId)
+                          }}
+                          onDragEnd={() => {
+                            setDraggingCaseId(null)
+                          }}
+                          onClick={() => setSelectedCaseId(caseId)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              setSelectedCaseId(caseId)
+                            }
+                          }}
+                        >
+                          <div className="api-case-nav-item-main">
+                            <div className="api-case-nav-item-tags">
+                              <Tag color={item.enabled === false ? 'default' : 'success'}>
+                                {item.enabled === false ? '停用' : '启用'}
+                              </Tag>
+                              {caseId === DRAFT_CASE_ID ? <Tag color="gold">草稿</Tag> : null}
+                            </div>
+                            <span className="api-case-nav-item-name">{item.name}</span>
+                            <span className="api-case-nav-item-path">{stepCount} 步</span>
+                          </div>
+                          <div
+                            className="api-case-nav-item-actions"
+                            onClick={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                          >
+                            <Popconfirm
+                              title={caseId === DRAFT_CASE_ID ? '确认丢弃这个未保存用例？' : '确认删除该 UI测试用例？'}
+                              onConfirm={() => {
+                                if (caseId === DRAFT_CASE_ID) {
+                                  handleDiscardDraft()
+                                  return
+                                }
+                                deleteCaseMutation.mutate(caseId)
+                              }}
+                            >
+                              <Tooltip title="删除">
+                                <Button
+                                  danger
+                                  type="text"
+                                  size="small"
+                                  className="api-case-nav-delete action-btn-delete"
+                                  icon={<DeleteOutlined />}
+                                  loading={deleteCaseMutation.isPending && !isCreatingCase && selectedCaseId === caseId}
+                                  aria-label="删除 UI测试用例"
+                                />
+                              </Tooltip>
+                            </Popconfirm>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </aside>
+
+            <div className="api-case-workspace">
+              {suiteQuery.data ? (
+                <div className="api-detail-hover-panel api-collection-detail-panel ui-suite-case-detail-panel">
+                  <div className="api-detail-hover-bar">
+                    <div className="api-detail-hover-bar-main">
+                      <span className="api-detail-hover-title">UI测试集详情</span>
+                      <span className="api-detail-hover-preview">
+                        {suiteQuery.data.name} / {requirementQuery.data?.name ?? requirementId ?? '-'} / {sprintQuery.data?.name ?? sprintId ?? '-'}
+                      </span>
+                    </div>
+                    <div className="api-detail-hover-bar-actions">
+                      <Button className="action-btn-read" onClick={() => setSuiteRunHistoryOpen(true)}>
+                        运行记录
+                      </Button>
+                      <Button
+                        type="primary"
+                        icon={<PlayCircleOutlined />}
+                        loading={runSuiteMutation.isPending}
+                        onClick={handleRunSuite}
+                        disabled={uiTestCases.length === 0}
+                      >
+                        运行测试集
+                      </Button>
+                      <Tag color="processing">{uiTestCases.length} 个用例</Tag>
+                    </div>
+                  </div>
+                  <div className="api-detail-hover-body">
+                    <p className="api-detail-description">
+                      {suiteQuery.data.description || '在这里管理当前 UI测试集下的测试用例，步骤会直接保存在用例的 stepsJson 中。'}
+                    </p>
+                    <Card className="detail-block api-case-summary-card">
+                      <div className="api-case-summary-grid compact ui-suite-case-summary-grid">
+                        {suiteMeta.map((item) => (
+                          <div key={item.label} className="api-summary-item ui-suite-case-summary-item">
+                            <Text type="secondary">{item.label}</Text>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+              ) : null}
+
+              <section className="workbench-panel api-case-editor-panel ui-suite-case-editor-panel">
+                <div className="api-case-editor-shell">
+                  <div className="api-case-editor-main">
+                    <div className="api-case-editor-main-scroll">
+                      {!selectedCaseId ? (
+                      <div className="ui-test-case-empty-editor">
+                        <Empty description="请选择一个 UI测试用例，或先新建一个用例">
+                          <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateCase}>
+                            新建用例
+                          </Button>
+                        </Empty>
+                      </div>
+                      ) : !showEditorForm && selectedCaseDetailQuery.isLoading ? (
+                      <div className="ui-test-case-empty-editor">
+                        <Empty description="UI测试用例详情加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      </div>
+                      ) : showEditorForm ? (
+                      <Form<UiTestCaseFormValues>
+                        form={caseForm}
+                        layout="vertical"
+                        requiredMark={false}
+                        className="ui-test-case-form"
+                        onValuesChange={(_changedValues, allValues) => {
+                          if (isCreatingCase) {
+                            setDraftCaseValues(allValues as UiTestCaseFormValues)
+                          }
+                        }}
+                        onFinish={(values) => {
+                          const completeValues = {
+                            ...getCompleteCaseFormValues(),
+                            ...values,
+                            steps: values.steps ?? getCompleteCaseFormValues().steps,
+                          } satisfies UiTestCaseFormValues
+
+                          if (isCreatingCase) {
+                            createCaseMutation.mutate(completeValues)
+                            return
+                          }
+
+                          if (!editingCase || normalizeUiTestCaseId(editingCase) !== activeCaseId) {
+                            message.warning('用例详情加载中，请稍后再试')
+                            return
+                          }
+
+                          const payload = buildUiTestCaseUpdatePayload(editingCase, {
+                            name: completeValues.name,
+                            description: completeValues.description,
+                            enabled: completeValues.enabled,
+                            orderNo: editingCase.orderNo,
+                            stepsJson: serializeSteps(completeValues.steps),
+                          })
+
+                          if (Object.keys(payload).length === 0) {
+                            message.info('当前没有需要保存的修改')
+                            return
+                          }
+
+                          updateCaseMutation.mutate(completeValues)
+                        }}
+                      >
+                        <div className="ui-test-case-editor-fixed-head">
+                          <div className="ui-test-case-toolbar">
+                            <div className="ui-test-case-name-block">
+                              <div className="ui-test-case-inline-label">用例名称</div>
+                              <Form.Item name="name" className="ui-test-case-name-item" rules={[{ required: true, message: '请输入 UI测试用例名称' }]}>
+                                <Input maxLength={120} placeholder="例如：登录成功验证" />
+                              </Form.Item>
+                            </div>
+                            <div className="ui-test-case-toolbar-meta">
+                              <div className="ui-test-case-inline-stat switch">
+                                <span className="ui-test-case-inline-label">启用</span>
+                                <Form.Item name="enabled" valuePropName="checked">
+                                  <Switch />
+                                </Form.Item>
+                              </div>
+                              <div className="ui-test-case-inline-stat info">
+                                <span className="ui-test-case-inline-label">步骤</span>
+                                <strong>{watchedSteps.length} 步</strong>
+                              </div>
+                              <Button
+                                className="action-btn-read"
+                                icon={<PlayCircleOutlined />}
+                                onClick={handleDebugRun}
+                                loading={debugRunMutation.isPending}
+                                disabled={!activeCaseId || isCreatingCase}
+                              >
+                                调试运行
+                              </Button>
+                              <Button
+                                type="primary"
+                                className="action-btn-save"
+                                icon={<SaveOutlined />}
+                                loading={createCaseMutation.isPending || updateCaseMutation.isPending}
+                                onClick={() => caseForm.submit()}
+                              >
+                                保存
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="ui-test-case-step-section">
+                          <div className="ui-test-case-step-scroll">
+                            <div className="ui-test-case-step-toolbar">
+                              <div>
+                                <div className="ui-test-case-step-title">步骤编辑器</div>
+                                <div className="ui-test-case-step-subtitle">
+                                  本地编辑步骤数组，保存时会自动转成 `stepsJson` 提交给后端。
+                                </div>
+                              </div>
+                            </div>
+
+                            <Form.List name="steps">
+                              {(fields, { add, remove, move }) => (
+                                <>
+                                  {fields.length === 0 ? (
+                                    <div className="ui-test-case-step-empty">
+                                      <Empty description="当前还没有步骤">
+                                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => addStep(add, fields.length)}>
+                                          添加步骤
+                                        </Button>
+                                      </Empty>
+                                    </div>
+                                  ) : (
+                                    <div className="ui-test-case-step-list">
+                                      {fields.map((field, index) => {
+                                      const step = watchedSteps[index]
+                                      const stepKeyword = step?.keyword?.trim()
+                                      const stepMeta = getUiStepFieldMeta(stepKeyword)
+                                      const stepRequiresLocator = requiresUiStepLocator(stepKeyword)
+                                      const stepUsesComparator = usesUiStepComparator(stepKeyword)
+                                      const stepUsesOperation = usesUiStepOperation(stepKeyword)
+                                      const stepUsesExpect = usesUiStepExpect(stepKeyword)
+                                      const showLocatorFields = stepRequiresLocator || Boolean(step?.locatorType?.trim() || step?.locatorValue?.trim())
+                                      const showOperationField = stepUsesOperation || Boolean(step?.operationValue?.trim())
+                                      const showExpectField = stepUsesExpect || Boolean(step?.expectValue?.trim())
+                                      const showLocatorTypeField = stepRequiresLocator || Boolean(step?.locatorType?.trim())
+                                      const pairLocatorAndOperation = showLocatorFields && showOperationField
+                                      const operationFieldLabel = stepMeta.operationLabel ? `操作值（${stepMeta.operationLabel}）` : '操作值'
+                                      const locatorFieldHint = stepMeta.locatorHint || (stepRequiresLocator ? '当前关键字通常需要定位器。' : '')
+                                      const operationFieldHint = stepMeta.operationHint || ''
+                                      const locatorValueFieldClass = pairLocatorAndOperation ? 'ui-test-case-step-field-half' : 'ui-test-case-step-field-wide'
+                                      const operationValueFieldClass = pairLocatorAndOperation
+                                        ? 'ui-test-case-step-field-half'
+                                        : stepUsesComparator || showExpectField
+                                          ? 'ui-test-case-step-field-half'
+                                          : 'ui-test-case-step-field-wide'
+                                      const expanded = expandedStepIndexes.includes(index)
+                                      const stepSummary = [
+                                        stepKeyword || '未设置关键字',
+                                        stepRequiresLocator ? step?.locatorType?.trim() || '待设定位' : step?.locatorType?.trim() || '无需定位',
+                                        stepUsesComparator ? step?.comparator?.trim() || '待设比较' : '',
+                                        step?.enabled === false ? '已禁用' : '已启用',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')
+
+                                      return (
+                                        <div
+                                          key={field.key}
+                                          className={`ui-test-case-step-card${expanded ? ' expanded' : ''}${draggingStepIndex === index ? ' dragging' : ''}`}
+                                          onDragOver={(event) => {
+                                            event.preventDefault()
+                                          }}
+                                          onDrop={(event) => {
+                                            event.preventDefault()
+                                            handleStepDrop(move, index)
+                                          }}
+                                        >
+                                          <div
+                                            className="ui-test-case-step-card-top"
+                                            draggable
+                                            onDragStart={(event) => handleStepDragStart(event, index)}
+                                            onDragEnd={() => setDraggingStepIndex(null)}
+                                            onClick={() => toggleStepPanel(index)}
+                                            >
+                                              <div className="ui-test-case-step-card-main">
+                                                <div className="ui-test-case-step-card-leading">
+                                                  <button
+                                                    type="button"
+                                                    className={`ui-test-case-step-toggle${expanded ? ' expanded' : ''}`}
+                                                    aria-label={expanded ? '折叠步骤' : '展开步骤'}
+                                                    aria-expanded={expanded}
+                                                    onClick={(event) => {
+                                                      event.stopPropagation()
+                                                      toggleStepPanel(index)
+                                                    }}
+                                                  >
+                                                    <DownOutlined />
+                                                  </button>
+                                                  <span className="ui-test-case-step-order">#{index + 1}</span>
+                                                </div>
+                                                <div
+                                                  className="ui-test-case-step-card-title"
+                                                  onClick={(event) => event.stopPropagation()}
+                                                  onMouseDown={(event) => event.stopPropagation()}
+                                                >
+                                                  <div className="ui-test-case-step-title-head">
+                                                    <Form.Item {...field} name={[field.name, 'stepName']} className="ui-test-case-step-title-item">
+                                                      <Input
+                                                        placeholder="点击输入步骤名称"
+                                                        maxLength={120}
+                                                        className="ui-test-case-step-title-input"
+                                                        suffix={<EditOutlined className="ui-test-case-step-title-edit-icon" />}
+                                                      />
+                                                    </Form.Item>
+                                                  </div>
+                                                  <span>{stepSummary}</span>
+                                                </div>
+                                              </div>
+                                              <div className="ui-test-case-step-actions" onClick={(event) => event.stopPropagation()}>
+                                                <Tooltip title="删除步骤">
+                                                  <Button
+                                                    type="text"
+                                                    size="small"
+                                                    className="ui-test-case-step-delete-action action-btn-delete"
+                                                    icon={<DeleteOutlined />}
+                                                    onClick={() => removeStep(remove, index)}
+                                                  />
+                                                </Tooltip>
+                                              </div>
+                                            </div>
+
+                                          <div className="ui-test-case-step-body" hidden={!expanded} aria-hidden={!expanded}>
+                                              <div className="ui-test-case-step-grid ui-test-case-step-core-grid">
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'keyword']}
+                                                  label="关键字"
+                                                  rules={[{ required: true, message: '请选择步骤关键字' }]}
+                                                >
+                                                  <Select
+                                                    showSearch
+                                                    placeholder="请选择关键字"
+                                                    options={uiTestKeywordOptions}
+                                                    optionFilterProp="label"
+                                                  />
+                                                </Form.Item>
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'locatorType']}
+                                                  label="定位方式"
+                                                  hidden={!showLocatorTypeField}
+                                                  dependencies={[['steps', field.name, 'keyword']]}
+                                                  rules={[
+                                                    ({ getFieldValue }) => ({
+                                                      validator(_, value: string | undefined) {
+                                                        const keyword = getFieldValue(['steps', field.name, 'keyword'])
+                                                        if (!requiresUiStepLocator(keyword) || value?.trim()) {
+                                                          return Promise.resolve()
+                                                        }
+                                                        return Promise.reject(new Error('当前关键字需要选择定位方式'))
+                                                      },
+                                                    }),
+                                                  ]}
+                                                >
+                                                  <Select
+                                                    showSearch
+                                                    placeholder={stepRequiresLocator ? '请选择定位方式' : '按需选择定位方式'}
+                                                    options={uiTestLocatorTypeOptions}
+                                                    optionFilterProp="label"
+                                                    allowClear={!stepRequiresLocator}
+                                                  />
+                                                </Form.Item>
+                                              </div>
+
+                                              <div className="ui-test-case-step-detail-grid">
+                                                <div
+                                                  className="ui-test-case-step-field-note ui-test-case-step-field-wide"
+                                                  hidden={!showLocatorTypeField || !locatorFieldHint}
+                                                >
+                                                  {locatorFieldHint}
+                                                </div>
+
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'locatorValue']}
+                                                  label="定位值"
+                                                  hidden={!showLocatorFields}
+                                                  className={`ui-test-case-step-field ${locatorValueFieldClass}`}
+                                                  dependencies={[['steps', field.name, 'keyword']]}
+                                                  rules={[
+                                                    ({ getFieldValue }) => ({
+                                                      validator(_, value: string | undefined) {
+                                                        const keyword = getFieldValue(['steps', field.name, 'keyword'])
+                                                        if (!requiresUiStepLocator(keyword) || value?.trim()) {
+                                                          return Promise.resolve()
+                                                        }
+                                                        return Promise.reject(new Error('当前关键字需要填写定位值'))
+                                                      },
+                                                    }),
+                                                  ]}
+                                                >
+                                                  <Input placeholder={stepRequiresLocator ? '例如：#username' : '按需填写'} maxLength={400} />
+                                                </Form.Item>
+
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'operationValue']}
+                                                  label={operationFieldLabel}
+                                                  hidden={!showOperationField}
+                                                  className={`ui-test-case-step-field ${operationValueFieldClass}`}
+                                                  dependencies={[
+                                                    ['steps', field.name, 'keyword'],
+                                                    ['steps', field.name, 'expectValue'],
+                                                  ]}
+                                                  rules={[
+                                                    ({ getFieldValue }) => ({
+                                                      validator(_, value: string | undefined) {
+                                                        const keyword = getFieldValue(['steps', field.name, 'keyword'])
+                                                        const trimmedValue = value?.trim()
+                                                        const expectValue = getFieldValue(['steps', field.name, 'expectValue']) as string | undefined
+                                                        const trimmedExpectValue = expectValue?.trim()
+
+                                                        if (keyword === 'open') {
+                                                          if (!trimmedValue) {
+                                                            return Promise.reject(new Error('open 步骤请填写完整 URL'))
+                                                          }
+                                                          if (/^https?:\/\//i.test(trimmedValue)) {
+                                                            return Promise.resolve()
+                                                          }
+                                                          return Promise.reject(new Error('open 步骤请填写完整 URL'))
+                                                        }
+
+                                                        if (keyword === 'input' && !trimmedValue) {
+                                                          return Promise.reject(new Error('input 步骤请填写输入值'))
+                                                        }
+
+                                                        if (keyword === 'press' && !trimmedValue) {
+                                                          return Promise.reject(new Error('press 步骤请填写按键名'))
+                                                        }
+
+                                                        if (keyword === 'sleep') {
+                                                          if (!trimmedValue) {
+                                                            return Promise.reject(new Error('sleep 步骤请填写等待时长'))
+                                                          }
+                                                          if (/^\d+$/.test(trimmedValue)) {
+                                                            return Promise.resolve()
+                                                          }
+                                                          return Promise.reject(new Error('sleep 步骤请填写毫秒数'))
+                                                        }
+
+                                                        if (keyword === 'wait_text' && !trimmedValue && !trimmedExpectValue) {
+                                                          return Promise.reject(new Error('wait_text 需要填写期望文本或回退文本'))
+                                                        }
+
+                                                        if (!trimmedValue) {
+                                                          return Promise.resolve()
+                                                        }
+
+                                                        return Promise.resolve()
+                                                      },
+                                                    }),
+                                                  ]}
+                                                >
+                                                  <Input placeholder={stepMeta.operationPlaceholder || '例如：tester'} maxLength={400} />
+                                                </Form.Item>
+
+                                                <div
+                                                  className="ui-test-case-step-field-note ui-test-case-step-field-wide"
+                                                  hidden={!showOperationField || !operationFieldHint}
+                                                >
+                                                  {operationFieldHint}
+                                                </div>
+
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'expectValue']}
+                                                  label={stepMeta.expectLabel || '期望值'}
+                                                  hidden={!showExpectField}
+                                                  className={`ui-test-case-step-field ${stepUsesComparator ? 'ui-test-case-step-field-half' : 'ui-test-case-step-field-wide'}`}
+                                                  dependencies={[
+                                                    ['steps', field.name, 'keyword'],
+                                                    ['steps', field.name, 'operationValue'],
+                                                  ]}
+                                                  rules={[
+                                                    ({ getFieldValue }) => ({
+                                                      validator(_, value: string | undefined) {
+                                                        const keyword = getFieldValue(['steps', field.name, 'keyword'])
+                                                        const trimmedValue = value?.trim()
+                                                        const operationValue = getFieldValue(['steps', field.name, 'operationValue']) as string | undefined
+                                                        const trimmedOperationValue = operationValue?.trim()
+
+                                                        if ((keyword === 'assert_text' || keyword === 'assert_url') && !trimmedValue) {
+                                                          return Promise.reject(new Error('当前断言步骤需要填写期望值'))
+                                                        }
+
+                                                        if (keyword === 'wait_text' && !trimmedValue && !trimmedOperationValue) {
+                                                          return Promise.reject(new Error('wait_text 需要填写期望文本或回退文本'))
+                                                        }
+
+                                                        return Promise.resolve()
+                                                      },
+                                                    }),
+                                                  ]}
+                                                >
+                                                  <Input placeholder={stepMeta.expectPlaceholder || '例如：登录成功'} maxLength={400} />
+                                                </Form.Item>
+
+                                                <div
+                                                  className="ui-test-case-step-field-note ui-test-case-step-field-wide"
+                                                  hidden={!showExpectField || !stepMeta.expectHint}
+                                                >
+                                                  {stepMeta.expectHint}
+                                                </div>
+
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'comparator']}
+                                                  label="比较器"
+                                                  hidden={!stepUsesComparator}
+                                                  className="ui-test-case-step-field ui-test-case-step-field-third"
+                                                  dependencies={[['steps', field.name, 'keyword']]}
+                                                  rules={[
+                                                    ({ getFieldValue }) => ({
+                                                      validator(_, value: string | undefined) {
+                                                        const keyword = getFieldValue(['steps', field.name, 'keyword'])
+                                                        if (!usesUiStepComparator(keyword) || value?.trim()) {
+                                                          return Promise.resolve()
+                                                        }
+                                                        return Promise.reject(new Error('当前断言步骤需要选择比较器'))
+                                                      },
+                                                    }),
+                                                  ]}
+                                                >
+                                                  <Select placeholder="请选择比较器" options={uiTestComparatorOptions} />
+                                                </Form.Item>
+                                              </div>
+
+                                              <div className="ui-test-case-step-footer">
+                                                <div className="ui-test-case-step-footer-grid">
+                                                  <div className="ui-test-case-step-status-row">
+                                                  <Form.Item
+                                                    {...field}
+                                                    name={[field.name, 'timeoutMs']}
+                                                    label="超时(ms)"
+                                                    className="ui-test-case-step-timeout-item"
+                                                  >
+                                                    <InputNumber min={0} step={500} style={{ width: '100%' }} />
+                                                  </Form.Item>
+
+                                                  <Form.Item
+                                                    {...field}
+                                                    name={[field.name, 'enabled']}
+                                                    label="启用"
+                                                    valuePropName="checked"
+                                                    className="ui-test-case-step-inline-switch-item"
+                                                  >
+                                                    <Switch />
+                                                  </Form.Item>
+                                                  <Form.Item
+                                                    {...field}
+                                                    name={[field.name, 'continueOnFailure']}
+                                                    label="失败后继续"
+                                                    valuePropName="checked"
+                                                    className="ui-test-case-step-inline-switch-item"
+                                                  >
+                                                    <Switch />
+                                                  </Form.Item>
+                                                  </div>
+                                                </div>
+
+                                                <Form.Item
+                                                  {...field}
+                                                  name={[field.name, 'description']}
+                                                  label="说明"
+                                                  className="ui-test-case-step-description-item"
+                                                >
+                                                  <Input.TextArea rows={3} maxLength={300} placeholder="补充当前步骤的备注、前置条件或断言说明" />
+                                                </Form.Item>
+                                              </div>
+                                            </div>
+                                        </div>
+                                      )
+                                      })}
+                                    </div>
+                                  )}
+
+                                  <div className="ui-test-case-step-add-row">
+                                    <Button type="dashed" icon={<PlusOutlined />} onClick={() => addStep(add, fields.length)}>
+                                      添加步骤
+                                    </Button>
+                                  </div>
+                                </>
+                              )}
+                            </Form.List>
+                          </div>
+                        </div>
+                      </Form>
+                      ) : (
+                      <div className="ui-test-case-empty-editor">
+                        <Empty description="未找到对应的 UI测试用例" />
+                      </div>
+                      )}
+                    </div>
+                  </div>
+                  {selectedRunId ? (
+                    <>
+                      <div className="api-case-editor-splitter" role="separator" aria-orientation="horizontal">
+                        <span className="api-case-editor-splitter-line" />
+                        <span className="api-case-editor-splitter-grip">⋯</span>
+                      </div>
+                      <div className="api-case-editor-result-pane">
+                        <div className="api-case-editor-result-scroll">
+                          <Card size="small" className="api-case-run-result-card">
+                            <div className="api-case-run-result-head">
+                              <div className="api-case-run-result-title">
+                                <Text strong>调试结果</Text>
+                                {currentRun ? <Tag color={currentRunStatusMeta.color}>{currentRunStatusMeta.label}</Tag> : null}
+                                {currentRun && typeof currentRun.success === 'boolean' ? (
+                                  <Tag color={currentRun.success ? 'success' : 'error'}>{currentRun.success ? '成功' : '失败'}</Tag>
+                                ) : null}
+                              </div>
+                              <div className="api-case-run-result-meta">
+                                <span>运行 ID：{selectedRunId || '-'}</span>
+                                <span>耗时：{currentRun?.durationMs ?? 0} ms</span>
+                                <span>当前 URL：{currentRun?.currentUrl || '-'}</span>
+                                <span>Trace：{currentRun?.tracePath || '-'}</span>
+                              </div>
+                            </div>
+                            {uiTestCaseRunQuery.error && !currentRun ? (
+                              <Alert showIcon type="error" message={getErrorMessage(uiTestCaseRunQuery.error)} className="api-case-run-result-alert" />
+                            ) : null}
+                            {currentRun?.errorMessage ? (
+                              <Alert showIcon type="error" message={currentRun.errorMessage} className="api-case-run-result-alert" />
+                            ) : null}
+                            <Segmented
+                              className="api-case-run-result-segmented"
+                              options={uiTestRunViewOptions}
+                              value={uiRunView}
+                              onChange={(value) => setUiRunView(value as UiTestRunView)}
+                            />
+                            <div className="api-case-run-result-block">{renderUiRunContent()}</div>
+                            <div className="ui-test-run-inline-actions">
+                              <Button icon={<ReloadOutlined />} onClick={handleRefreshUiRunDetail} loading={uiTestCaseRunQuery.isFetching}>
+                                刷新
+                              </Button>
+                            </div>
+                          </Card>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <Modal
+          open={suiteRunHistoryOpen}
+          title="测试集运行记录"
+          width={920}
+          footer={null}
+          onCancel={() => setSuiteRunHistoryOpen(false)}
+          destroyOnClose={false}
+          className="api-collection-run-history-modal"
+        >
+          <div className="api-collection-run-history-layout">
+            {suiteRunHistoryQuery.error ? (
+              <Alert showIcon type="error" message={getErrorMessage(suiteRunHistoryQuery.error)} />
+            ) : suiteRunHistoryQuery.isLoading ? (
+              <Empty description="运行记录加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : suiteRunHistory.length === 0 ? (
+              <Empty description="暂无运行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              <div className="api-collection-run-history-list">
+                {suiteRunHistory.map((item, index) => {
+                  const statusMeta = getExecutionStatusMeta(item.status)
+                  const isLoading = loadingSuiteRunHistoryId === item.suiteRunId
+
+                  return (
+                    <button
+                      key={item.suiteRunId ?? `ui-suite-run-${index}`}
+                      type="button"
+                      className="api-collection-run-history-item"
+                      onClick={() => handleOpenSuiteRunHistoryItem(item)}
+                      disabled={Boolean(loadingSuiteRunHistoryId)}
+                    >
+                      <div className="api-collection-run-history-item-main">
+                        <div className="api-collection-run-history-item-title">
+                          <strong>{formatTime(item.startedAt || item.createdAt || item.updatedAt)}</strong>
+                          <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                        </div>
+                        <div className="api-collection-run-history-item-meta">
+                          <span>总数：{item.totalCount ?? 0}</span>
+                          <span>成功：{item.successCount ?? 0}</span>
+                          <span>失败：{item.failedCount ?? 0}</span>
+                          <span>异常：{item.errorCount ?? 0}</span>
+                          <span>跳过：{item.skippedCount ?? 0}</span>
+                          <span>耗时：{item.durationMs ?? 0} ms</span>
+                          <span>结束：{formatTime(item.finishedAt)}</span>
+                        </div>
+                        {item.errorMessage ? <div className="api-collection-run-history-item-error">{item.errorMessage}</div> : null}
+                      </div>
+                      <div className="api-collection-run-history-item-side">
+                        <span className="api-collection-run-history-item-id">{item.suiteRunId ?? '-'}</span>
+                        <span className="api-collection-run-history-item-link">{isLoading ? '加载中...' : '查看报告'}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </Modal>
+
+        <Modal
+          open={suiteRunReportOpen}
+          title="测试集运行报告"
+          width={1180}
+          footer={null}
+          onCancel={closeSuiteRunReport}
+          destroyOnClose={false}
+          rootClassName="api-collection-run-report-modal-root"
+          className="api-collection-run-report-modal"
+        >
+          {suiteRunReportQuery.error && !suiteRunReport ? (
+            <Alert showIcon type="error" message={getErrorMessage(suiteRunReportQuery.error)} />
+          ) : suiteRunReportQuery.isLoading && !suiteRunReport ? (
+            <Empty description="测试集报告加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          ) : suiteRunReport ? (
+            <div className="api-collection-run-report-layout">
+              <div className="api-collection-run-report-static">
+                <div className="api-collection-run-report-head">
+                  <div className="api-collection-run-report-head-main">
+                    <div className="api-collection-run-report-title">
+                      <Text strong>运行结果</Text>
+                      <Tag color={getExecutionStatusMeta(suiteRunReport.status).color}>{getExecutionStatusMeta(suiteRunReport.status).label}</Tag>
+                    </div>
+                    <div className="api-collection-run-report-meta">
+                      <span>开始：{formatTime(suiteRunReport.startedAt)}</span>
+                      <span>结束：{formatTime(suiteRunReport.finishedAt)}</span>
+                      <span>总耗时：{suiteRunReport.durationMs ?? 0} ms</span>
+                      <span>当前 URL：{suiteRunReport.currentUrl || '-'}</span>
+                      <span>Trace：{suiteRunReport.tracePath || '-'}</span>
+                    </div>
+                  </div>
+                  <div className="api-collection-run-report-head-actions">
+                    <Button onClick={handleRefreshSuiteRunReport} loading={refreshingSuiteRunReport} disabled={!selectedSuiteRunId}>
+                      刷新报告
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="api-collection-run-report-summary-grid">
+                  <div className="api-collection-run-report-summary-item">
+                    <span>总数</span>
+                    <strong>{suiteRunReport.totalCount ?? 0}</strong>
+                  </div>
+                  <div className="api-collection-run-report-summary-item success">
+                    <span>成功</span>
+                    <strong>{suiteRunReport.successCount ?? 0}</strong>
+                  </div>
+                  <div className="api-collection-run-report-summary-item failed">
+                    <span>失败</span>
+                    <strong>{suiteRunReport.failedCount ?? 0}</strong>
+                  </div>
+                  <div className="api-collection-run-report-summary-item error">
+                    <span>异常</span>
+                    <strong>{suiteRunReport.errorCount ?? 0}</strong>
+                  </div>
+                  <div className="api-collection-run-report-summary-item skipped">
+                    <span>跳过</span>
+                    <strong>{suiteRunReport.skippedCount ?? 0}</strong>
+                  </div>
+                  <div className="api-collection-run-report-summary-item">
+                    <span>报告 ID</span>
+                    <strong>{suiteRunReport.suiteRunId ?? '-'}</strong>
+                  </div>
+                </div>
+
+                {suiteRunReport.errorMessage ? (
+                  <Alert showIcon type="error" message={suiteRunReport.errorMessage} className="api-case-run-result-alert" />
+                ) : null}
+
+                <Segmented
+                  className="api-case-run-result-segmented"
+                  options={uiSuiteRunReportViewOptions}
+                  value={suiteRunReportView}
+                  onChange={(value) => setSuiteRunReportView(value as UiSuiteRunReportView)}
+                />
+              </div>
+
+              <div className="api-collection-run-report-scroll">
+                <div className="api-collection-run-report-content">
+                  {suiteRunReportView === 'snapshot' ? (
+                    suiteRunReport.snapshot ? (
+                      <pre className="api-case-run-result-pre compact">{prettyPrintValue(suiteRunReport.snapshot)}</pre>
+                    ) : (
+                      <Empty description="暂无运行快照" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    )
+                  ) : orderedSuiteRunItems.length === 0 ? (
+                    <Empty
+                      description={selectedSuiteRunSummary?.status && isUiRunPollingStatus(selectedSuiteRunSummary.status) ? '运行中，报告生成中...' : '暂无测试集运行明细'}
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ) : (
+                    <div className="api-collection-run-report-list">
+                      {orderedSuiteRunItems.map((item, index) => {
+                        const itemKey = getUiTestSuiteRunItemKey(item, index)
+                        const expanded = expandedSuiteRunItemIds.includes(itemKey)
+                        const statusMeta = getExecutionStatusMeta(item.status)
+
+                        return (
+                          <div key={itemKey} className={`api-collection-run-report-item${expanded ? ' expanded' : ''}`}>
+                            <button type="button" className="api-collection-run-report-item-head" onClick={() => toggleSuiteRunItem(itemKey)}>
+                              <div className="api-collection-run-report-item-title">
+                                <span className="api-collection-run-report-item-order">#{item.orderNo ?? index + 1}</span>
+                                <strong>{item.caseName || `用例 ${index + 1}`}</strong>
+                                <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                                {item.continueOnFailure ? <Tag color="processing">失败后继续</Tag> : null}
+                              </div>
+                              <div className="api-collection-run-report-item-meta">
+                                <span>耗时：{item.durationMs ?? 0} ms</span>
+                                <span>开始：{formatTime(item.startedAt)}</span>
+                                <span>结束：{formatTime(item.finishedAt)}</span>
+                                <DownOutlined className={`api-collection-run-report-item-arrow${expanded ? ' expanded' : ''}`} />
+                              </div>
+                            </button>
+
+                            {expanded ? (
+                              <div className="api-collection-run-report-item-body">
+                                <div className="api-collection-run-report-item-inline-meta">
+                                  <span>caseId：{item.caseId || '-'}</span>
+                                  <span>itemId：{item.itemId || '-'}</span>
+                                  <span>当前 URL：{item.currentUrl || '-'}</span>
+                                  <span>步骤数：{item.stepResults?.length ?? 0}</span>
+                                  <span>失败后继续：{item.continueOnFailure ? '是' : '否'}</span>
+                                </div>
+                                {item.errorMessage ? <Alert showIcon type="error" message={item.errorMessage} className="api-case-run-result-alert" /> : null}
+                                <div className="api-case-run-result-block">
+                                  {renderUiRunStepResultList(item.stepResults ?? [], '该用例暂无步骤结果')}
+                                  {item.snapshot ? <pre className="api-case-run-result-pre compact">{prettyPrintValue(item.snapshot)}</pre> : null}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <Empty
+              description={selectedSuiteRunSummary?.status && isUiRunPollingStatus(selectedSuiteRunSummary.status) ? '运行中，报告生成中...' : '暂无测试集报告'}
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          )}
+        </Modal>
+      </div>
+    </div>
+  )
+}

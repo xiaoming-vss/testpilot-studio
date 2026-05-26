@@ -1,0 +1,292 @@
+.page-frame {
+  width: 100%;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.page-head h2,
+.section-head h4 {
+  margin: 0;
+}
+
+.page-head .ant-typography,
+.section-head .ant-typography {
+  margin-bottom: 0;
+}
+
+.page-actions {
+  flex: 0 0 auto;
+}
+
+.detail-block,
+.capability-card,
+.profile-card {
+  background: #fff;
+}
+
+.section-head {
+  margin-top: 4px;
+}
+
+.capability-card .ant-empty {
+  padding: 32px 0 40px;
+}
+
+.capability-card .ant-empty-image {
+  height: auto;
+  margin-bottom: 16px;
+  color: #1677ff;
+  font-size: 42px;
+}
+
+.profile-card {
+  max-width: 560px;
+}
+
+.sprint-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.sprint-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sprint-card {
+  height: 100%;
+  border: 1px solid var(--tp-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.98) 0%, rgba(255, 255, 255, 1) 45%),
+    #fff;
+  box-shadow: 0 10px 24px rgba(24, 27, 35, 0.05);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.sprint-card:hover {
+  transform: translateY(-4px);
+  border-color: #b8d3ff;
+  box-shadow: 0 16px 36px rgba(22, 119, 255, 0.12);
+}
+
+.sprint-card .ant-card-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sprint-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sprint-card-title {
+  color: #181b23;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+}
+
+.sprint-card-title-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sprint-card-status {
+  flex: 0 0 auto;
+}
+
+.sprint-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--tp-border-soft);
+}
+
+.sprint-card-label {
+  color: #727786;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.sprint-card-value {
+  color: #181b23;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.sprint-card-description {
+  color: #414755;
+  font-size: 14px;
+  line-height: 22px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.sprint-card-actions {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.sprint-card-scroll {
+  padding: 16px;
+}
+
+.sprint-card-grid-workbench {
+  align-content: start;
+}
+
+.sprint-card-loading {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+}
+
+.requirement-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.requirement-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 6px 2px 8px;
+  background: #f7f9fc;
+  border: 1px solid var(--tp-border-soft);
+  border-radius: 999px;
+}
+
+.requirement-filter-label {
+  color: #727786;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.requirement-filter-control {
+  min-width: 0;
+}
+
+.requirement-filter-select {
+  min-width: 116px;
+}
+
+.requirement-filter-select .ant-select-selector {
+  min-height: 20px !important;
+  padding-inline: 0 !important;
+}
+
+.requirement-filter-select .ant-select-selection-item,
+.requirement-filter-select .ant-select-selection-placeholder {
+  color: #181b23;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px !important;
+}
+
+.requirement-filter-select .ant-select-arrow,
+.requirement-filter-select .ant-select-clear {
+  font-size: 10px;
+}
+
+@media (max-width: 900px) {
+  .auth-page {
+    padding: 24px 16px;
+  }
+
+  .auth-card .ant-card-body {
+    padding: 32px 24px;
+  }
+
+  .app-sider {
+    display: none;
+  }
+
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .app-search {
+    display: none;
+  }
+
+  .project-context-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px 16px;
+  }
+
+  .project-actions {
+    width: 100%;
+  }
+
+  .workbench-tabs {
+    padding: 16px;
+  }
+
+  .page-head {
+    flex-direction: column;
+  }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .sprint-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sprint-card-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sprint-card-value {
+    text-align: left;
+  }
+
+  .requirement-panel-head,
+  .requirement-filter-bar {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .requirement-filter-bar {
+    border-radius: 16px;
+  }
+
+  .requirement-filter-select {
+    min-width: 108px;
+  }
+}
+

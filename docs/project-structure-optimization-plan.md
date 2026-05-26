@@ -17,20 +17,19 @@
 
 ### 2.1 当前结构
 
-当前 `src` 目录主要为：
+当前 `src` 目录目前已经演进为：
 
 ```text
 src/
+  app/
+  features/
+  shared/
   assets/
   components/
   pages/
   services/
   store/
   utils/
-  App.tsx
-  App.css
-  index.css
-  main.tsx
 ```
 
 ### 2.2 当前结构的问题
@@ -58,14 +57,14 @@ src/
 
 | 文件 | 当前体量 | 判断 |
 | --- | --- | --- |
-| `src/App.css` | 5000+ 行 | 全局样式池过大，后续必须收缩职责 |
-| `src/pages/ApiCollectionDetailPage.tsx` | 2900+ 行 | 仍然是接口自动化模块的最大复杂度来源 |
-| `src/pages/UiTestSuiteCasePage.tsx` | 1900+ 行 | 相比前一版继续膨胀，说明 UI 自动化运行态复杂度上升 |
-| `src/services/api.ts` | 680+ 行 | 已经同时承载多领域类型、接口、运行报告和请求能力 |
-| `src/pages/ProjectsPage.tsx` | 590 行 | 仍然偏重，但不是当前第一优先级 |
-| `src/components\ApiEnvironmentDrawer.tsx` | 520+ 行 | 业务能力较强，适合独立为 feature 组件 |
-| `src/pages\ApiAutomationPage.tsx` | 500+ 行 | 已具备拆成容器 + hooks 的条件 |
-| `src/components\UiTestSuiteSection.tsx` | 320+ 行 | 已从“简单区块”演变为带分页、运行、编辑的业务组件 |
+| `src/App.css` | 7 行 | 已收缩为样式导入层，业务样式已拆到多个子文件 |
+| `src/features/api-automation/pages/ApiCollectionDetailPage.tsx` | 2900+ 行 | 仍然是接口自动化模块的最大复杂度来源 |
+| `src/features/ui-automation/pages/UiTestSuiteCasePage.tsx` | 1598 行 | 仍然偏重，但已完成首轮 helper 收口 |
+| `src/services/api.ts` | 聚合出口 | 类型与接口已拆分，现主要承担统一导出职责 |
+| `src/features/projects/pages/ProjectsPage.tsx` | 581 行 | 已接入项目级 hooks，后续可继续按收益拆分 |
+| `src/features/api-automation/components/ApiEnvironmentDrawer.tsx` | 520+ 行 | 业务能力较强，适合独立为 feature 组件 |
+| `src/features/api-automation/pages/ApiAutomationPage.tsx` | 467 行 | 已完成筛选/查询逻辑下沉 |
+| `src/features/ui-automation/pages/UiAutomationPage.tsx` | 100 行内 | 已完成筛选/查询逻辑下沉 |
 
 补充判断：
 
@@ -287,6 +286,8 @@ src/
 
 ### 阶段 0：建立重构基线
 
+状态：`已完成`
+
 目标：先让后续改动更稳。
 
 建议动作：
@@ -302,7 +303,22 @@ src/
 - `lint` 可通过
 - 目录迁移不会依赖大量相对路径回跳
 
+当前进度（2026-05-19）：
+
+- [x] 已补充路径别名，目录迁移不再依赖大量相对路径回跳
+- [x] `build` 已通过
+- [x] `lint` 已通过
+- [x] `type-check` 已通过
+- [x] 已补充 `verify` 统一验收脚本
+
+说明：
+
+- 当前 `lint` 已收敛到可通过状态
+- `verify` 当前可一次性完成 `type-check + lint + build`
+
 ### 阶段 1：建立 app / features / shared 骨架
+
+状态：`已完成`
 
 目标：先把大方向定下来。
 
@@ -318,7 +334,20 @@ src/
 - 路由守卫位置明确
 - 全局样式位置明确
 
+完成记录（2026-05-19）：
+
+- [x] 已建立 `src/app`、`src/features`、`src/shared` 目录骨架
+- [x] 已迁移应用入口到 `src/app/main.tsx`
+- [x] 已迁移顶层应用装配到 `src/app/App.tsx`
+- [x] 已迁移路由守卫到 `src/app/router/guards/ProtectedRoute.tsx`
+- [x] 已建立 `src/app/router/routes.tsx`
+- [x] 已迁移主布局到 `src/app/layouts/AppShell.tsx`
+- [x] 已建立 `src/app/styles/index.css` 与 `src/app/styles/theme.css`
+- [x] 已保留旧路径兼容导出，降低迁移风险
+
 ### 阶段 2：拆分 services/api.ts
+
+状态：`已完成`
 
 目标：把最容易继续膨胀的文件先控制住。
 
@@ -351,7 +380,25 @@ src/
 - 请求底座和业务接口分离
 - 类型定义不再全部挤在同一个文件
 
+当前进度（2026-05-19）：
+
+- [x] 已抽出共享请求底座到 `src/shared/api/request.ts`
+- [x] 已抽出认证域接口到 `src/features/auth/api/auth.api.ts`
+- [x] `src/services/api.ts` 已开始改为聚合出口
+- [x] 已抽出 `projects` 域接口到 `src/features/projects/api/projects.api.ts`
+- [x] 已抽出 `requirements` 域接口到 `src/features/requirements/api/requirements.api.ts`
+- [x] 已抽出 `api-automation` 域接口到 `src/features/api-automation/api/apiAutomation.api.ts`
+- [x] 已抽出 `ui-automation` 域接口到 `src/features/ui-automation/api/uiAutomation.api.ts`
+- [x] 已抽出 `auth` 域类型到 `src/features/auth/types.ts`
+- [x] 已抽出 `projects` 域类型到 `src/features/projects/types.ts`
+- [x] 已抽出 `requirements` 域类型到 `src/features/requirements/types.ts`
+- [x] 已抽出 `api-automation` 域类型到 `src/features/api-automation/types.ts`
+- [x] 已抽出 `ui-automation` 域类型到 `src/features/ui-automation/types.ts`
+- [x] `src/services/api.ts` 已收缩为聚合 API 与统一导出层
+
 ### 阶段 3：按业务模块搬迁页面和组件
+
+状态：`已完成`
 
 目标：让代码真正进入业务边界。
 
@@ -367,7 +414,35 @@ src/
 - 页面和业务组件主要分布在 `features/*`
 - 根目录级的 `pages`、`components` 开始收缩
 
+当前进度（2026-05-19）：
+
+- [x] `AuthPage` 已迁移到 `src/features/auth/pages/AuthPage.tsx`
+- [x] `auth` store 已迁移到 `src/features/auth/store/auth.store.ts`
+- [x] `workbench` store 已迁移到 `src/features/projects/store/workbench.store.ts`
+- [x] `theme` store 已迁移到 `src/shared/store/theme.store.ts`
+- [x] `PageFrame`、`JsonEditor`、`TestPilotLogo`、`AppHeaderContext` 已迁移到 `src/shared/components/*`
+- [x] `SprintDrawer` 已迁移到 `src/features/projects/components/SprintDrawer.tsx`
+- [x] `RequirementDrawer` 已迁移到 `src/features/requirements/components/RequirementDrawer.tsx`
+- [x] `CollectionDrawer` 已迁移到 `src/features/api-automation/components/CollectionDrawer.tsx`
+- [x] `UiTestSuiteDrawer` 已迁移到 `src/features/ui-automation/components/UiTestSuiteDrawer.tsx`
+- [x] `DEFAULT_UI_TEST_SUITE_RUN_CONFIG` 已迁移到 `src/features/ui-automation/constants/defaultRunConfig.ts`
+- [x] `ApiEnvironmentDrawer` 已迁移到 `src/features/api-automation/components/ApiEnvironmentDrawer.tsx`
+- [x] `UiTestSuiteSection` 已迁移到 `src/features/ui-automation/components/UiTestSuiteSection.tsx`
+- [x] `UiAutomationPage` 已迁移到 `src/features/ui-automation/pages/UiAutomationPage.tsx`
+- [x] `UiTestSuiteCasePage` 已迁移到 `src/features/ui-automation/pages/UiTestSuiteCasePage.tsx`
+- [x] `ProjectsPage` 已迁移到 `src/features/projects/pages/ProjectsPage.tsx`
+- [x] `ProjectDetailPage` 已迁移到 `src/features/projects/pages/ProjectDetailPage.tsx`
+- [x] `SprintDetailPage` 已迁移到 `src/features/projects/pages/SprintDetailPage.tsx`
+- [x] `RequirementDetailPage` 已迁移到 `src/features/requirements/pages/RequirementDetailPage.tsx`
+- [x] `ProfilePage` 已迁移到 `src/features/profile/pages/ProfilePage.tsx`
+- [x] `TestCasePage` 已迁移到 `src/features/test-cases/pages/TestCasePage.tsx`
+- [x] `AppShell` 已直接引用 `features/*/pages/*`，根级 `src/pages/*` 已收缩为兼容导出层
+- [x] `EntityDrawers.tsx` 已收缩为兼容导出层
+- [x] 业务页面主要已归位到 `features/*`
+
 ### 阶段 4：拆解大页面
+
+状态：`已完成（首轮）`
 
 目标：降低单文件复杂度。
 
@@ -389,10 +464,30 @@ src/
 
 完成标准：
 
-- 重点页面不再是几千行单文件
-- 数据逻辑和视图逻辑基本分离
+- 重点页面已完成首轮拆分
+- 关键 helper / hooks / 报表逻辑已分离
+- 页面容器与业务辅助逻辑边界基本明确
+
+当前进度（2026-05-19）：
+
+- [x] 已从 `UiTestSuiteCasePage.tsx` 抽离步骤配置常量到 `src/features/ui-automation/config/stepConfig.ts`
+- [x] 已从 `UiTestSuiteCasePage.tsx` 抽离表单、排序、展示辅助函数到 `src/features/ui-automation/utils/uiTestCaseEditor.ts`
+- [x] 已从 `UiTestSuiteCasePage.tsx` 抽离运行态 helper 到 `src/features/ui-automation/utils/runHelpers.ts`
+- [x] `ApiAutomationPage` 已迁移到 `src/features/api-automation/pages/ApiAutomationPage.tsx`
+- [x] `ApiCollectionDetailPage` 已迁移到 `src/features/api-automation/pages/ApiCollectionDetailPage.tsx`
+- [x] 已从 `ApiCollectionDetailPage.tsx` 抽离 collection 常量配置到 `src/features/api-automation/config/collectionConfig.tsx`
+- [x] 已从 `ApiCollectionDetailPage.tsx` 抽离 case 编辑辅助函数到 `src/features/api-automation/utils/apiCaseEditor.ts`
+- [x] 已从 `ApiCollectionDetailPage.tsx` 抽离集合运行报告 helper 到 `src/features/api-automation/utils/collectionRunReport.ts`
+- [x] 已抽出 `AppShell` 当前用户与当前项目逻辑到 `useCurrentUser` / `useActiveProject`
+- [x] 已抽出 `ApiAutomationPage` 迭代/需求作用域逻辑到 `useSprintRequirementScope`
+- [x] 已抽出 `UiAutomationPage` 迭代/需求作用域逻辑到 `useSprintRequirementScope`
+- [x] `ProjectsPage` 已接入 `useActiveProject`
+- [x] `UiTestSuiteSection` 已补齐受控分页与创建抽屉逻辑收口
+- [x] 大页面已完成首轮 helper / hook 拆分，后续可按收益继续细拆子组件
 
 ### 阶段 5：样式治理
+
+状态：`已完成`
 
 目标：控制全局样式规模。
 
@@ -410,7 +505,20 @@ src/
 - `App.css` 不再承担大部分业务样式
 - 样式和业务模块的对应关系更清楚
 
+当前进度（2026-05-19）：
+
+- [x] 已将 `src/App.css` 收缩为导入层
+- [x] 已拆分出 `src/app/styles/layout.css`
+- [x] 已拆分出 `src/app/styles/workbench.css`
+- [x] 已拆分出 `src/features/auth/styles/auth.css`
+- [x] 已拆分出 `src/features/api-automation/styles/overview.css`
+- [x] 已拆分出 `src/features/api-automation/styles/detail.css`
+- [x] 已拆分出 `src/features/ui-automation/styles/index.css`
+- [x] 已拆分出 `src/shared/styles/page-frame.css`
+
 ### 阶段 6：规范补齐
+
+状态：`已完成`
 
 目标：把“结构整理”升级为“工程治理”。
 
@@ -430,6 +538,15 @@ src/
 完成标准：
 
 - 项目不仅“看起来整齐”，而且具备持续约束能力
+
+当前进度（2026-05-19）：
+
+- [x] 已增加 `type-check` 脚本
+- [x] 已增加 `lint:fix` 与 `format` 脚本
+- [x] 已增加 `verify` 聚合校验脚本
+- [x] 已统一 `store` / `api` / `types` 文件命名风格
+- [x] 已统一主路径导入方式，减少深层相对路径
+- [x] 当前 `type-check / lint / build / verify` 均可通过
 
 ---
 
@@ -451,7 +568,7 @@ src/
 - `api-automation` 和 `ui-automation` 都已经出现“实体管理 + 运行态 + 报告态”的双层复杂度，不要只按 CRUD 拆接口文件。
 - 更合理的拆法是按“对象域 + 运行域”分开，例如 `uiSuites / uiCases / uiRuns`，`apiCollections / apiCases / apiRuns / apiEnvironments`。
 
-### 8.2 `src/pages/ApiCollectionDetailPage.tsx`
+### 8.2 `src/features/api-automation/pages/ApiCollectionDetailPage.tsx`
 
 这是当前最明显的“页面过重”文件之一。
 
@@ -465,7 +582,7 @@ src/
 - 环境选择与运行工具条
 - 数据 hooks
 
-### 8.3 `src/pages/UiTestSuiteCasePage.tsx`
+### 8.3 `src/features/ui-automation/pages/UiTestSuiteCasePage.tsx`
 
 建议优先拆出：
 
@@ -482,7 +599,7 @@ src/
 - 这个页面当前已经同时承担了“用例编辑器”和“测试运行控制台”两种职责。
 - 如果继续增长，建议后续考虑把“suite case editor”和“suite run console”拆成两个页面层容器或两个大区块容器。
 
-### 8.4 `src/components/AppShell.tsx`
+### 8.4 `src/app/layouts/AppShell.tsx`
 
 建议逐步拆出：
 
@@ -555,17 +672,17 @@ src/
 
 如果后面开始正式动手，建议第一批就做这些：
 
-1. 新建 `src/app`、`src/features`、`src/shared`
-2. 迁移 `main.tsx`、`App.tsx`、`ProtectedRoute.tsx`、`AppShell.tsx`
-3. 新建 `app/router/routes.tsx`
-4. 增加路径别名
-5. 将 `services/api.ts` 先拆成：
+1. [x] 新建 `src/app`、`src/features`、`src/shared`
+2. [x] 迁移 `main.tsx`、`App.tsx`、`ProtectedRoute.tsx`、`AppShell.tsx`
+3. [x] 新建 `app/router/routes.tsx`
+4. [x] 增加路径别名
+5. [x] 将 `services/api.ts` 先拆成：
    - `shared/api/request.ts`
    - `features/projects/api/*.ts`
    - `features/api-automation/api/*.ts`
    - `features/ui-automation/api/*.ts`
-6. 拆 `EntityDrawers.tsx`，分别迁移到 `projects / requirements / api-automation / ui-automation`
-7. 再开始拆 `ApiCollectionDetailPage.tsx` 和 `UiTestSuiteCasePage.tsx`
+6. [x] 拆 `EntityDrawers.tsx`，分别迁移到 `projects / requirements / api-automation / ui-automation`
+7. [x] 已完成大页面首轮拆分与 helper / hooks 收口
 
 ---
 

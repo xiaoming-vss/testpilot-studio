@@ -132,14 +132,11 @@ export function buildUiTestSuiteUpdatePayload(suite: UiTestSuite, values: UiTest
 
 export function buildUiTestCaseUpdatePayload(
   uiTestCase: UiTestCase,
-  values: Pick<UiTestCase, 'name' | 'description' | 'enabled' | 'orderNo' | 'stepsJson'>,
+  values: Pick<UiTestCase, 'name' | 'enabled' | 'orderNo' | 'stepsJson'>,
 ) {
-  const payload: Partial<Pick<UiTestCase, 'name' | 'description' | 'enabled' | 'orderNo' | 'stepsJson'>> = {}
+  const payload: Partial<Pick<UiTestCase, 'name' | 'enabled' | 'orderNo' | 'stepsJson'>> = {}
 
   if (uiTestCase.name !== values.name) payload.name = values.name
-  if (normalizeText(uiTestCase.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
-  }
   if (Boolean(uiTestCase.enabled) !== Boolean(values.enabled)) payload.enabled = Boolean(values.enabled)
   if ((uiTestCase.orderNo ?? undefined) !== (values.orderNo ?? undefined)) payload.orderNo = values.orderNo
   if (normalizeText(uiTestCase.stepsJson) !== normalizeText(values.stepsJson)) payload.stepsJson = values.stepsJson ?? '[]'
@@ -181,10 +178,10 @@ export function buildApiEnvironmentVarUpdatePayload(
 
 export function buildApiAssertRuleUpdatePayload(
   assertRule: ApiAssertRule,
-  values: Pick<ApiAssertRule, 'name' | 'enabled' | 'orderNo' | 'assertSource' | 'targetExpr' | 'comparator' | 'expectedValue' | 'description'>,
+  values: Pick<ApiAssertRule, 'name' | 'enabled' | 'orderNo' | 'assertSource' | 'targetExpr' | 'comparator' | 'expectedValue'>,
 ) {
   const payload: Partial<
-    Pick<ApiAssertRule, 'name' | 'enabled' | 'orderNo' | 'assertSource' | 'targetExpr' | 'comparator' | 'expectedValue' | 'description'>
+    Pick<ApiAssertRule, 'name' | 'enabled' | 'orderNo' | 'assertSource' | 'targetExpr' | 'comparator' | 'expectedValue'>
   > = {}
 
   if (assertRule.name !== values.name) payload.name = values.name
@@ -194,17 +191,16 @@ export function buildApiAssertRuleUpdatePayload(
   if (normalizeText(assertRule.targetExpr) !== normalizeText(values.targetExpr)) payload.targetExpr = values.targetExpr ?? ''
   if (assertRule.comparator !== values.comparator) payload.comparator = values.comparator
   if (normalizeText(assertRule.expectedValue) !== normalizeText(values.expectedValue)) payload.expectedValue = values.expectedValue ?? ''
-  if (normalizeText(assertRule.description) !== normalizeText(values.description)) payload.description = values.description ?? ''
 
   return payload
 }
 
 export function buildApiExtractRuleUpdatePayload(
   extractRule: ApiExtractRule,
-  values: Pick<ApiExtractRule, 'name' | 'enabled' | 'orderNo' | 'source' | 'sourceExpr' | 'varKey' | 'defaultValue' | 'targetScope' | 'description'>,
+  values: Pick<ApiExtractRule, 'name' | 'enabled' | 'orderNo' | 'source' | 'sourceExpr' | 'varKey' | 'defaultValue'>,
 ) {
   const payload: Partial<
-    Pick<ApiExtractRule, 'name' | 'enabled' | 'orderNo' | 'source' | 'sourceExpr' | 'varKey' | 'defaultValue' | 'targetScope' | 'description'>
+    Pick<ApiExtractRule, 'name' | 'enabled' | 'orderNo' | 'source' | 'sourceExpr' | 'varKey' | 'defaultValue'>
   > = {}
 
   if (extractRule.name !== values.name) payload.name = values.name
@@ -214,8 +210,6 @@ export function buildApiExtractRuleUpdatePayload(
   if (normalizeText(extractRule.sourceExpr) !== normalizeText(values.sourceExpr)) payload.sourceExpr = values.sourceExpr ?? ''
   if (extractRule.varKey !== values.varKey) payload.varKey = values.varKey
   if (normalizeText(extractRule.defaultValue) !== normalizeText(values.defaultValue)) payload.defaultValue = values.defaultValue ?? ''
-  if (extractRule.targetScope !== values.targetScope) payload.targetScope = values.targetScope
-  if (normalizeText(extractRule.description) !== normalizeText(values.description)) payload.description = values.description ?? ''
 
   return payload
 }

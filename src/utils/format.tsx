@@ -1,5 +1,18 @@
 import { Tag } from 'antd'
-import type { ApiAssertRule, ApiEnvironment, ApiEnvironmentVar, ApiExtractRule, Project, Requirement, Sprint, UiTestCase, UiTestSuite, User } from '../services/api'
+import type {
+  ApiAssertRule,
+  ApiEnvironment,
+  ApiEnvironmentVar,
+  ApiExtractRule,
+  FunctionTestCase,
+  FunctionTestSuite,
+  Project,
+  Requirement,
+  Sprint,
+  UiTestCase,
+  UiTestSuite,
+  User,
+} from '../services/api'
 
 export function normalizeUserName(user?: User | null) {
   return user?.name ?? user?.nickname ?? '未命名用户'
@@ -27,6 +40,14 @@ export function normalizeEnvironmentVarId(environmentVar: ApiEnvironmentVar) {
 
 export function normalizeUiTestSuiteId(suite: UiTestSuite) {
   return suite.suiteId ?? ''
+}
+
+export function normalizeFunctionTestSuiteId(suite: FunctionTestSuite) {
+  return suite.suiteId ?? ''
+}
+
+export function normalizeFunctionTestCaseId(testCase: FunctionTestCase) {
+  return testCase.caseId ?? ''
 }
 
 export function normalizeUiTestCaseId(uiTestCase: UiTestCase) {

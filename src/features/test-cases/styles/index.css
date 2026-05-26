@@ -1,0 +1,241 @@
+.functional-suite-detail-page {
+  height: 100%;
+}
+
+.functional-suite-detail-page .api-automation-content {
+  height: 100%;
+}
+
+.functional-suite-detail-page .page-frame {
+  min-height: 0;
+}
+
+.functional-suite-detail-layout {
+  align-items: stretch;
+}
+
+.functional-suite-detail-panel {
+  flex: 0 0 auto;
+}
+
+.functional-case-sidebar {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.functional-case-nav-item {
+  align-items: flex-start;
+}
+
+.functional-case-nav-item-main {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.functional-case-nav-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+}
+
+.functional-case-nav-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.functional-case-nav-title-row .ant-tag {
+  margin-inline-end: 0;
+}
+
+.functional-case-nav-order {
+  flex: 0 0 auto;
+  min-width: 34px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tp-bg-softest, #eef5ff);
+  color: var(--tp-accent, #1677ff);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.functional-case-nav-item-actions {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.functional-case-nav-item-tags {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.functional-case-editor-panel {
+  overflow: hidden;
+}
+
+.functional-case-empty-editor {
+  min-height: 100%;
+}
+
+.functional-case-editor-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 16px 24px 24px;
+}
+
+.functional-case-editor-sticky-head {
+  margin-bottom: 0;
+}
+
+.functional-case-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.functional-case-name-block {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.functional-case-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.functional-case-inline-label {
+  color: var(--tp-text-secondary, #5b6477);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.functional-case-name-item {
+  margin-bottom: 8px;
+}
+
+.functional-case-title-input.ant-input {
+  min-height: 42px;
+  padding: 9px 12px;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+}
+
+.functional-case-title-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.functional-case-title-meta .ant-typography {
+  margin: 0;
+}
+
+.functional-case-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.functional-case-editor-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 16px;
+}
+
+.functional-case-editor-description {
+  margin-bottom: 0;
+  color: var(--tp-text-secondary, #5b6477);
+}
+
+.functional-case-editor-grid {
+  gap: 14px 16px;
+}
+
+.functional-case-section-item {
+  margin-bottom: 0;
+}
+
+.functional-case-editor-split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.functional-case-section-item .ant-input,
+.functional-case-section-item .ant-input-number,
+.functional-case-section-item .ant-select-selector,
+.functional-case-form-grid .ant-input,
+.functional-case-form-grid .ant-input-number,
+.functional-case-form-grid .ant-select-selector {
+  min-height: 36px;
+}
+
+.functional-case-section-item .ant-input-textarea textarea {
+  resize: vertical;
+}
+
+.functional-case-brief {
+  color: var(--tp-text-secondary, #5b6477);
+}
+
+.functional-case-brief-stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--tp-text-secondary, #5b6477);
+}
+
+.functional-case-brief-stack span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.functional-case-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+:root[data-theme='dark'] .functional-case-brief,
+:root[data-theme='dark'] .functional-case-brief-stack {
+  color: var(--tp-text-secondary);
+}
+
+@media (max-width: 900px) {
+  .functional-case-toolbar {
+    flex-direction: column;
+  }
+
+  .functional-case-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .functional-case-editor-split-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .functional-case-nav-item {
+    flex-direction: column;
+  }
+
+  .functional-case-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,115 @@
+.testing-page {
+  --testing-panel: linear-gradient(180deg, rgba(24, 28, 38, 0.98) 0%, rgba(18, 22, 31, 0.98) 100%);
+  --testing-border: rgba(148, 163, 184, 0.14);
+  --testing-text: #e8eef8;
+  --testing-text-muted: #7f8aa3;
+  --testing-accent: #83d5c8;
+}
+
+.testing-page .testing-toolbar {
+  background:
+    radial-gradient(circle at top left, rgba(131, 213, 200, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(123, 168, 255, 0.1), transparent 22%),
+    var(--testing-panel);
+  border: 1px solid var(--testing-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 40px rgba(7, 10, 16, 0.2);
+}
+
+.testing-tab-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  min-width: 0;
+}
+
+.testing-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+  border: 0;
+  color: var(--testing-text-muted);
+  background: transparent;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.testing-tab:hover {
+  color: #d6e8ff;
+}
+
+.testing-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 0.18s ease;
+}
+
+.testing-tab.active {
+  color: var(--testing-text);
+}
+
+.testing-tab.active::after {
+  background: var(--testing-accent);
+}
+
+.testing-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.testing-tab-panel {
+  min-width: 0;
+}
+
+.testing-tab-panel > .workbench-page {
+  padding: 0;
+}
+
+.functional-test-page {
+  height: 100%;
+}
+
+.functional-test-page .api-automation-content {
+  height: 100%;
+}
+
+.functional-suite-scroll {
+  padding: 16px;
+}
+
+.functional-suite-grid {
+  width: 100%;
+  align-content: start;
+}
+
+.functional-suite-card .api-collection-description {
+  min-height: 44px;
+}
+
+.functional-suite-card .sprint-card-actions .ant-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+}
+
+@media (max-width: 680px) {
+  .testing-tab-switcher {
+    gap: 18px;
+    width: 100%;
+    overflow-x: auto;
+  }
+}

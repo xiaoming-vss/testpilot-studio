@@ -1,4 +1,6 @@
 import type { CreateUiTestCasePayload, UiTestCase } from '@/services/api'
+import { moveArrayItem } from '@/shared/utils/array'
+import { formatOptionalValue, prettyPrintValue } from '@/shared/utils/value'
 import { normalizeUiTestCaseId, pickCreatedAt } from '@/utils/format'
 import { usesUiStepComparator } from '../config/stepConfig'
 
@@ -144,13 +146,6 @@ export function getUiTestCaseStepCount(uiTestCase: UiTestCase) {
   return parseStepsJson(uiTestCase.stepsJson).length
 }
 
-export function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
-  const next = [...items]
-  const [item] = next.splice(fromIndex, 1)
-  next.splice(toIndex, 0, item)
-  return next
-}
-
 export function moveExpandedStepIndex(index: number, fromIndex: number, toIndex: number) {
   if (index === fromIndex) return toIndex
 
@@ -165,39 +160,7 @@ export function moveExpandedStepIndex(index: number, fromIndex: number, toIndex:
   return index
 }
 
-function parseMaybeJsonValue(value: unknown) {
-  if (typeof value !== 'string') return value
-  if (!value.trim()) return ''
-
-  try {
-    return JSON.parse(value) as unknown
-  } catch {
-    return value
-  }
-}
-
-export function prettyPrintValue(value: unknown) {
-  const normalized = parseMaybeJsonValue(value)
-
-  if (normalized === '' || normalized === undefined || normalized === null) {
-    return ''
-  }
-
-  if (typeof normalized === 'string') {
-    return normalized
-  }
-
-  try {
-    return JSON.stringify(normalized, null, 2)
-  } catch {
-    return String(normalized)
-  }
-}
-
-export function formatOptionalValue(value: unknown) {
-  if (value === undefined || value === null || value === '') return '-'
-  return String(value)
-}
+export { formatOptionalValue, moveArrayItem, prettyPrintValue }
 
 export function formatViewportText(width?: number, height?: number) {
   if (!width || !height) return '-'

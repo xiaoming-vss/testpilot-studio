@@ -7,7 +7,7 @@ import { ApiEnvironmentDrawer } from '@/features/api-automation/components/ApiEn
 import { CollectionDrawer, type CollectionFormValues } from '@/features/api-automation/components/CollectionDrawer'
 import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRequirementScope'
 import { api, type ApiCollection, type ApiEnvironment, type Requirement } from '@/services/api'
-import { useWorkbenchStore } from '@/store/workbench'
+import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
 import {
   formatTime,
   getErrorMessage,
@@ -20,10 +20,19 @@ import { buildApiCollectionUpdatePayload } from '@/utils/updatePayload'
 
 const { Paragraph, Text } = Typography
 
-export function ApiAutomationPage() {
+type ApiAutomationPageScope = {
+  projectId?: string
+  sprintId?: string
+  sprintName?: string
+  requirementId?: string
+  requirementName?: string
+}
+
+export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const activeProjectId = useWorkbenchStore((state) => state.activeProjectId)
+  const workbenchActiveProjectId = useWorkbenchStore((state) => state.activeProjectId)
+  const activeProjectId = scope?.projectId ?? workbenchActiveProjectId
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(8)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -33,6 +42,7 @@ export function ApiAutomationPage() {
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | undefined>(undefined)
   const [runningCollectionId, setRunningCollectionId] = useState('')
   const [drawerForm] = Form.useForm<CollectionFormValues>()
+  const isRequirementLocked = Boolean(scope?.requirementId)
 
   const {
     currentRequirementSelection,
@@ -51,6 +61,8 @@ export function ApiAutomationPage() {
     includeAllRequirementOption: true,
     includeAllSprintOption: true,
   })
+  const selectedSprintId = scope?.sprintId ?? resolvedSelectedSprintId
+  const selectedRequirementId = scope?.requirementId ?? resolvedSelectedRequirementId
 
   const allRequirementsQuery = useQuery({
     queryKey: ['requirementsPoolForCollections', activeProjectId, sprints.map(normalizeSprintId).join(',')],
@@ -59,7 +71,7 @@ export function ApiAutomationPage() {
       const requirementGroups = await Promise.all(sprints.map((sprint) => api.getRequirements(normalizeSprintId(sprint))))
       return requirementGroups.flat()
     },
-    enabled: Boolean(activeProjectId) && !sprintsQuery.isLoading,
+    enabled: Boolean(activeProjectId) && !sprintsQuery.isLoading && !isRequirementLocked,
   })
   const allRequirements = useMemo(() => allRequirementsQuery.data ?? [], [allRequirementsQuery.data])
 
@@ -67,26 +79,44 @@ export function ApiAutomationPage() {
     queryKey: [
       'apiCollections',
       activeProjectId,
-      resolvedSelectedSprintId,
-      resolvedSelectedRequirementId,
+      selectedSprintId,
+      selectedRequirementId,
       sprints.map(normalizeSprintId).join(','),
     ],
     queryFn: async () => {
-      const targetRequirements: Requirement[] = resolvedSelectedRequirementId
+      if (selectedRequirementId) {
+        const collections = await api.getApiCollections(selectedRequirementId)
+        return collections.map((collection) => ({
+          ...collection,
+          requirementId: collection.requirementId ?? collection.requirement_id ?? selectedRequirementId,
+        }))
+      }
+
+      const targetRequirements: Requirement[] = selectedSprintId
         ? (() => {
-            const target = allRequirements.find((item) => normalizeRequirementId(item) === resolvedSelectedRequirementId)
-            return target ? [target] : []
+            const pool = allRequirements.length > 0 ? allRequirements : []
+            const targets = pool.filter((item) => (item.sprintId ?? item.sprint_id) === selectedSprintId)
+            return targets
           })()
-        : resolvedSelectedSprintId
-          ? await api.getRequirements(resolvedSelectedSprintId)
+        : sprints.length === 0
+          ? []
+          : (await Promise.all(sprints.map((sprint) => api.getRequirements(normalizeSprintId(sprint))))).flat()
+
+      if (targetRequirements.length === 0 && selectedSprintId) {
+        return []
+      }
+
+      const requirementPool =
+        targetRequirements.length > 0
+          ? targetRequirements
           : sprints.length === 0
             ? []
             : (await Promise.all(sprints.map((sprint) => api.getRequirements(normalizeSprintId(sprint))))).flat()
 
-      if (targetRequirements.length === 0) return []
+      if (requirementPool.length === 0) return []
 
       const collectionGroups = await Promise.all(
-        targetRequirements.map(async (requirement) => {
+        requirementPool.map(async (requirement) => {
           const requirementId = normalizeRequirementId(requirement)
           const collections = await api.getApiCollections(requirementId)
           return collections.map((collection) => ({
@@ -216,10 +246,10 @@ export function ApiAutomationPage() {
 
   function openCreateDrawer() {
     setEditingCollection(null)
-    setDrawerSprintId(resolvedSelectedSprintId)
+    setDrawerSprintId(scope?.sprintId ?? resolvedSelectedSprintId)
     drawerForm.setFieldsValue({
-      sprintId: resolvedSelectedSprintId,
-      requirementId: resolvedSelectedRequirementId,
+      sprintId: scope?.sprintId ?? resolvedSelectedSprintId,
+      requirementId: selectedRequirementId,
       name: '',
       summary: '',
     })
@@ -228,7 +258,7 @@ export function ApiAutomationPage() {
 
   function openEditDrawer(collection: ApiCollection) {
     const requirementId = collection.requirementId ?? collection.requirement_id
-    const sprintId = requirementId ? requirementSprintMap.get(requirementId) : undefined
+    const sprintId = scope?.sprintId ?? (requirementId ? requirementSprintMap.get(requirementId) : undefined)
 
     setEditingCollection(collection)
     setDrawerSprintId(sprintId)
@@ -262,54 +292,56 @@ export function ApiAutomationPage() {
           <div className="panel-header api-panel-header">
             <div className="requirement-panel-head">
               <Text strong>API测试集</Text>
-              <div className="api-filter-group">
-                <div className="api-filter-field">
-                  <span className="api-filter-field-label">迭代</span>
-                  <Select
-                    className="api-filter-select business-filter-select"
-                    value={currentSprintSelection === null ? 'all' : resolvedSelectedSprintId ?? 'all'}
-                    options={sprintFilterOptions}
-                    loading={sprintsQuery.isLoading}
-                    placeholder="筛选迭代"
-                    onChange={(value: string) => {
-                      selectSprint(value === 'all' ? null : value)
-                      if (value === 'all') {
-                        selectRequirement(null)
-                      }
-                      setPage(1)
-                    }}
-                  />
+              {!isRequirementLocked ? (
+                <div className="api-filter-group">
+                  <div className="api-filter-field">
+                    <span className="api-filter-field-label">迭代</span>
+                    <Select
+                      className="api-filter-select business-filter-select"
+                      value={currentSprintSelection === null ? 'all' : selectedSprintId ?? 'all'}
+                      options={sprintFilterOptions}
+                      loading={sprintsQuery.isLoading}
+                      placeholder="筛选迭代"
+                      onChange={(value: string) => {
+                        selectSprint(value === 'all' ? null : value)
+                        if (value === 'all') {
+                          selectRequirement(null)
+                        }
+                        setPage(1)
+                      }}
+                    />
+                  </div>
+                  <div className="api-filter-field">
+                    <span className="api-filter-field-label">需求</span>
+                    <Select
+                      className="api-filter-select business-filter-select"
+                      value={currentRequirementSelection === null ? 'all' : selectedRequirementId ?? 'all'}
+                      options={requirementFilterOptions}
+                      loading={requirementsQuery.isLoading}
+                      placeholder="筛选需求"
+                      disabled={!selectedSprintId && sprints.length === 0}
+                      onChange={(value: string) => {
+                        selectRequirement(value === 'all' ? null : value)
+                        setPage(1)
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="api-filter-field">
-                  <span className="api-filter-field-label">需求</span>
-                  <Select
-                    className="api-filter-select business-filter-select"
-                    value={currentRequirementSelection === null ? 'all' : resolvedSelectedRequirementId ?? 'all'}
-                    options={requirementFilterOptions}
-                    loading={requirementsQuery.isLoading}
-                    placeholder="筛选需求"
-                    disabled={!resolvedSelectedSprintId && sprints.length === 0}
-                    onChange={(value: string) => {
-                      selectRequirement(value === 'all' ? null : value)
-                      setPage(1)
-                    }}
-                  />
-                </div>
-              </div>
+              ) : null}
             </div>
             <Space size={8}>
               <Button icon={<SettingOutlined />} disabled={!activeProjectId} onClick={() => setEnvironmentDrawerOpen(true)}>
                 环境管理
               </Button>
-              <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!resolvedSelectedRequirementId} onClick={openCreateDrawer}>
+              <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!selectedRequirementId} onClick={openCreateDrawer}>
                 新建API测试集
               </Button>
             </Space>
           </div>
 
           {sprintsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintsQuery.error)} /> : null}
-          {requirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementsQuery.error)} /> : null}
-          {allRequirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(allRequirementsQuery.error)} /> : null}
+          {!isRequirementLocked ? <>{requirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementsQuery.error)} /> : null}</> : null}
+          {!isRequirementLocked ? <>{allRequirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(allRequirementsQuery.error)} /> : null}</> : null}
           {collectionsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(collectionsQuery.error)} /> : null}
           {environmentsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(environmentsQuery.error)} /> : null}
 
@@ -356,6 +388,10 @@ export function ApiAutomationPage() {
               <div className="sprint-card-loading">
                 <Empty description="请先选择项目" />
               </div>
+            ) : isRequirementLocked && !selectedRequirementId ? (
+              <div className="sprint-card-loading">
+                <Empty description="当前需求不可用" />
+              </div>
             ) : collectionsQuery.isLoading ? (
               <div className="sprint-card-loading">
                 <Empty description="API测试集加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -368,9 +404,12 @@ export function ApiAutomationPage() {
               <div className="api-collection-grid">
                 {pagedCollections.map((collection) => {
                   const requirementId = collection.requirementId ?? collection.requirement_id
-                  const requirementName = requirementId ? requirementNameMap.get(requirementId) ?? requirementId : '-'
-                  const sprintIdForCollection = requirementId ? requirementSprintMap.get(requirementId) : undefined
-                  const sprintName = sprintIdForCollection ? sprintNameMap.get(sprintIdForCollection) ?? sprintIdForCollection : '-'
+                  const requirementName =
+                    scope?.requirementName ||
+                    (requirementId ? requirementNameMap.get(requirementId) ?? requirementId : '-')
+                  const sprintIdForCollection = scope?.sprintId ?? (requirementId ? requirementSprintMap.get(requirementId) : undefined)
+                  const sprintName =
+                    scope?.sprintName || (sprintIdForCollection ? sprintNameMap.get(sprintIdForCollection) ?? sprintIdForCollection : '-')
                   const collectionId = collection.collectionId ?? collection.collection_id ?? ''
 
                   return (
@@ -479,6 +518,7 @@ export function ApiAutomationPage() {
         error={saveCollectionMutation.error ?? drawerRequirementsQuery.error}
         sprintOptions={drawerSprintOptions}
         requirementOptions={drawerRequirementOptions}
+        showScopeFields={!isRequirementLocked}
         onSprintChange={(nextSprintId) => {
           setDrawerSprintId(nextSprintId)
           drawerForm.setFieldValue('requirementId', undefined)

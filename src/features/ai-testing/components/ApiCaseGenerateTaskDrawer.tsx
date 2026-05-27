@@ -3,7 +3,7 @@ import { Alert, Button, Drawer, Form, Input, Segmented, Select, Upload, message 
 import type { FormInstance } from 'antd'
 import { useEffect, useState } from 'react'
 import type { ApiCaseGenerateTaskSourceType, CreateApiCaseGenerateTaskPayload } from '../types'
-import { TextCodeEditor } from '@/components/TextCodeEditor'
+import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import { getErrorMessage } from '@/utils/format'
 
 export type ApiCaseGenerateTaskFormValues = CreateApiCaseGenerateTaskPayload

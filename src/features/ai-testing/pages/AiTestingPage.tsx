@@ -25,7 +25,7 @@ import {
 } from 'antd'
 import type { BadgeProps } from 'antd'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
@@ -196,6 +196,9 @@ export function AiTestingPage() {
     const entries = pagedTasks.map((task, index) => [getTaskId(task), getLatestRun(taskRunQueries[index]?.data)] as const)
     return new Map(entries)
   }, [pagedTasks, taskRunQueries])
+  const closeDrawerEffect = useEffectEvent(() => {
+    closeDrawer()
+  })
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(tasks.length / pageSize))
@@ -208,7 +211,7 @@ export function AiTestingPage() {
 
   useEffect(() => {
     if (activeCategory !== 'api' && drawerOpen) {
-      closeDrawer()
+      closeDrawerEffect()
     }
   }, [activeCategory, drawerOpen])
 

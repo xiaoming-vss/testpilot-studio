@@ -4,8 +4,8 @@ import type { InputRef } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { JsonEditor, type JsonEditorRef } from '@/components/JsonEditor'
-import { TextCodeEditor } from '@/components/TextCodeEditor'
+import { JsonEditor, type JsonEditorRef } from '@/shared/components/JsonEditor/JsonEditor'
+import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import {
   assertComparatorLabelMap,
   assertComparatorOptions,

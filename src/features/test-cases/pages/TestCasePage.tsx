@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRequirementScope'
+import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
 import { api, type FunctionTestSuite } from '@/services/api'
-import { useWorkbenchStore } from '@/store/workbench'
 import {
   formatTime,
   getErrorMessage,
@@ -24,6 +24,14 @@ type FunctionalTestSuiteFormValues = {
   description?: string
 }
 
+type TestCasePageScope = {
+  projectId?: string
+  sprintId?: string
+  sprintName?: string
+  requirementId: string
+  requirementName?: string
+}
+
 function footerRange(total: number, currentPage: number, currentPageSize: number) {
   if (total === 0) return '显示第 0 条 - 第 0 条，共 0 条'
   const start = (currentPage - 1) * currentPageSize + 1
@@ -31,9 +39,10 @@ function footerRange(total: number, currentPage: number, currentPageSize: number
   return `显示第 ${start} 条 - 第 ${end} 条，共 ${total} 条`
 }
 
-export function TestCasePage() {
+export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
   const navigate = useNavigate()
-  const activeProjectId = useWorkbenchStore((state) => state.activeProjectId)
+  const workbenchActiveProjectId = useWorkbenchStore((state) => state.activeProjectId)
+  const activeProjectId = scope?.projectId ?? workbenchActiveProjectId
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(8)
@@ -41,6 +50,7 @@ export function TestCasePage() {
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
   const [editingSuite, setEditingSuite] = useState<FunctionTestSuite | null>(null)
   const [form] = Form.useForm<FunctionalTestSuiteFormValues>()
+  const isRequirementLocked = Boolean(scope?.requirementId)
 
   const {
     requirementFilterOptions,
@@ -53,10 +63,13 @@ export function TestCasePage() {
     sprintsQuery,
   } = useSprintRequirementScope({ activeProjectId })
 
+  const selectedSprintId = scope?.sprintId ?? resolvedSelectedSprintId
+  const selectedRequirementId = scope?.requirementId ?? resolvedSelectedRequirementId
+
   const drawerRequirementsQuery = useQuery({
     queryKey: ['requirements', 'functionalSuiteDrawer', drawerSprintId],
     queryFn: () => api.getRequirements(drawerSprintId!),
-    enabled: Boolean(drawerSprintId) && !editingSuite,
+    enabled: Boolean(drawerSprintId) && !editingSuite && !isRequirementLocked,
   })
   const drawerRequirementOptions = useMemo(
     () =>
@@ -67,14 +80,17 @@ export function TestCasePage() {
     [drawerRequirementsQuery.data],
   )
 
-  const sprintName = sprintFilterOptions.find((item) => item.value === resolvedSelectedSprintId)?.label || resolvedSelectedSprintId || '-'
+  const sprintName = scope?.sprintName || sprintFilterOptions.find((item) => item.value === selectedSprintId)?.label || selectedSprintId || '-'
   const requirementName =
-    requirementFilterOptions.find((item) => item.value === resolvedSelectedRequirementId)?.label || resolvedSelectedRequirementId || '-'
+    scope?.requirementName ||
+    requirementFilterOptions.find((item) => item.value === selectedRequirementId)?.label ||
+    selectedRequirementId ||
+    '-'
 
   const suitesQuery = useQuery({
-    queryKey: ['functionTestSuites', resolvedSelectedRequirementId],
-    queryFn: () => api.getFunctionTestSuites(resolvedSelectedRequirementId!),
-    enabled: Boolean(resolvedSelectedRequirementId),
+    queryKey: ['functionTestSuites', selectedRequirementId],
+    queryFn: () => api.getFunctionTestSuites(selectedRequirementId!),
+    enabled: Boolean(selectedRequirementId),
   })
   const suites = useMemo(() => suitesQuery.data ?? [], [suitesQuery.data])
   const orderedSuites = useMemo(
@@ -98,7 +114,7 @@ export function TestCasePage() {
 
   useEffect(() => {
     setPage(1)
-  }, [resolvedSelectedRequirementId])
+  }, [selectedRequirementId])
 
   function closeDrawer() {
     setDrawerOpen(false)
@@ -109,10 +125,10 @@ export function TestCasePage() {
 
   function openCreateDrawer() {
     setEditingSuite(null)
-    setDrawerSprintId(resolvedSelectedSprintId)
+    setDrawerSprintId(scope?.sprintId ?? resolvedSelectedSprintId)
     form.setFieldsValue({
-      sprintId: resolvedSelectedSprintId,
-      requirementId: resolvedSelectedRequirementId,
+      sprintId: scope?.sprintId ?? resolvedSelectedSprintId,
+      requirementId: selectedRequirementId,
       name: '',
       description: '',
     })
@@ -140,7 +156,7 @@ export function TestCasePage() {
         })
       }
 
-      const targetRequirementId = values.requirementId || resolvedSelectedRequirementId
+      const targetRequirementId = values.requirementId || selectedRequirementId
       if (!targetRequirementId) throw new Error('请选择所属需求')
       return api.createFunctionTestSuite(targetRequirementId, {
         name: values.name,
@@ -149,7 +165,7 @@ export function TestCasePage() {
     },
     onSuccess: (suite, values) => {
       const suiteId = normalizeFunctionTestSuiteId(suite)
-      const nextRequirementId = suite.requirementId ?? values.requirementId ?? resolvedSelectedRequirementId
+      const nextRequirementId = suite.requirementId ?? values.requirementId ?? selectedRequirementId
       message.success(editingSuite ? '功能测试集已更新' : '功能测试集已创建')
       if (suiteId) {
         queryClient.setQueryData(['functionTestSuite', suiteId], suite)
@@ -169,7 +185,7 @@ export function TestCasePage() {
     mutationFn: (suiteId: string) => api.deleteFunctionTestSuite(suiteId),
     onSuccess: () => {
       message.success('功能测试集已删除')
-      queryClient.invalidateQueries({ queryKey: ['functionTestSuites', resolvedSelectedRequirementId] })
+      queryClient.invalidateQueries({ queryKey: ['functionTestSuites', selectedRequirementId] })
     },
     onError: (error) => {
       message.error(getErrorMessage(error))
@@ -192,38 +208,40 @@ export function TestCasePage() {
           <div className="panel-header api-panel-header">
             <div className="requirement-panel-head">
               <Text strong>功能测试集</Text>
-              <div className="api-filter-group">
-                <div className="api-filter-field">
-                  <span className="api-filter-field-label">迭代</span>
-                  <Select
-                    className="api-filter-select business-filter-select"
-                    value={resolvedSelectedSprintId}
-                    options={sprintFilterOptions}
-                    loading={sprintsQuery.isLoading}
-                    placeholder="请选择迭代"
-                    onChange={selectSprint}
-                  />
+              {!isRequirementLocked ? (
+                <div className="api-filter-group">
+                  <div className="api-filter-field">
+                    <span className="api-filter-field-label">迭代</span>
+                    <Select
+                      className="api-filter-select business-filter-select"
+                      value={selectedSprintId}
+                      options={sprintFilterOptions}
+                      loading={sprintsQuery.isLoading}
+                      placeholder="请选择迭代"
+                      onChange={selectSprint}
+                    />
+                  </div>
+                  <div className="api-filter-field">
+                    <span className="api-filter-field-label">需求</span>
+                    <Select
+                      className="api-filter-select business-filter-select"
+                      value={selectedRequirementId}
+                      options={requirementFilterOptions}
+                      loading={requirementsQuery.isLoading}
+                      placeholder="请选择需求"
+                      disabled={!selectedSprintId}
+                      onChange={selectRequirement}
+                    />
+                  </div>
                 </div>
-                <div className="api-filter-field">
-                  <span className="api-filter-field-label">需求</span>
-                  <Select
-                    className="api-filter-select business-filter-select"
-                    value={resolvedSelectedRequirementId}
-                    options={requirementFilterOptions}
-                    loading={requirementsQuery.isLoading}
-                    placeholder="请选择需求"
-                    disabled={!resolvedSelectedSprintId}
-                    onChange={selectRequirement}
-                  />
-                </div>
-              </div>
+              ) : null}
             </div>
             <Space size={8}>
               <Button
                 type="primary"
                 className="action-btn-create"
                 icon={<PlusOutlined />}
-                disabled={!resolvedSelectedRequirementId}
+                disabled={!selectedRequirementId}
                 onClick={openCreateDrawer}
               >
                 新建测试集
@@ -239,13 +257,13 @@ export function TestCasePage() {
             <div className="sprint-card-loading">
               <Empty description="请先选择项目" />
             </div>
-          ) : !resolvedSelectedSprintId ? (
+          ) : !isRequirementLocked && !selectedSprintId ? (
             <div className="sprint-card-loading">
               <Empty description="当前项目下暂无迭代" />
             </div>
-          ) : !resolvedSelectedRequirementId ? (
+          ) : !selectedRequirementId ? (
             <div className="sprint-card-loading">
-              <Empty description="请选择一个需求后查看功能测试集" />
+              <Empty description={isRequirementLocked ? '当前需求不可用' : '请选择一个需求后查看功能测试集'} />
             </div>
           ) : (
             <div className="table-body-scroll sprint-card-scroll functional-suite-scroll">
@@ -386,7 +404,7 @@ export function TestCasePage() {
       >
         {drawerRequirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(drawerRequirementsQuery.error)} /> : null}
         <Form<FunctionalTestSuiteFormValues> form={form} layout="vertical" requiredMark={false} onFinish={(values) => saveSuiteMutation.mutate(values)}>
-          {!editingSuite ? (
+          {!editingSuite && !isRequirementLocked ? (
             <>
               <Form.Item name="sprintId" label="所属迭代" rules={[{ required: true, message: '请选择所属迭代' }]}>
                 <Select

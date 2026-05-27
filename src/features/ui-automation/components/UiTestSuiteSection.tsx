@@ -48,6 +48,8 @@ export const UiTestSuiteSection = forwardRef<
     selectedSprintId?: string
     sprintOptions?: Array<{ label: string; value: string }>
     requirementOptions?: Array<{ label: string; value: string }>
+    sprintName?: string
+    requirementName?: string
     onCreateSprintChange?: (value?: string) => void
     showInlineCreateButton?: boolean
   }
@@ -57,6 +59,8 @@ export const UiTestSuiteSection = forwardRef<
     selectedSprintId,
     sprintOptions,
     requirementOptions,
+    sprintName,
+    requirementName,
     onCreateSprintChange,
     showInlineCreateButton = true,
   },
@@ -76,8 +80,9 @@ export const UiTestSuiteSection = forwardRef<
     enabled: Boolean(requirementId),
   })
   const suites = useMemo(() => suitesQuery.data ?? [], [suitesQuery.data])
-  const sprintName = sprintOptions?.find((item) => item.value === selectedSprintId)?.label || selectedSprintId || '-'
-  const requirementName = requirementOptions?.find((item) => item.value === requirementId)?.label || requirementId || '-'
+  const resolvedSprintName = sprintName || sprintOptions?.find((item) => item.value === selectedSprintId)?.label || selectedSprintId || '-'
+  const resolvedRequirementName =
+    requirementName || requirementOptions?.find((item) => item.value === requirementId)?.label || requirementId || '-'
 
   const orderedSuites = useMemo(
     () =>
@@ -256,7 +261,7 @@ export const UiTestSuiteSection = forwardRef<
                   <div className="sprint-card-meta api-collection-meta-inline">
                     <span className="sprint-card-label">所属迭代/需求</span>
                     <span className="api-collection-inline-value">
-                      {sprintName}/{requirementName}
+                      {resolvedSprintName}/{resolvedRequirementName}
                     </span>
                   </div>
 

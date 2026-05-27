@@ -4,7 +4,7 @@ import type { InputRef } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { TextCodeEditor } from '@/components/TextCodeEditor'
+import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import {
   getUiStepFieldMeta,
   requiresUiStepLocator,

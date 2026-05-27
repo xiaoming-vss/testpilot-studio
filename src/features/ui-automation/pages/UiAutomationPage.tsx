@@ -4,14 +4,24 @@ import { PlusOutlined } from '@ant-design/icons'
 import { useRef } from 'react'
 import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRequirementScope'
 import { UiTestSuiteSection, type UiTestSuiteSectionRef } from '@/features/ui-automation/components/UiTestSuiteSection'
-import { useWorkbenchStore } from '@/store/workbench'
+import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
 import { getErrorMessage } from '@/utils/format'
 
 const { Text } = Typography
 
-export function UiAutomationPage() {
-  const activeProjectId = useWorkbenchStore((state) => state.activeProjectId)
+type UiAutomationPageScope = {
+  projectId?: string
+  sprintId?: string
+  sprintName?: string
+  requirementId?: string
+  requirementName?: string
+}
+
+export function UiAutomationPage({ scope }: { scope?: UiAutomationPageScope }) {
+  const workbenchActiveProjectId = useWorkbenchStore((state) => state.activeProjectId)
+  const activeProjectId = scope?.projectId ?? workbenchActiveProjectId
   const uiTestSuiteSectionRef = useRef<UiTestSuiteSectionRef | null>(null)
+  const isRequirementLocked = Boolean(scope?.requirementId)
   const {
     requirementFilterOptions,
     requirementsQuery,
@@ -22,6 +32,8 @@ export function UiAutomationPage() {
     sprintFilterOptions,
     sprintsQuery,
   } = useSprintRequirementScope({ activeProjectId })
+  const selectedSprintId = scope?.sprintId ?? resolvedSelectedSprintId
+  const selectedRequirementId = scope?.requirementId ?? resolvedSelectedRequirementId
 
   return (
     <div className="workbench-page api-automation-page">
@@ -30,38 +42,40 @@ export function UiAutomationPage() {
           <div className="panel-header api-panel-header">
             <div className="requirement-panel-head">
               <Text strong>UI测试集</Text>
-              <div className="api-filter-group">
-                <div className="api-filter-field">
-                  <span className="api-filter-field-label">迭代</span>
-                  <Select
-                    className="api-filter-select business-filter-select"
-                    value={resolvedSelectedSprintId}
-                    options={sprintFilterOptions}
-                    loading={sprintsQuery.isLoading}
-                    placeholder="请选择迭代"
-                    onChange={selectSprint}
-                  />
+              {!isRequirementLocked ? (
+                <div className="api-filter-group">
+                  <div className="api-filter-field">
+                    <span className="api-filter-field-label">迭代</span>
+                    <Select
+                      className="api-filter-select business-filter-select"
+                      value={selectedSprintId}
+                      options={sprintFilterOptions}
+                      loading={sprintsQuery.isLoading}
+                      placeholder="请选择迭代"
+                      onChange={selectSprint}
+                    />
+                  </div>
+                  <div className="api-filter-field">
+                    <span className="api-filter-field-label">需求</span>
+                    <Select
+                      className="api-filter-select business-filter-select"
+                      value={selectedRequirementId}
+                      options={requirementFilterOptions}
+                      loading={requirementsQuery.isLoading}
+                      placeholder="请选择需求"
+                      disabled={!selectedSprintId}
+                      onChange={selectRequirement}
+                    />
+                  </div>
                 </div>
-                <div className="api-filter-field">
-                  <span className="api-filter-field-label">需求</span>
-                  <Select
-                    className="api-filter-select business-filter-select"
-                    value={resolvedSelectedRequirementId}
-                    options={requirementFilterOptions}
-                    loading={requirementsQuery.isLoading}
-                    placeholder="请选择需求"
-                    disabled={!resolvedSelectedSprintId}
-                    onChange={selectRequirement}
-                  />
-                </div>
-              </div>
+              ) : null}
             </div>
             <Space size={8}>
               <Button
                 type="primary"
                 className="action-btn-create"
                 icon={<PlusOutlined />}
-                disabled={!resolvedSelectedRequirementId}
+                disabled={!selectedRequirementId}
                 onClick={() => uiTestSuiteSectionRef.current?.openCreateDrawer()}
               >
                 新建测试集
@@ -70,27 +84,29 @@ export function UiAutomationPage() {
           </div>
 
           {sprintsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintsQuery.error)} /> : null}
-          {requirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementsQuery.error)} /> : null}
+          {!isRequirementLocked ? <>{requirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementsQuery.error)} /> : null}</> : null}
 
           {!activeProjectId ? (
             <div className="sprint-card-loading">
               <Empty description="请先选择项目" />
             </div>
-          ) : !resolvedSelectedSprintId ? (
+          ) : !isRequirementLocked && !selectedSprintId ? (
             <div className="sprint-card-loading">
               <Empty description="当前项目下暂无迭代" />
             </div>
-          ) : !resolvedSelectedRequirementId ? (
+          ) : !selectedRequirementId ? (
             <div className="sprint-card-loading">
-              <Empty description="请选择一个需求后查看 UI测试集" />
+              <Empty description={isRequirementLocked ? '当前需求不可用' : '请选择一个需求后查看 UI测试集'} />
             </div>
           ) : (
             <UiTestSuiteSection
               ref={uiTestSuiteSectionRef}
-              requirementId={resolvedSelectedRequirementId}
-              selectedSprintId={resolvedSelectedSprintId}
-              sprintOptions={sprintFilterOptions}
-              requirementOptions={requirementFilterOptions}
+              requirementId={selectedRequirementId}
+              selectedSprintId={selectedSprintId}
+              sprintOptions={isRequirementLocked ? undefined : sprintFilterOptions}
+              requirementOptions={isRequirementLocked ? undefined : requirementFilterOptions}
+              sprintName={scope?.sprintName}
+              requirementName={scope?.requirementName}
               onCreateSprintChange={selectSprint}
               showInlineCreateButton={false}
             />

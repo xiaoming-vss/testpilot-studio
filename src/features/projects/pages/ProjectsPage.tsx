@@ -26,6 +26,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { RequirementDrawer, type RequirementFormValues } from '@/features/requirements/components/RequirementDrawer'
 import { SprintDrawer } from '@/features/projects/components/SprintDrawer'
@@ -77,6 +78,7 @@ function toPickerValue(value?: string) {
 }
 
 export function ProjectsPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const projectModalOpen = useWorkbenchStore((state) => state.projectModalOpen)
   const editingProject = useWorkbenchStore((state) => state.editingProject)
@@ -278,6 +280,13 @@ export function ProjectsPage() {
       page: 1,
       selectedSprintId: sprintId,
     })
+  }
+
+  function openRequirementWorkspace(requirement: RequirementPoolItem) {
+    if (!activeProjectId) return
+    navigate(
+      `/projects/${activeProjectId}/sprints/${requirement.sprintIdForCreate}/requirements/${normalizeRequirementId(requirement)}`,
+    )
   }
 
   return (
@@ -488,7 +497,13 @@ export function ProjectsPage() {
                     {!sprintsQuery.isLoading && !requirementsQuery.isLoading && visibleRequirements.length > 0 ? (
                       <div className="sprint-card-grid sprint-card-grid-workbench">
                         {visibleRequirements.map((requirement) => (
-                          <Card key={normalizeRequirementId(requirement)} hoverable className="sprint-card" bodyStyle={{ padding: 20 }}>
+                          <Card
+                            key={normalizeRequirementId(requirement)}
+                            hoverable
+                            className="sprint-card"
+                            bodyStyle={{ padding: 20 }}
+                            onClick={() => openRequirementWorkspace(requirement)}
+                          >
                             <div className="sprint-card-head">
                               <div className="sprint-card-title-wrap">
                                 <Space size={10}>
@@ -519,7 +534,10 @@ export function ProjectsPage() {
                                   className="action-btn-update"
                                   icon={<EditOutlined />}
                                   aria-label="编辑需求"
-                                  onClick={() => openRequirementDrawer(requirement)}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    openRequirementDrawer(requirement)
+                                  }}
                                 />
                               </Tooltip>
                               <Popconfirm title="确认删除该需求？" onConfirm={() => deleteRequirementMutation.mutate(normalizeRequirementId(requirement))}>
@@ -532,6 +550,7 @@ export function ProjectsPage() {
                                     icon={<DeleteOutlined />}
                                     aria-label="删除需求"
                                     loading={deleteRequirementMutation.isPending}
+                                    onClick={(event) => event.stopPropagation()}
                                   />
                                 </Tooltip>
                               </Popconfirm>

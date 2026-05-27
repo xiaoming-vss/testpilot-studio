@@ -89,7 +89,11 @@ export function ApiCaseGenerateTaskDetailPage() {
   })
   const sprintsQuery = useQuery({
     queryKey: ['sprints', 'aiTestingDetail', task?.projectId],
-    queryFn: () => api.getSprints(task?.projectId!),
+    queryFn: async () => {
+      const projectId = task?.projectId
+      if (!projectId) return []
+      return api.getSprints(projectId)
+    },
     enabled: Boolean(task?.projectId),
   })
   const sprintOptions = useMemo(
@@ -111,7 +115,11 @@ export function ApiCaseGenerateTaskDetailPage() {
   )
   const apiCollectionsQuery = useQuery({
     queryKey: ['apiCollections', 'aiTestingReview', task?.requirementId],
-    queryFn: () => api.getApiCollections(task?.requirementId!),
+    queryFn: async () => {
+      const requirementId = task?.requirementId
+      if (!requirementId) return []
+      return api.getApiCollections(requirementId)
+    },
     enabled: Boolean(task?.requirementId),
   })
   const sprintNameMap = useMemo(
@@ -288,10 +296,10 @@ export function ApiCaseGenerateTaskDetailPage() {
     [selectedRunResultSections],
   )
   const selectedRunReviewStatus = normalizeReviewStatus(selectedRun?.reviewStatus)
-  const selectedRunImportedCollectionName = useMemo(() => {
-    if (!selectedRun?.importedCollectionId) return ''
-    return apiCollectionNameMap.get(selectedRun.importedCollectionId) ?? selectedRun.importedCollectionId
-  }, [apiCollectionNameMap, selectedRun?.importedCollectionId])
+  const selectedRunImportedCollectionId = selectedRun?.importedCollectionId ?? ''
+  const selectedRunImportedCollectionName = selectedRunImportedCollectionId
+    ? (apiCollectionNameMap.get(selectedRunImportedCollectionId) ?? selectedRunImportedCollectionId)
+    : ''
 
   function toggleSection(section: 'instruction' | 'sourceContent' | 'runHistory') {
     setExpandedSection((current) => (current === section ? null : section))

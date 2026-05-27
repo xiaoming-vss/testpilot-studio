@@ -1,25 +1,65 @@
 .base-services-page {
+  --base-border: rgba(148, 163, 184, 0.18);
+  --base-panel:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 248, 255, 0.96) 100%);
+  --base-panel-soft: rgba(22, 119, 255, 0.04);
+  --base-accent: #1677ff;
+  --base-text: #172033;
+  --base-text-secondary: #667085;
+  --base-text-muted: #7a8699;
+  --base-blue: #1677ff;
+  --base-hover-text: #2d5bff;
+  --base-toolbar-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 14px 32px rgba(42, 55, 92, 0.08);
+  --base-surface:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 255, 0.96)),
+    rgba(255, 255, 255, 0.96);
+  --base-card:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 255, 0.98)),
+    rgba(255, 255, 255, 0.98);
+  --base-card-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 12px 28px rgba(42, 55, 92, 0.08);
+  min-height: calc(100vh - 64px);
+}
+
+:root[data-theme='dark'] .base-services-page {
   --base-border: rgba(148, 163, 184, 0.14);
   --base-panel: linear-gradient(180deg, rgba(30, 36, 50, 0.98) 0%, rgba(24, 29, 41, 0.98) 100%);
   --base-panel-soft: rgba(255, 255, 255, 0.04);
   --base-accent: #83d5c8;
-  --base-accent-strong: #9ce0b2;
   --base-text: #e8eef8;
   --base-text-secondary: #9aa7bf;
   --base-text-muted: #748097;
   --base-blue: #84b9ff;
-  min-height: calc(100vh - 64px);
+  --base-hover-text: #d6e8ff;
+  --base-toolbar-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 40px rgba(7, 10, 16, 0.2);
+  --base-surface:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+    rgba(19, 24, 34, 0.98);
+  --base-card:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
+    rgba(24, 29, 40, 0.98);
+  --base-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .base-services-toolbar {
   background:
+    radial-gradient(circle at top left, rgba(22, 119, 255, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(131, 213, 200, 0.1), transparent 24%),
+    var(--base-panel);
+  border: 1px solid var(--base-border);
+  box-shadow: var(--base-toolbar-shadow);
+}
+
+:root[data-theme='dark'] .base-services-toolbar {
+  background:
     radial-gradient(circle at top left, rgba(131, 213, 200, 0.16), transparent 30%),
     radial-gradient(circle at top right, rgba(132, 185, 255, 0.14), transparent 24%),
     var(--base-panel);
-  border: 1px solid var(--base-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 20px 40px rgba(7, 10, 16, 0.2);
 }
 
 .base-services-switcher-row {
@@ -51,7 +91,7 @@
 }
 
 .base-services-tab:hover {
-  color: #d6e8ff;
+  color: var(--base-hover-text);
 }
 
 .base-services-tab::after {
@@ -86,11 +126,15 @@
   overflow: hidden;
   min-height: 0;
   margin: 12px 24px 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
-    rgba(19, 24, 34, 0.98);
+  background: var(--base-surface);
   border-color: var(--base-border);
   border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 20px 40px rgba(42, 55, 92, 0.08);
+}
+
+:root[data-theme='dark'] .base-services-panel {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 22px 44px rgba(7, 10, 16, 0.2);
@@ -103,6 +147,11 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.base-services-panel-body-immersive {
+  padding: 0;
+  gap: 0;
 }
 
 .base-services-panel-header {
@@ -135,158 +184,196 @@
   line-height: 22px;
 }
 
-.base-services-panel-action.ant-btn {
-  height: 42px;
-  padding-inline: 18px;
-  border: 0;
-  color: rgba(18, 24, 33, 0.72) !important;
-  background: linear-gradient(135deg, #84d2a7 0%, #6ac68f 100%) !important;
-  box-shadow: 0 12px 24px rgba(87, 183, 132, 0.22);
-  font-weight: 700;
+.base-services-panel-status-tag.ant-tag {
+  margin-inline-end: 0;
+  padding-inline: 12px;
+  line-height: 28px;
+  border-radius: 999px;
+  border-color: rgba(132, 185, 255, 0.24);
+  background: rgba(132, 185, 255, 0.1);
 }
 
-.base-services-panel-action.ant-btn[disabled] {
-  opacity: 0.62;
-  box-shadow: none;
-}
-
-.base-services-card-scroll {
+.base-services-empty-layout {
   min-height: 0;
   flex: 1 1 auto;
-  overflow: auto;
-}
-
-.base-services-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: stretch;
-  padding-bottom: 8px;
 }
 
-.base-services-card.ant-card,
-.base-services-placeholder-card.ant-card {
+.base-services-integration-alert.ant-alert {
+  border-radius: 14px;
+  border-color: rgba(132, 185, 255, 0.18);
+  background: rgba(132, 185, 255, 0.08);
+}
+
+.base-services-contract-card,
+.base-services-empty-card {
   border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
-    rgba(24, 29, 40, 0.98);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: var(--base-card);
+  box-shadow: var(--base-card-shadow);
 }
 
-.base-services-card .ant-card-body,
-.base-services-placeholder-card .ant-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 22px !important;
-}
-
-.base-services-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.base-services-card-top h5.ant-typography {
-  margin-bottom: 0;
-  color: var(--base-text);
-  font-size: 18px;
-  line-height: 26px;
-}
-
-.base-services-card-top .ant-tag {
-  margin-inline-end: 0;
-  border-radius: 999px;
-  font-weight: 700;
-}
-
-.base-services-card-summary.ant-typography {
-  margin-bottom: 0;
-  color: var(--base-text-secondary);
-  font-size: 14px;
-  line-height: 22px;
-}
-
-.base-services-card-points {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
-}
-
-.base-services-card-point {
+.base-services-contract-card {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  flex-wrap: wrap;
 }
 
-.base-services-card-point-dot {
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  border-radius: 999px;
-  background: var(--base-accent-strong);
-  box-shadow: 0 0 0 4px rgba(131, 213, 200, 0.12);
-  flex: 0 0 auto;
+.base-services-contract-copy {
+  flex: 1 1 460px;
+  min-width: 0;
 }
 
-.base-services-card-point .ant-typography {
-  margin-bottom: 0;
-  color: var(--base-text);
-  font-size: 13px;
-  line-height: 21px;
-}
-
-.base-services-placeholder-card {
-  background:
-    radial-gradient(circle at top right, rgba(132, 185, 255, 0.18), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(21, 26, 37, 0.98);
-}
-
-.base-services-placeholder-badge {
-  width: fit-content;
-  padding: 6px 10px;
-  border-radius: 999px;
-  color: var(--base-blue);
-  background: rgba(132, 185, 255, 0.12);
-  border: 1px solid rgba(132, 185, 255, 0.2);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.base-services-placeholder-card h4.ant-typography {
-  margin-bottom: 0;
+.base-services-contract-copy h5.ant-typography {
+  margin-bottom: 8px;
   color: var(--base-text);
 }
 
-.base-services-placeholder-card .ant-typography {
+.base-services-contract-copy .ant-typography {
   margin-bottom: 0;
   color: var(--base-text-secondary);
   font-size: 14px;
   line-height: 22px;
 }
 
-.base-services-placeholder-tags {
+.base-services-contract-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.base-services-placeholder-tags .ant-tag {
+.base-services-contract-tags .ant-tag {
   margin-inline-end: 0;
-  color: #cfe4ff;
+  color: var(--base-blue);
   border-color: rgba(132, 185, 255, 0.18);
   background: rgba(132, 185, 255, 0.08);
   border-radius: 999px;
   padding-inline: 10px;
   line-height: 24px;
+}
+
+.base-services-empty-card {
+  flex: 1 1 auto;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(132, 185, 255, 0.18), transparent 28%),
+    var(--base-card);
+}
+
+.base-services-empty-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.base-services-empty-copy h5.ant-typography {
+  margin-bottom: 0;
+  color: var(--base-text);
+}
+
+.base-services-empty-copy .ant-typography {
+  color: var(--base-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.base-services-connection-shell {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.base-services-card-scroll {
+  flex: 1 1 auto;
+  padding: 16px;
+}
+
+.base-services-connection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.base-services-connection-card {
+  border-color: var(--base-border);
+  background: var(--base-card);
+  box-shadow: var(--base-card-shadow);
+}
+
+.base-services-connection-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.base-services-connection-head {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.base-services-connection-title-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.base-services-connection-title {
+  min-width: 0;
+  font-size: 15px;
+  line-height: 22px;
+  word-break: break-word;
+}
+
+.base-services-connection-url.ant-typography {
+  min-height: 22px;
+  word-break: break-all;
+}
+
+.base-services-connection-actions {
+  gap: 6px;
+}
+
+.base-services-connection-actions .ant-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+}
+
+.base-services-empty-card-list {
+  min-height: 260px;
+}
+
+.base-services-detail-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.base-services-detail-alert.ant-alert {
+  border-radius: 12px;
+}
+
+.base-services-detail-descriptions .ant-descriptions-item-label {
+  width: 140px;
+}
+
+.base-services-detail-error-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.base-services-drawer-alert {
+  margin-bottom: 16px;
 }
 
 @media (max-width: 900px) {
@@ -303,8 +390,12 @@
     padding: 16px 16px 20px;
   }
 
-  .base-services-panel-action.ant-btn {
-    width: 100%;
+  .base-services-contract-card {
+    padding: 18px;
+  }
+
+  .base-services-connection-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -315,7 +406,7 @@
     overflow-x: auto;
   }
 
-  .base-services-card-grid {
-    grid-template-columns: 1fr;
+  .base-services-empty-card {
+    min-height: 260px;
   }
 }

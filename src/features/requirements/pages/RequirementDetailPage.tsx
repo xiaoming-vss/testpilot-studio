@@ -1,31 +1,36 @@
 import {
-  ApiOutlined,
   ArrowLeftOutlined,
-  BugOutlined,
-  CodeOutlined,
   DeleteOutlined,
   EditOutlined,
-  ExperimentOutlined,
 } from '@ant-design/icons'
-import { Alert, Button, Card, Descriptions, Empty, Form, Popconfirm, Space, Spin, Tabs, Typography, message } from 'antd'
+import { Alert, Button, Form, Popconfirm, Space, Spin, Typography, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { UiTestSuiteSection } from '@/features/ui-automation/components/UiTestSuiteSection'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ApiAutomationPage } from '@/features/api-automation/pages/ApiAutomationPage'
+import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { RequirementDrawer } from '@/features/requirements/components/RequirementDrawer'
+import { TestCasePage } from '@/features/test-cases/pages/TestCasePage'
+import { TestingTabSwitcher } from '@/features/testing/components/TestingTabSwitcher'
+import { resolveTestingTab, type TestingTab } from '@/features/testing/components/testingTab'
+import '@/features/testing/styles/index.css'
+import { UiAutomationPage } from '@/features/ui-automation/pages/UiAutomationPage'
 import { api, type Requirement } from '@/services/api'
-import { PageFrame } from '@/shared/components/PageFrame/PageFrame'
-import { formatTime, getErrorMessage, pickUpdatedAt, statusTag } from '@/utils/format'
+import { getErrorMessage } from '@/utils/format'
 import { buildRequirementUpdatePayload } from '@/utils/updatePayload'
 
-const { Text } = Typography
+const { Paragraph, Text, Title } = Typography
 
 export function RequirementDetailPage() {
   const { projectId = '', sprintId = '', requirementId = '' } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [form] = Form.useForm()
+  const { setActiveProjectId } = useActiveProject()
+
+  const activeTab = useMemo<TestingTab>(() => resolveTestingTab(searchParams.get('tab')), [searchParams])
 
   const requirementQuery = useQuery({
     queryKey: ['requirement', requirementId],
@@ -42,13 +47,16 @@ export function RequirementDetailPage() {
       setOpen(false)
       queryClient.invalidateQueries({ queryKey: ['requirement', requirementId] })
       queryClient.invalidateQueries({ queryKey: ['requirements', sprintId] })
+      queryClient.invalidateQueries({ queryKey: ['requirementsPool', projectId] })
     },
   })
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteRequirement(requirementId),
     onSuccess: () => {
       message.success('需求已删除')
-      navigate(`/projects/${projectId}/sprints/${sprintId}`)
+      queryClient.invalidateQueries({ queryKey: ['requirements', sprintId] })
+      queryClient.invalidateQueries({ queryKey: ['requirementsPool', projectId] })
+      navigate('/projects')
     },
   })
 
@@ -56,58 +64,106 @@ export function RequirementDetailPage() {
     if (requirementQuery.data) form.setFieldsValue(requirementQuery.data)
   }, [form, requirementQuery.data])
 
+  useEffect(() => {
+    if (!projectId) return
+    setActiveProjectId(projectId)
+  }, [projectId, setActiveProjectId])
+
+  function handleTabChange(nextTab: TestingTab) {
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.set('tab', nextTab)
+    setSearchParams(nextSearchParams, { replace: true })
+  }
+
   return (
-    <PageFrame
-      title={requirementQuery.data?.name ?? '需求详情'}
-      description="AI 生成用例、API 自动化和 UI Agent 执行都从这里进入。"
-      back={
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/projects/${projectId}/sprints/${sprintId}`)}>
-          返回迭代
-        </Button>
-      }
-      actions={
-        <Space>
-          <Button className="action-btn-update" icon={<EditOutlined />} onClick={() => setOpen(true)}>
-            编辑需求
-          </Button>
-          <Popconfirm title="确认删除这个需求？" onConfirm={() => deleteMutation.mutate()}>
-            <Button danger className="action-btn-delete" icon={<DeleteOutlined />}>
-              删除需求
+    <div className="workbench-page testing-page requirement-testing-page">
+      <section className="workbench-project-toolbar testing-toolbar requirement-testing-toolbar">
+        <div className="requirement-testing-summary-row">
+          <div className="requirement-testing-tabbar">
+            <TestingTabSwitcher activeTab={activeTab} onChange={handleTabChange} />
+          </div>
+          <div className="requirement-testing-summary-main">
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/projects')}>
+              返回项目
             </Button>
-          </Popconfirm>
-        </Space>
-      }
-    >
+          </div>
+        </div>
+        <div className="requirement-testing-hover-body">
+          <div className="requirement-testing-copy">
+            <div className="requirement-testing-detail-head">
+              <div className="requirement-testing-detail-copy">
+                <Text type="secondary" className="requirement-testing-kicker">
+                  需求测试工作台
+                </Text>
+                <Title level={4}>{requirementQuery.data?.name ?? '需求详情'}</Title>
+                <div className="requirement-testing-meta">
+                  <span>所属迭代：{sprintQuery.data?.name ?? sprintId ?? '-'}</span>
+                  <span>状态：{requirementQuery.data?.status || '-'}</span>
+                </div>
+                <Paragraph className="requirement-testing-description" type="secondary" ellipsis={{ rows: 1 }}>
+                  {requirementQuery.data?.description || '这里展示该需求下的功能测试、API测试和 UI测试内容。'}
+                </Paragraph>
+              </div>
+              <Space size={8} className="requirement-testing-actions">
+                <Button className="action-btn-update" icon={<EditOutlined />} onClick={() => setOpen(true)} disabled={!requirementQuery.data}>
+                  编辑需求
+                </Button>
+                <Popconfirm title="确认删除这个需求？" onConfirm={() => deleteMutation.mutate()}>
+                  <Button danger className="action-btn-delete" icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
+                    删除需求
+                  </Button>
+                </Popconfirm>
+              </Space>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {requirementQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementQuery.error)} /> : null}
-      {requirementQuery.data ? (
-        <Descriptions bordered size="small" className="detail-block">
-          <Descriptions.Item label="状态">{statusTag(requirementQuery.data.status)}</Descriptions.Item>
-          <Descriptions.Item label="所属迭代">{sprintQuery.data?.name ?? sprintId}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{formatTime(pickUpdatedAt(requirementQuery.data))}</Descriptions.Item>
-          <Descriptions.Item label="需求描述" span={3}>
-            {requirementQuery.data.description || '-'}
-          </Descriptions.Item>
-        </Descriptions>
+      {sprintQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintQuery.error)} /> : null}
+
+      {!requirementId ? (
+        <section className="workbench-panel workbench-board-panel requirement-testing-loading">
+          <Spin />
+        </section>
       ) : (
-        <Spin />
+        <div className="testing-tab-panel">
+          {activeTab === 'api' ? (
+            <ApiAutomationPage
+              scope={{
+                projectId,
+                sprintId,
+                sprintName: sprintQuery.data?.name,
+                requirementId,
+                requirementName: requirementQuery.data?.name,
+              }}
+            />
+          ) : null}
+          {activeTab === 'ui' ? (
+            <UiAutomationPage
+              scope={{
+                projectId,
+                sprintId,
+                sprintName: sprintQuery.data?.name,
+                requirementId,
+                requirementName: requirementQuery.data?.name,
+              }}
+            />
+          ) : null}
+          {activeTab === 'functional' ? (
+            <TestCasePage
+              scope={{
+                projectId,
+                sprintId,
+                sprintName: sprintQuery.data?.name,
+                requirementId,
+                requirementName: requirementQuery.data?.name,
+              }}
+            />
+          ) : null}
+        </div>
       )}
-      <Card className="capability-card">
-        <Tabs
-          items={[
-            { key: 'cases', label: '功能用例', children: <CapabilityEmpty icon={<ExperimentOutlined />} title="功能测试用例生成" action="生成测试用例" /> },
-            { key: 'api', label: 'API 自动化', children: <CapabilityEmpty icon={<ApiOutlined />} title="Swagger / OpenAPI 导入" action="导入 Swagger/OpenAPI" /> },
-            {
-              key: 'ui',
-              label: 'UI测试集',
-              children: requirementId ? (
-                <UiTestSuiteSection requirementId={requirementId} />
-              ) : (
-                <CapabilityEmpty icon={<BugOutlined />} title="UI测试集" action="新建 UI测试集" />
-              ),
-            },
-          ]}
-        />
-      </Card>
+
       <RequirementDrawer
         title="编辑需求"
         open={open}
@@ -118,22 +174,6 @@ export function RequirementDetailPage() {
         mode="edit"
         onFinish={(values) => updateMutation.mutate(values)}
       />
-    </PageFrame>
-  )
-}
-
-function CapabilityEmpty({ icon, title, action }: { icon: React.ReactNode; title: string; action: string }) {
-  return (
-    <Empty
-      image={icon}
-      description={
-        <Space direction="vertical" size={4}>
-          <Text strong>{title}</Text>
-          <Text type="secondary">接口确认后将在这里承载真实生成、导入和执行流程。</Text>
-        </Space>
-      }
-    >
-      <Button className="action-btn-create" icon={<CodeOutlined />}>{action}</Button>
-    </Empty>
+    </div>
   )
 }

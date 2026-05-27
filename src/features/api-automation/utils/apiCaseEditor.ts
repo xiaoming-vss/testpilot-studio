@@ -7,6 +7,8 @@ import type {
   CreateApiCasePayload,
   UpdateApiCasePayload,
 } from '@/services/api'
+import { moveArrayItem } from '@/shared/utils/array'
+import { formatOptionalValue, parseMaybeJsonValue } from '@/shared/utils/value'
 import { normalizeAssertRuleId, normalizeExtractRuleId, pickCreatedAt } from '@/utils/format'
 
 export const EMPTY_API_CASES: ApiCase[] = []
@@ -76,10 +78,6 @@ export function stringifyKeyValuePairs(items?: Array<{ enabled?: boolean; key?: 
 
 function normalizeText(value?: string) {
   return value ?? ''
-}
-
-export function formatOptionalValue(value?: string) {
-  return value && value.trim() ? value : '-'
 }
 
 export function serializeCaseValues(values: ApiCaseFormValues): CreateApiCasePayload {
@@ -216,22 +214,7 @@ export function sortCasesByOrderNo(cases: ApiCase[]) {
   )
 }
 
-export function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
-  const next = [...items]
-  const [item] = next.splice(fromIndex, 1)
-  next.splice(toIndex, 0, item)
-  return next
-}
-
-export function parseMaybeJsonValue(value?: string) {
-  if (!value) return ''
-
-  try {
-    return JSON.parse(value) as unknown
-  } catch {
-    return value
-  }
-}
+export { formatOptionalValue, moveArrayItem, parseMaybeJsonValue }
 
 export function sortRulesByOrderNo<T extends { orderNo?: number; createdAt?: string; created_at?: string }>(rules: T[]) {
   return [...rules].sort((left, right) => {

@@ -1,6 +1,7 @@
 import { authApi } from '@/features/auth/api/auth.api'
 import { aiTestingApi } from '@/features/ai-testing/api/aiTesting.api'
 import { apiAutomationApi } from '@/features/api-automation/api/apiAutomation.api'
+import { baseServicesApi } from '@/features/base-services/api/baseServices.api'
 import { functionTestingApi } from '@/features/test-cases/api/functionTesting.api'
 import { projectsApi } from '@/features/projects/api/projects.api'
 import { requirementsApi } from '@/features/requirements/api/requirements.api'
@@ -55,6 +56,12 @@ export type {
 export type { Project, ProjectUpdatePayload, Sprint, SprintCreatePayload, SprintUpdatePayload } from '@/features/projects/types'
 export type { Requirement, RequirementCreatePayload, RequirementUpdatePayload } from '@/features/requirements/types'
 export type {
+  CreateZentaoConnectionPayload,
+  IntegrationConnectionStatus,
+  UpdateZentaoConnectionPayload,
+  ZentaoConnection,
+} from '@/features/base-services/types'
+export type {
   CreateFunctionTestCasePayload,
   CreateFunctionTestSuitePayload,
   FunctionTestCase,
@@ -84,6 +91,7 @@ export { ApiError } from '@/shared/api/request'
 export const api = {
   ...authApi,
   ...aiTestingApi,
+  ...baseServicesApi,
   ...projectsApi,
   ...requirementsApi,
   ...apiAutomationApi,

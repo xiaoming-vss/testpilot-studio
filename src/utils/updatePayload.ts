@@ -13,12 +13,17 @@ import type {
   UiTestCase,
   UiTestSuite,
 } from '../services/api'
-import type { CollectionFormValues, SprintFormValues, UiTestSuiteFormValues } from '../components/EntityDrawers'
+import type { CollectionFormValues } from '@/features/api-automation/components/CollectionDrawer'
+import type { SprintFormValues } from '@/features/projects/components/SprintDrawer'
+import type { UiTestSuiteFormValues } from '@/features/ui-automation/components/UiTestSuiteDrawer'
+import {
+  normalizeText,
+  setBooleanIfChanged,
+  setDefinedValueIfChanged,
+  setNormalizedTextIfChanged,
+  setValueIfChanged,
+} from '@/shared/utils/payload'
 import { pickEndTime, pickStartTime } from './format'
-
-function normalizeText(value?: string) {
-  return value ?? ''
-}
 
 function toRfc3339(value: SprintFormValues['startTime']) {
   if (!value) return ''
@@ -44,10 +49,8 @@ export function buildSprintCreatePayload(values: SprintFormValues): SprintCreate
 export function buildProjectUpdatePayload(project: Project, values: Pick<Project, 'name' | 'description'>) {
   const payload: Partial<Pick<Project, 'name' | 'description'>> = {}
 
-  if (project.name !== values.name) payload.name = values.name
-  if (normalizeText(project.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
-  }
+  setValueIfChanged(payload, 'name', project.name, values.name)
+  setNormalizedTextIfChanged(payload, 'description', project.description, values.description)
 
   return payload
 }
@@ -59,13 +62,11 @@ export function buildSprintUpdatePayload(sprint: Sprint, values: SprintFormValue
   const currentStartTime = pickStartTime(sprint) ?? ''
   const currentEndTime = pickEndTime(sprint) ?? ''
 
-  if (sprint.name !== values.name) payload.name = values.name
-  if (normalizeText(sprint.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
-  }
-  if (values.status && sprint.status !== values.status) payload.status = values.status
+  setValueIfChanged(payload, 'name', sprint.name, values.name)
+  setNormalizedTextIfChanged(payload, 'description', sprint.description, values.description)
+  setDefinedValueIfChanged(payload, 'status', sprint.status, values.status)
   if (nextStartTime && nextStartTime !== currentStartTime) payload.startTime = nextStartTime
-  if (nextEndTime !== currentEndTime) payload.endTime = nextEndTime
+  setValueIfChanged(payload, 'endTime', currentEndTime, nextEndTime)
 
   return payload
 }
@@ -76,11 +77,11 @@ export function buildRequirementUpdatePayload(
 ): RequirementUpdatePayload {
   const payload: RequirementUpdatePayload = {}
 
-  if (values.name !== undefined && requirement.name !== values.name) payload.name = values.name
-  if (normalizeText(requirement.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
+  if (values.name !== undefined) {
+    setValueIfChanged(payload, 'name', requirement.name, values.name)
   }
-  if (values.status && requirement.status !== values.status) payload.status = values.status
+  setNormalizedTextIfChanged(payload, 'description', requirement.description, values.description)
+  setDefinedValueIfChanged(payload, 'status', requirement.status, values.status)
 
   return payload
 }
@@ -88,10 +89,8 @@ export function buildRequirementUpdatePayload(
 export function buildApiCollectionUpdatePayload(collection: ApiCollection, values: CollectionFormValues) {
   const payload: Partial<Pick<ApiCollection, 'name' | 'description'>> = {}
 
-  if (collection.name !== values.name) payload.name = values.name
-  if (normalizeText(collection.description) !== normalizeText(values.summary)) {
-    payload.description = values.summary ?? ''
-  }
+  setValueIfChanged(payload, 'name', collection.name, values.name)
+  setNormalizedTextIfChanged(payload, 'description', collection.description, values.summary)
 
   return payload
 }
@@ -104,28 +103,18 @@ export function buildUiTestSuiteUpdatePayload(suite: UiTestSuite, values: UiTest
     >
   > = {}
 
-  if (suite.name !== values.name) payload.name = values.name
-  if (normalizeText(suite.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
-  }
-  if (suite.headless !== values.headless && values.headless !== undefined) {
-    payload.headless = values.headless
-  }
-  if ((suite.slowMoMs ?? undefined) !== (values.slowMoMs ?? undefined) && values.slowMoMs !== undefined) {
-    payload.slowMoMs = values.slowMoMs
-  }
-  if ((suite.viewportWidth ?? undefined) !== (values.viewportWidth ?? undefined) && values.viewportWidth !== undefined) {
-    payload.viewportWidth = values.viewportWidth
-  }
-  if ((suite.viewportHeight ?? undefined) !== (values.viewportHeight ?? undefined) && values.viewportHeight !== undefined) {
-    payload.viewportHeight = values.viewportHeight
-  }
-  if (
-    (suite.defaultStepTimeoutMs ?? undefined) !== (values.defaultStepTimeoutMs ?? undefined) &&
-    values.defaultStepTimeoutMs !== undefined
-  ) {
-    payload.defaultStepTimeoutMs = values.defaultStepTimeoutMs
-  }
+  setValueIfChanged(payload, 'name', suite.name, values.name)
+  setNormalizedTextIfChanged(payload, 'description', suite.description, values.description)
+  setDefinedValueIfChanged(payload, 'headless', suite.headless, values.headless)
+  setDefinedValueIfChanged(payload, 'slowMoMs', suite.slowMoMs ?? undefined, values.slowMoMs)
+  setDefinedValueIfChanged(payload, 'viewportWidth', suite.viewportWidth ?? undefined, values.viewportWidth)
+  setDefinedValueIfChanged(payload, 'viewportHeight', suite.viewportHeight ?? undefined, values.viewportHeight)
+  setDefinedValueIfChanged(
+    payload,
+    'defaultStepTimeoutMs',
+    suite.defaultStepTimeoutMs ?? undefined,
+    values.defaultStepTimeoutMs,
+  )
 
   return payload
 }
@@ -136,8 +125,8 @@ export function buildUiTestCaseUpdatePayload(
 ) {
   const payload: Partial<Pick<UiTestCase, 'name' | 'enabled' | 'orderNo' | 'stepsJson'>> = {}
 
-  if (uiTestCase.name !== values.name) payload.name = values.name
-  if (Boolean(uiTestCase.enabled) !== Boolean(values.enabled)) payload.enabled = Boolean(values.enabled)
+  setValueIfChanged(payload, 'name', uiTestCase.name, values.name)
+  setBooleanIfChanged(payload, 'enabled', uiTestCase.enabled, values.enabled)
   if ((uiTestCase.orderNo ?? undefined) !== (values.orderNo ?? undefined)) payload.orderNo = values.orderNo
   if (normalizeText(uiTestCase.stepsJson) !== normalizeText(values.stepsJson)) payload.stepsJson = values.stepsJson ?? '[]'
 
@@ -150,12 +139,10 @@ export function buildApiEnvironmentUpdatePayload(
 ) {
   const payload: Partial<Pick<ApiEnvironment, 'name' | 'baseUrl' | 'description' | 'isDefault'>> = {}
 
-  if (environment.name !== values.name) payload.name = values.name
-  if (environment.baseUrl !== values.baseUrl) payload.baseUrl = values.baseUrl
-  if (normalizeText(environment.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
-  }
-  if (Boolean(environment.isDefault) !== Boolean(values.isDefault)) payload.isDefault = Boolean(values.isDefault)
+  setValueIfChanged(payload, 'name', environment.name, values.name)
+  setValueIfChanged(payload, 'baseUrl', environment.baseUrl, values.baseUrl)
+  setNormalizedTextIfChanged(payload, 'description', environment.description, values.description)
+  setBooleanIfChanged(payload, 'isDefault', environment.isDefault, values.isDefault)
 
   return payload
 }
@@ -166,12 +153,10 @@ export function buildApiEnvironmentVarUpdatePayload(
 ) {
   const payload: Partial<Pick<ApiEnvironmentVar, 'varKey' | 'value' | 'description' | 'isSecret'>> = {}
 
-  if (environmentVar.varKey !== values.varKey) payload.varKey = values.varKey
-  if (environmentVar.value !== values.value) payload.value = values.value
-  if (normalizeText(environmentVar.description) !== normalizeText(values.description)) {
-    payload.description = values.description ?? ''
-  }
-  if (Boolean(environmentVar.isSecret) !== Boolean(values.isSecret)) payload.isSecret = Boolean(values.isSecret)
+  setValueIfChanged(payload, 'varKey', environmentVar.varKey, values.varKey)
+  setValueIfChanged(payload, 'value', environmentVar.value, values.value)
+  setNormalizedTextIfChanged(payload, 'description', environmentVar.description, values.description)
+  setBooleanIfChanged(payload, 'isSecret', environmentVar.isSecret, values.isSecret)
 
   return payload
 }
@@ -184,13 +169,13 @@ export function buildApiAssertRuleUpdatePayload(
     Pick<ApiAssertRule, 'name' | 'enabled' | 'orderNo' | 'assertSource' | 'targetExpr' | 'comparator' | 'expectedValue'>
   > = {}
 
-  if (assertRule.name !== values.name) payload.name = values.name
-  if (Boolean(assertRule.enabled) !== Boolean(values.enabled)) payload.enabled = Boolean(values.enabled)
+  setValueIfChanged(payload, 'name', assertRule.name, values.name)
+  setBooleanIfChanged(payload, 'enabled', assertRule.enabled, values.enabled)
   if ((assertRule.orderNo ?? undefined) !== (values.orderNo ?? undefined)) payload.orderNo = values.orderNo
-  if (assertRule.assertSource !== values.assertSource) payload.assertSource = values.assertSource
-  if (normalizeText(assertRule.targetExpr) !== normalizeText(values.targetExpr)) payload.targetExpr = values.targetExpr ?? ''
-  if (assertRule.comparator !== values.comparator) payload.comparator = values.comparator
-  if (normalizeText(assertRule.expectedValue) !== normalizeText(values.expectedValue)) payload.expectedValue = values.expectedValue ?? ''
+  setValueIfChanged(payload, 'assertSource', assertRule.assertSource, values.assertSource)
+  setNormalizedTextIfChanged(payload, 'targetExpr', assertRule.targetExpr, values.targetExpr)
+  setValueIfChanged(payload, 'comparator', assertRule.comparator, values.comparator)
+  setNormalizedTextIfChanged(payload, 'expectedValue', assertRule.expectedValue, values.expectedValue)
 
   return payload
 }
@@ -203,13 +188,13 @@ export function buildApiExtractRuleUpdatePayload(
     Pick<ApiExtractRule, 'name' | 'enabled' | 'orderNo' | 'source' | 'sourceExpr' | 'varKey' | 'defaultValue'>
   > = {}
 
-  if (extractRule.name !== values.name) payload.name = values.name
-  if (Boolean(extractRule.enabled) !== Boolean(values.enabled)) payload.enabled = Boolean(values.enabled)
+  setValueIfChanged(payload, 'name', extractRule.name, values.name)
+  setBooleanIfChanged(payload, 'enabled', extractRule.enabled, values.enabled)
   if ((extractRule.orderNo ?? undefined) !== (values.orderNo ?? undefined)) payload.orderNo = values.orderNo
-  if (extractRule.source !== values.source) payload.source = values.source
-  if (normalizeText(extractRule.sourceExpr) !== normalizeText(values.sourceExpr)) payload.sourceExpr = values.sourceExpr ?? ''
-  if (extractRule.varKey !== values.varKey) payload.varKey = values.varKey
-  if (normalizeText(extractRule.defaultValue) !== normalizeText(values.defaultValue)) payload.defaultValue = values.defaultValue ?? ''
+  setValueIfChanged(payload, 'source', extractRule.source, values.source)
+  setNormalizedTextIfChanged(payload, 'sourceExpr', extractRule.sourceExpr, values.sourceExpr)
+  setValueIfChanged(payload, 'varKey', extractRule.varKey, values.varKey)
+  setNormalizedTextIfChanged(payload, 'defaultValue', extractRule.defaultValue, values.defaultValue)
 
   return payload
 }

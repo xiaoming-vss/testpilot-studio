@@ -1,0 +1,357 @@
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tag, Tooltip, Typography, message } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { api, type CreateZentaoConnectionPayload, type UpdateZentaoConnectionPayload, type ZentaoConnection } from '@/services/api'
+import { formatTime, getErrorMessage } from '@/utils/format'
+import { ZentaoConnectionDetailDrawer } from './ZentaoConnectionDetailDrawer'
+import { ZentaoConnectionDrawer, type ZentaoConnectionFormValues } from './ZentaoConnectionDrawer'
+
+const { Paragraph, Text, Title } = Typography
+
+function getConnectionStatusMeta(status?: string) {
+  switch (status) {
+    case 'active':
+      return { color: 'success' as const, label: '连接正常', badgeStatus: 'success' as const }
+    case 'auth_failed':
+      return { color: 'error' as const, label: '鉴权失败', badgeStatus: 'error' as const }
+    case 'disabled':
+      return { color: 'default' as const, label: '已停用', badgeStatus: 'default' as const }
+    default:
+      return { color: 'default' as const, label: status || '-', badgeStatus: 'default' as const }
+  }
+}
+
+function footerRange(total: number, page: number, pageSize: number) {
+  if (total === 0) return '显示第 0 条 - 第 0 条，共 0 条'
+  const start = (page - 1) * pageSize + 1
+  const end = Math.min(page * pageSize, total)
+  return `显示第 ${start} 条 - 第 ${end} 条，共 ${total} 条`
+}
+
+function buildCreatePayload(values: ZentaoConnectionFormValues): CreateZentaoConnectionPayload {
+  return {
+    name: values.name.trim(),
+    baseUrl: values.baseUrl.trim(),
+    account: values.account.trim(),
+    password: values.password?.trim() ?? '',
+  }
+}
+
+function buildUpdatePayload(current: ZentaoConnection, values: ZentaoConnectionFormValues): UpdateZentaoConnectionPayload {
+  const payload: UpdateZentaoConnectionPayload = {}
+  const nextName = values.name.trim()
+  const nextBaseUrl = values.baseUrl.trim()
+  const nextAccount = values.account.trim()
+  const nextPassword = values.password?.trim()
+
+  if (current.name !== nextName) payload.name = nextName
+  if (current.baseUrl !== nextBaseUrl) payload.baseUrl = nextBaseUrl
+  if (current.account !== nextAccount) payload.account = nextAccount
+  if (nextPassword) payload.password = nextPassword
+
+  return payload
+}
+
+export function ZentaoConnectionsPanel() {
+  const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(8)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editingConnection, setEditingConnection] = useState<ZentaoConnection | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailConnectionId, setDetailConnectionId] = useState('')
+  const [form] = Form.useForm<ZentaoConnectionFormValues>()
+
+  const connectionsQuery = useQuery({
+    queryKey: ['zentaoConnections'],
+    queryFn: () => api.getZentaoConnections(),
+  })
+
+  const detailQuery = useQuery({
+    queryKey: ['zentaoConnection', detailConnectionId],
+    queryFn: () => api.getZentaoConnection(detailConnectionId),
+    enabled: detailOpen && Boolean(detailConnectionId),
+  })
+
+  const connections = useMemo(
+    () =>
+      [...(connectionsQuery.data ?? [])].sort((left, right) => {
+        const leftTime = new Date(left.updatedAt || left.createdAt || '').getTime()
+        const rightTime = new Date(right.updatedAt || right.createdAt || '').getTime()
+        return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
+      }),
+    [connectionsQuery.data],
+  )
+  const pagedConnections = useMemo(
+    () => connections.slice((page - 1) * pageSize, page * pageSize),
+    [connections, page, pageSize],
+  )
+
+  const saveMutation = useMutation({
+    mutationFn: (values: ZentaoConnectionFormValues) => {
+      if (editingConnection) {
+        const payload = buildUpdatePayload(editingConnection, values)
+        if (Object.keys(payload).length === 0) {
+          return Promise.resolve(editingConnection)
+        }
+        return api.updateZentaoConnection(editingConnection.connectionId, payload)
+      }
+      return api.createZentaoConnection(buildCreatePayload(values))
+    },
+    onSuccess: (connection) => {
+      const isEditing = Boolean(editingConnection)
+      const hasChanges = !editingConnection || Object.keys(buildUpdatePayload(editingConnection, form.getFieldsValue())).length > 0
+      message.success(isEditing ? (hasChanges ? '禅道连接已更新' : '未检测到变更') : '禅道连接已创建')
+      queryClient.invalidateQueries({ queryKey: ['zentaoConnections'] })
+      queryClient.setQueryData(['zentaoConnection', connection.connectionId], connection)
+      setDrawerOpen(false)
+      setEditingConnection(null)
+      form.resetFields()
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error))
+    },
+  })
+
+  const reauthMutation = useMutation({
+    mutationFn: (connectionId: string) => api.reauthZentaoConnection(connectionId),
+    onSuccess: (connection) => {
+      message.success('重新鉴权成功')
+      queryClient.invalidateQueries({ queryKey: ['zentaoConnections'] })
+      queryClient.setQueryData(['zentaoConnection', connection.connectionId], connection)
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error))
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (connectionId: string) => api.deleteZentaoConnection(connectionId),
+    onSuccess: (_, connectionId) => {
+      message.success('禅道连接已删除')
+      queryClient.invalidateQueries({ queryKey: ['zentaoConnections'] })
+      queryClient.removeQueries({ queryKey: ['zentaoConnection', connectionId], exact: true })
+      if (detailConnectionId === connectionId) {
+        setDetailOpen(false)
+        setDetailConnectionId('')
+      }
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error))
+    },
+  })
+
+  function openCreateDrawer() {
+    setEditingConnection(null)
+    form.setFieldsValue({
+      name: '',
+      baseUrl: '',
+      account: '',
+      password: '',
+    })
+    setDrawerOpen(true)
+  }
+
+  function openEditDrawer(connection: ZentaoConnection) {
+    setEditingConnection(connection)
+    form.setFieldsValue({
+      name: connection.name,
+      baseUrl: connection.baseUrl,
+      account: connection.account,
+      password: '',
+    })
+    setDrawerOpen(true)
+  }
+
+  function openDetailDrawer(connectionId: string) {
+    setDetailConnectionId(connectionId)
+    setDetailOpen(true)
+  }
+
+  return (
+    <>
+      <div className="panel-header api-panel-header">
+        <div className="requirement-panel-head">
+          <Text strong>禅道连接</Text>
+        </div>
+        <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateDrawer}>
+          新建禅道连接
+        </Button>
+      </div>
+
+      {connectionsQuery.error ? (
+        <Alert showIcon type="error" message={getErrorMessage(connectionsQuery.error)} className="base-services-integration-alert" />
+      ) : null}
+
+      <div className="base-services-connection-shell">
+        {connections.length > 0 && connections.some((item) => item.status === 'auth_failed') ? (
+          <Alert
+            showIcon
+            type="warning"
+            className="base-services-integration-alert"
+            message="存在鉴权失败的禅道连接"
+            description="请优先检查最近错误信息，并使用“重新鉴权”或“编辑”更新连接配置。"
+          />
+        ) : null}
+
+        <div className="table-body-scroll sprint-card-scroll base-services-card-scroll">
+          {connectionsQuery.isLoading ? (
+            <div className="sprint-card-loading">
+              <Empty description="禅道连接加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </div>
+          ) : connections.length === 0 ? (
+            <div className="base-services-empty-card base-services-empty-card-list">
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <div className="base-services-empty-copy">
+                    <Title level={5}>还没有禅道连接</Title>
+                    <Text>先创建一个禅道连接，用于后续联通需求、执行和缺陷相关能力。</Text>
+                  </div>
+                }
+              />
+            </div>
+          ) : (
+            <div className="api-collection-grid base-services-connection-grid">
+              {pagedConnections.map((connection) => {
+                const statusMeta = getConnectionStatusMeta(connection.status)
+                const loadingReauth = reauthMutation.isPending && reauthMutation.variables === connection.connectionId
+                const loadingDelete = deleteMutation.isPending && deleteMutation.variables === connection.connectionId
+
+                return (
+                  <Card
+                    key={connection.connectionId}
+                    className="sprint-card api-collection-card base-services-connection-card"
+                    bodyStyle={{ padding: 20 }}
+                  >
+                    <div className="api-collection-card-top base-services-connection-head">
+                      <Space size={10} className="base-services-connection-title-wrap">
+                        <Badge status={statusMeta.badgeStatus} />
+                        <Text strong className="base-services-connection-title">
+                          {connection.name}
+                        </Text>
+                      </Space>
+                      <Space size={8} wrap>
+                        <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                      </Space>
+                    </div>
+
+                    <Paragraph className="api-collection-description base-services-connection-url">
+                      {connection.baseUrl || '暂无禅道地址'}
+                    </Paragraph>
+
+                    <div className="sprint-card-meta api-collection-meta-inline">
+                      <span className="sprint-card-label">账号</span>
+                      <span className="api-collection-inline-value">{connection.account || '-'}</span>
+                    </div>
+
+                    <div className="sprint-card-meta">
+                      <span className="sprint-card-label">状态</span>
+                      <span className="api-collection-inline-value">{statusMeta.label}</span>
+                    </div>
+                    <div className="sprint-card-meta">
+                      <span className="sprint-card-label">更新时间</span>
+                      <span className="api-collection-inline-value">{formatTime(connection.updatedAt)}</span>
+                    </div>
+
+                    <div className="sprint-card-actions base-services-connection-actions">
+                      <Tooltip title="查看详情">
+                        <Button
+                          type="text"
+                          shape="circle"
+                          className="action-btn-read"
+                          icon={<EyeOutlined />}
+                          aria-label="查看详情"
+                          onClick={() => openDetailDrawer(connection.connectionId)}
+                        />
+                      </Tooltip>
+                      <Tooltip title="重新鉴权">
+                        <Button
+                          type="text"
+                          shape="circle"
+                          className={connection.status === 'auth_failed' ? 'action-btn-delete' : 'action-btn-save'}
+                          icon={<ReloadOutlined />}
+                          aria-label="重新鉴权"
+                          loading={loadingReauth}
+                          onClick={() => reauthMutation.mutate(connection.connectionId)}
+                        />
+                      </Tooltip>
+                      <Tooltip title="编辑">
+                        <Button
+                          type="text"
+                          shape="circle"
+                          className="action-btn-update"
+                          icon={<EditOutlined />}
+                          aria-label="编辑禅道连接"
+                          onClick={() => openEditDrawer(connection)}
+                        />
+                      </Tooltip>
+                      <Popconfirm
+                        title="确认删除该禅道连接？"
+                        description="删除后将无法继续使用该连接进行鉴权。"
+                        onConfirm={() => deleteMutation.mutate(connection.connectionId)}
+                      >
+                        <Tooltip title="删除">
+                          <Button
+                            danger
+                            type="text"
+                            shape="circle"
+                            className="action-btn-delete"
+                            icon={<DeleteOutlined />}
+                            aria-label="删除禅道连接"
+                            loading={loadingDelete}
+                          />
+                        </Tooltip>
+                      </Popconfirm>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="table-footer">
+          <Text type="secondary">{footerRange(connections.length, page, pageSize)}</Text>
+          <Pagination
+            current={page}
+            pageSize={pageSize}
+            total={connections.length}
+            showSizeChanger
+            onChange={(nextPage, nextPageSize) => {
+              setPage(nextPage)
+              setPageSize(nextPageSize)
+            }}
+          />
+        </div>
+      </div>
+
+      <ZentaoConnectionDrawer
+        title={editingConnection ? '编辑禅道连接' : '新建禅道连接'}
+        open={drawerOpen}
+        form={form}
+        loading={saveMutation.isPending}
+        error={saveMutation.error}
+        mode={editingConnection ? 'edit' : 'create'}
+        onClose={() => {
+          setDrawerOpen(false)
+          setEditingConnection(null)
+          form.resetFields()
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      />
+
+      <ZentaoConnectionDetailDrawer
+        open={detailOpen}
+        loading={detailQuery.isLoading}
+        error={detailQuery.error}
+        connection={detailQuery.data}
+        onClose={() => {
+          setDetailOpen(false)
+          setDetailConnectionId('')
+        }}
+      />
+    </>
+  )
+}

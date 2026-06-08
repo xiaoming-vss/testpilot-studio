@@ -3,6 +3,7 @@ import { Alert, Empty, Tag, Typography } from 'antd'
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { LlmConnectionsPanel } from '@/features/base-services/components/LlmConnectionsPanel'
 import { ZentaoConnectionsPanel } from '@/features/base-services/components/ZentaoConnectionsPanel'
 
 const { Paragraph, Text, Title } = Typography
@@ -86,9 +87,11 @@ export function BaseServicesPage() {
       </section>
 
       <section className="workbench-panel base-services-panel">
-        <div className={`base-services-panel-body${activeTab === 'zentao' ? ' base-services-panel-body-immersive' : ''}`}>
+        <div className={`base-services-panel-body${activeTab === 'zentao' || activeTab === 'llm' ? ' base-services-panel-body-immersive' : ''}`}>
           {activeTab === 'zentao' ? (
             <ZentaoConnectionsPanel />
+          ) : activeTab === 'llm' ? (
+            <LlmConnectionsPanel />
           ) : (
             <>
               <div className="base-services-panel-header">

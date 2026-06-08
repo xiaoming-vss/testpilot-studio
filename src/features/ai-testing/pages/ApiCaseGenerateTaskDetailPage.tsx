@@ -1,10 +1,11 @@
-import { ArrowLeftOutlined, CaretRightOutlined, DeleteOutlined, DownOutlined, EditOutlined, RightOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Popover, Select, Spin, Tag, message } from 'antd'
+import { ArrowLeftOutlined, CaretRightOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, FullscreenOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Popover, Select, Spin, Tag, Tooltip, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
-import { isRunnableApiCaseGenerateTaskRun, renderApiCaseGenerateTaskRunStatusTag } from '../utils/taskStatus'
+import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
+import { isApiCaseGenerateTaskRunInProgress, isRunnableApiCaseGenerateTaskRun, renderApiCaseGenerateTaskRunStatusTag } from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser'
 import { useAuthStore } from '@/features/auth/store/auth.store'
@@ -12,7 +13,6 @@ import { api } from '@/services/api'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, normalizeUserName, pickUpdatedAt } from '@/utils/format'
 
 const runResultSectionDefinitions = [
-  { key: 'resultSummaryJson', label: '结果摘要' },
   { key: 'configJson', label: '中间配置' },
   { key: 'resultYaml', label: '结果 YAML' },
   { key: 'errorMessage', label: '错误信息' },
@@ -65,9 +65,11 @@ export function ApiCaseGenerateTaskDetailPage() {
   const queryClient = useQueryClient()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
+  const [llmSelectOpen, setLlmSelectOpen] = useState(false)
   const [expandedSection, setExpandedSection] = useState<'instruction' | 'sourceContent' | 'runHistory' | null>('runHistory')
   const [selectedRunRecordId, setSelectedRunRecordId] = useState<string | null>(null)
   const [openRunDetailPopoverKey, setOpenRunDetailPopoverKey] = useState<string | null>(null)
+  const [expandedRunResult, setExpandedRunResult] = useState<{ title: string; content: string } | null>(null)
   const [reviewModalRunId, setReviewModalRunId] = useState<string | null>(null)
   const [reviewSubmitAction, setReviewSubmitAction] = useState<'approve' | 'reject' | null>(null)
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
@@ -86,6 +88,7 @@ export function ApiCaseGenerateTaskDetailPage() {
     queryKey: ['apiCaseGenerateTaskRuns', taskId],
     queryFn: () => api.getApiCaseGenerateTaskRuns(taskId),
     enabled: Boolean(taskId),
+    refetchInterval: expandedSection === 'runHistory' ? 5000 : false,
   })
   const sprintsQuery = useQuery({
     queryKey: ['sprints', 'aiTestingDetail', task?.projectId],
@@ -147,6 +150,7 @@ export function ApiCaseGenerateTaskDetailPage() {
     queryKey: ['apiCaseGenerateTaskRun', selectedRunId],
     queryFn: () => api.getApiCaseGenerateTaskRun(selectedRunId),
     enabled: Boolean(selectedRunId),
+    refetchInterval: expandedSection === 'runHistory' && selectedRunId ? 5000 : false,
   })
   const selectedRun = selectedRunQuery.data
   const selectedRunResultSections = useMemo(
@@ -208,9 +212,10 @@ export function ApiCaseGenerateTaskDetailPage() {
   })
 
   const runTaskMutation = useMutation({
-    mutationFn: () => api.runApiCaseGenerateTask(taskId),
+    mutationFn: (connectionId: string) => api.runApiCaseGenerateTask(taskId, connectionId),
     onSuccess: (run) => {
       message.success('任务已加入执行队列')
+      setLlmSelectOpen(false)
       setExpandedSection('runHistory')
       setSelectedRunRecordId(run.runId ?? null)
       queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTask', taskId] })
@@ -296,10 +301,12 @@ export function ApiCaseGenerateTaskDetailPage() {
     [selectedRunResultSections],
   )
   const selectedRunReviewStatus = normalizeReviewStatus(selectedRun?.reviewStatus)
+  const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && !isApiCaseGenerateTaskRunInProgress(selectedRun?.status)
   const selectedRunImportedCollectionId = selectedRun?.importedCollectionId ?? ''
   const selectedRunImportedCollectionName = selectedRunImportedCollectionId
     ? (apiCollectionNameMap.get(selectedRunImportedCollectionId) ?? selectedRunImportedCollectionId)
     : ''
+  const runHistoryRefreshing = runsQuery.isFetching || selectedRunQuery.isFetching
 
   function toggleSection(section: 'instruction' | 'sourceContent' | 'runHistory') {
     setExpandedSection((current) => (current === section ? null : section))
@@ -314,7 +321,18 @@ export function ApiCaseGenerateTaskDetailPage() {
       message.warning('任务执行中，暂时不能重复运行')
       return
     }
-    runTaskMutation.mutate()
+    setLlmSelectOpen(true)
+  }
+
+  function handleLlmSelectConfirm(connectionId: string) {
+    runTaskMutation.mutate(connectionId)
+  }
+
+  function handleRefreshRuns() {
+    void runsQuery.refetch()
+    if (selectedRunId) {
+      void selectedRunQuery.refetch()
+    }
   }
 
   function openReviewModal(runId?: string) {
@@ -324,8 +342,47 @@ export function ApiCaseGenerateTaskDetailPage() {
     setReviewSubmitAction(null)
   }
 
+  function openExpandedRunResult(title: string, content?: string) {
+    if (!content) return
+    setOpenRunDetailPopoverKey(null)
+    setExpandedRunResult({ title, content })
+  }
+
+  async function handleCopyExpandedRunResult() {
+    const content = expandedRunResult?.content
+    if (!content) return
+    try {
+      await navigator.clipboard.writeText(content)
+      message.success('已复制内容')
+    } catch {
+      message.error('复制失败，请手动复制')
+    }
+  }
+
+  function handleDownloadExpandedRunResult() {
+    const content = expandedRunResult?.content
+    if (!content) return
+    const title = expandedRunResult?.title || '运行结果'
+    const safeTitle = title.replace(/[\\/:*?"<>|]/g, '_')
+    const extension = title.toLowerCase().includes('yaml') ? 'yaml' : 'txt'
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${safeTitle}.${extension}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    message.success('已下载内容')
+  }
+
   async function handleApproveReview() {
     if (!reviewModalRunId) return
+    if (!canReviewSelectedRun) {
+      message.warning('任务执行中，暂时不能审核')
+      return
+    }
     const values = await reviewForm.validateFields(['collectionId', 'comment'])
     setReviewSubmitAction('approve')
     reviewRunMutation.mutate({
@@ -340,6 +397,10 @@ export function ApiCaseGenerateTaskDetailPage() {
 
   function handleRejectReview() {
     if (!reviewModalRunId) return
+    if (!canReviewSelectedRun) {
+      message.warning('任务执行中，暂时不能审核')
+      return
+    }
     const values = reviewForm.getFieldsValue()
     setReviewSubmitAction('reject')
     reviewRunMutation.mutate({
@@ -363,6 +424,9 @@ export function ApiCaseGenerateTaskDetailPage() {
         <div className="ai-task-detail-layout">
           <Card className="ai-task-detail-summary-card">
             <div className="ai-task-detail-inline-meta">
+              <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-testing')}>
+                返回
+              </Button>
               {detailItems.map((item) => (
                 <div key={item.label} className="ai-task-detail-inline-item">
                   <span className="ai-task-detail-inline-label">{item.label}</span>
@@ -370,9 +434,6 @@ export function ApiCaseGenerateTaskDetailPage() {
                 </div>
               ))}
               <div className="ai-task-detail-inline-actions">
-                <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-testing')}>
-                  返回
-                </Button>
                 <Button
                   className="action-btn-run"
                   icon={<CaretRightOutlined />}
@@ -443,6 +504,22 @@ export function ApiCaseGenerateTaskDetailPage() {
 
             <Card
               className={`ai-task-detail-card ai-task-detail-fold-card ai-task-detail-fold-card-history${expandedSection === 'runHistory' ? ' expanded' : ' collapsed'}`}
+              extra={
+                <div className="ai-task-run-history-toolbar">
+                  <span className="ai-task-run-history-auto-refresh">每 5 秒自动刷新</span>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    loading={runHistoryRefreshing}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleRefreshRuns()
+                    }}
+                  >
+                    刷新
+                  </Button>
+                </div>
+              }
               title={
                 <button
                   type="button"
@@ -487,13 +564,15 @@ export function ApiCaseGenerateTaskDetailPage() {
                             <div className="ai-task-run-history-record-main">
                               <div className="ai-task-run-history-record-identity">
                                 <span className="ai-task-run-history-record-index">#{index + 1}</span>
-                                <span className="ai-task-run-history-record-name">{record.runId || '未命名记录'}</span>
+                                <span className="ai-task-run-history-record-name" title={record.runId || '未命名记录'}>
+                                  {record.runId || '未命名记录'}
+                                </span>
                               </div>
                               <div className="ai-task-run-history-record-meta">
                                 <span className="ai-task-run-history-record-status">{renderApiCaseGenerateTaskRunStatusTag(record.status)}</span>
-                                {active && selectedRun ? (
-                                  <span className="ai-task-run-history-review-status">{renderReviewStatusTag(selectedRun.reviewStatus)}</span>
-                                ) : null}
+                                <span className="ai-task-run-history-review-status">
+                                  {renderReviewStatusTag(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)}
+                                </span>
                                 <span className="ai-task-run-history-record-field">开始：{formatTime(record.startedAt)}</span>
                                 <span className="ai-task-run-history-record-field">结束：{formatTime(record.finishedAt)}</span>
                                 <span className="ai-task-run-history-record-field">耗时：{formatDurationSeconds(record.durationMs)}</span>
@@ -524,7 +603,22 @@ export function ApiCaseGenerateTaskDetailPage() {
                                             <Spin size="small" />
                                           </div>
                                         ) : content ? (
-                                          <pre className="ai-task-code-block">{content}</pre>
+                                          <>
+                                            <div className="ai-task-run-result-popover-header">
+                                              <span>{section.label}</span>
+                                              <Button
+                                                type="text"
+                                                size="small"
+                                                icon={<FullscreenOutlined />}
+                                                aria-label="放大查看"
+                                                onClick={(event) => {
+                                                  event.stopPropagation()
+                                                  openExpandedRunResult(section.label, content)
+                                                }}
+                                              />
+                                            </div>
+                                            <pre className="ai-task-code-block">{content}</pre>
+                                          </>
                                         ) : (
                                           <div className="ai-task-run-result-popover-empty">暂无内容</div>
                                         )}
@@ -564,7 +658,7 @@ export function ApiCaseGenerateTaskDetailPage() {
                                       </button>
                                     </Popover>
                                   ) : null}
-                                  {selectedRunReviewStatus === 'pending' ? (
+                                  {canReviewSelectedRun ? (
                                     <Button
                                       size="small"
                                       type="primary"
@@ -630,38 +724,49 @@ export function ApiCaseGenerateTaskDetailPage() {
       />
 
       <Modal
-        title="审核 AI 生成结果"
+        title={canReviewSelectedRun ? '审核 AI 生成结果' : 'API 用例生成结果'}
         open={Boolean(reviewModalRunId)}
         onCancel={() => {
           setReviewModalRunId(null)
           setReviewSubmitAction(null)
         }}
-        footer={[
-          <Button key="cancel" onClick={() => {
-            setReviewModalRunId(null)
-            setReviewSubmitAction(null)
-          }}>
-            取消
-          </Button>,
-          <Button
-            key="reject"
-            danger
-            ghost
-            loading={reviewRunMutation.isPending && reviewSubmitAction === 'reject'}
-            onClick={handleRejectReview}
-          >
-            审核不通过
-          </Button>,
-          <Button
-            key="approve"
-            type="primary"
-            loading={reviewRunMutation.isPending && reviewSubmitAction === 'approve'}
-            disabled={apiCollectionsQuery.isLoading || apiCollectionOptions.length === 0}
-            onClick={handleApproveReview}
-          >
-            审核通过
-          </Button>,
-        ]}
+        footer={
+          canReviewSelectedRun
+            ? [
+                <Button key="cancel" onClick={() => {
+                  setReviewModalRunId(null)
+                  setReviewSubmitAction(null)
+                }}>
+                  取消
+                </Button>,
+                <Button
+                  key="reject"
+                  danger
+                  ghost
+                  loading={reviewRunMutation.isPending && reviewSubmitAction === 'reject'}
+                  onClick={handleRejectReview}
+                >
+                  审核不通过
+                </Button>,
+                <Button
+                  key="approve"
+                  type="primary"
+                  loading={reviewRunMutation.isPending && reviewSubmitAction === 'approve'}
+                  disabled={apiCollectionsQuery.isLoading || apiCollectionOptions.length === 0}
+                  onClick={handleApproveReview}
+                >
+                  审核通过
+                </Button>,
+              ]
+            : [
+                <Button key="close" type="primary" onClick={() => {
+                  setReviewModalRunId(null)
+                  setReviewSubmitAction(null)
+                }}>
+                  关闭
+                </Button>,
+              ]
+        }
         destroyOnHidden
         width={960}
       >
@@ -694,15 +799,52 @@ export function ApiCaseGenerateTaskDetailPage() {
                   options={apiCollectionOptions}
                   loading={apiCollectionsQuery.isLoading}
                   optionFilterProp="label"
+                  disabled={!canReviewSelectedRun}
                 />
               </Form.Item>
             </div>
           </div>
           <Form.Item label="审核备注" name="comment">
-            <Input.TextArea rows={4} placeholder="请输入审核备注或驳回原因" />
+            <Input.TextArea rows={4} placeholder="请输入审核备注或驳回原因" disabled={!canReviewSelectedRun} />
           </Form.Item>
         </Form>
       </Modal>
+
+      <Modal
+        title={
+          <div className="ai-task-run-result-expanded-title">
+            <span>{expandedRunResult?.title ?? '运行结果'}</span>
+            <div className="ai-task-run-result-expanded-actions">
+              <Tooltip title="复制内容">
+                <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyExpandedRunResult} />
+              </Tooltip>
+              <Tooltip title="下载内容">
+                <Button type="text" size="small" icon={<DownloadOutlined />} onClick={handleDownloadExpandedRunResult} />
+              </Tooltip>
+            </div>
+          </div>
+        }
+        open={Boolean(expandedRunResult)}
+        onCancel={() => setExpandedRunResult(null)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setExpandedRunResult(null)}>
+            关闭
+          </Button>,
+        ]}
+        width="min(1180px, calc(100vw - 56px))"
+        destroyOnHidden
+      >
+        <div className="ai-task-run-result-expanded-content">
+          <pre className="ai-task-code-block">{expandedRunResult?.content ?? ''}</pre>
+        </div>
+      </Modal>
+
+      <LlmConnectionSelectModal
+        open={llmSelectOpen}
+        onClose={() => setLlmSelectOpen(false)}
+        onConfirm={handleLlmSelectConfirm}
+        loading={runTaskMutation.isPending}
+      />
       </div>
     </div>
   )

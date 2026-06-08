@@ -18,13 +18,13 @@ import { ApiCollectionDetailPage } from '@/features/api-automation/pages/ApiColl
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser'
 import { useAuthStore } from '@/features/auth/store/auth.store'
 import { ProfilePage } from '@/features/profile/pages/ProfilePage'
-import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage'
 import { ProjectsPage } from '@/features/projects/pages/ProjectsPage'
 import { SprintDetailPage } from '@/features/projects/pages/SprintDetailPage'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { RequirementDetailPage } from '@/features/requirements/pages/RequirementDetailPage'
 import { AiTestingPage } from '@/features/ai-testing/pages/AiTestingPage'
 import { ApiCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/ApiCaseGenerateTaskDetailPage'
+import { FunctionalCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/FunctionalCaseGenerateTaskDetailPage'
 import { BaseServicesPage } from '@/features/base-services/pages/BaseServicesPage'
 import { TestingPage } from '@/features/testing/pages/TestingPage'
 import { FunctionTestSuiteDetailPage } from '@/features/test-cases/pages/FunctionTestSuiteDetailPage'
@@ -152,7 +152,6 @@ export function AppShell() {
           <Routes>
             <Route path="/" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="/projects/:projectId/sprints/:sprintId" element={<SprintDetailPage />} />
             <Route
               path="/projects/:projectId/sprints/:sprintId/requirements/:requirementId"
@@ -163,6 +162,7 @@ export function AppShell() {
             <Route path="/test-cases/suites/:suiteId" element={<FunctionTestSuiteDetailPage />} />
             <Route path="/ai-testing" element={<AiTestingPage />} />
             <Route path="/ai-testing/tasks/:taskId" element={<ApiCaseGenerateTaskDetailPage />} />
+            <Route path="/ai-testing/function-tasks/:taskId" element={<FunctionalCaseGenerateTaskDetailPage />} />
             <Route path="/base-services" element={<BaseServicesPage />} />
             <Route path="/api-automation" element={<Navigate to="/testing?tab=api" replace />} />
             <Route path="/api-automation/collections/:collectionId" element={<ApiCollectionDetailPage />} />

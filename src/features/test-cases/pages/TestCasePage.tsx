@@ -319,11 +319,6 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
                         </div>
 
                         <div className="sprint-card-meta">
-                          <span className="sprint-card-label">创建时间</span>
-                          <span className="api-collection-inline-value">{formatTime(pickCreatedAt(suite))}</span>
-                        </div>
-
-                        <div className="sprint-card-meta">
                           <span className="sprint-card-label">最近更新</span>
                           <span className="api-collection-inline-value">{formatTime(pickUpdatedAt(suite))}</span>
                         </div>

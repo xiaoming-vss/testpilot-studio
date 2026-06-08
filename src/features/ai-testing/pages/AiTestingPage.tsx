@@ -29,18 +29,24 @@ import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
-import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun } from '../types'
+import { FunctionalCaseGenerateTaskDrawer, type FunctionalCaseGenerateTaskFormValues } from '../components/FunctionalCaseGenerateTaskDrawer'
+import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
+import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun, FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun } from '../types'
 import { isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { api } from '@/services/api'
-import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickCreatedAt, pickUpdatedAt } from '@/utils/format'
+import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickCreatedAt } from '@/utils/format'
 
 const { Paragraph, Text, Title } = Typography
 
 type AiTestingCategory = 'api' | 'ui' | 'functional'
 
 function getTaskId(task: ApiCaseGenerateTask) {
+  return task.taskId ?? ''
+}
+
+function getFunctionalTaskId(task: FunctionalCaseGenerateTask) {
   return task.taskId ?? ''
 }
 
@@ -51,17 +57,35 @@ function footerRange(total: number, page: number, pageSize: number) {
   return `显示第 ${start} 条 - 第 ${end} 条，共 ${total} 条`
 }
 
-function getRunSortTime(run: ApiCaseGenerateTaskRun) {
+function getRunSortTime(run: ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun) {
   const time = new Date(run.createdAt || run.startedAt || run.updatedAt || '').getTime()
   return Number.isNaN(time) ? 0 : time
 }
 
-function getLatestRun(runs?: ApiCaseGenerateTaskRun[]) {
+function getLatestRun<T extends ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun>(runs?: T[]) {
   return [...(runs ?? [])].sort((left, right) => getRunSortTime(right) - getRunSortTime(left))[0]
 }
 
 function sourceTypeTag(sourceType: ApiCaseGenerateTask['sourceType']) {
   return <Tag color={sourceType === 'swagger' ? 'gold' : 'blue'}>{sourceType}</Tag>
+}
+
+function functionalSourceTypeTag(sourceType: FunctionalCaseGenerateTask['sourceType']) {
+  if (sourceType === 'docx') return <Tag color="purple">docx</Tag>
+  return <Tag color="blue">text</Tag>
+}
+
+function getFunctionalSourceFileName(task: FunctionalCaseGenerateTask) {
+  const sourceContent = task.sourceContent || ''
+  if (!sourceContent) return ''
+  const normalized = sourceContent.split('?')[0]
+  const segments = normalized.split(/[\\/]/)
+  return segments[segments.length - 1] || normalized
+}
+
+function getFunctionalSourcePreview(task: FunctionalCaseGenerateTask) {
+  if (task.sourceType === 'text') return task.sourceContent || '暂无来源内容'
+  return '下载文件'
 }
 
 function taskStatusBadge(status?: ApiCaseGenerateTaskRun['status']): NonNullable<BadgeProps['status']> {
@@ -93,7 +117,7 @@ const categoryOptions: Array<{
   {
     key: 'functional',
     label: '功能测试',
-    description: '后续承接功能用例生成与编辑流程',
+    description: '项目级功能用例生成任务录入与管理',
     icon: <ExperimentOutlined />,
   },
 ]
@@ -106,9 +130,17 @@ export function AiTestingPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<ApiCaseGenerateTask | null>(null)
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
+  const [functionalDrawerOpen, setFunctionalDrawerOpen] = useState(false)
+  const [editingFunctionalTask, setEditingFunctionalTask] = useState<FunctionalCaseGenerateTask | null>(null)
+  const [functionalDrawerSprintId, setFunctionalDrawerSprintId] = useState<string | undefined>(undefined)
+  const [llmSelectTaskId, setLlmSelectTaskId] = useState<string | null>(null)
+  const [functionalLlmSelectTaskId, setFunctionalLlmSelectTaskId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [functionalPage, setFunctionalPage] = useState(1)
+  const [functionalPageSize, setFunctionalPageSize] = useState(10)
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
+  const [functionalForm] = Form.useForm<FunctionalCaseGenerateTaskFormValues>()
 
   const activeCategory = useMemo<AiTestingCategory>(() => {
     const tab = searchParams.get('tab')
@@ -140,6 +172,11 @@ export function AiTestingPage() {
     queryFn: () => api.getRequirements(drawerSprintId!),
     enabled: Boolean(drawerSprintId),
   })
+  const functionalRequirementOptionsQuery = useQuery({
+    queryKey: ['requirements', 'aiTestingFunctional', functionalDrawerSprintId],
+    queryFn: () => api.getRequirements(functionalDrawerSprintId!),
+    enabled: Boolean(functionalDrawerSprintId),
+  })
   const allRequirementsQuery = useQuery({
     queryKey: ['requirementsPool', 'aiTesting', activeProjectId, sprintOptions.map((item) => item.value).join(',')],
     queryFn: async () => {
@@ -159,6 +196,14 @@ export function AiTestingPage() {
       })),
     [requirementOptionsQuery.data],
   )
+  const functionalRequirementOptions = useMemo(
+    () =>
+      (functionalRequirementOptionsQuery.data ?? []).map((requirement) => ({
+        label: requirement.name,
+        value: normalizeRequirementId(requirement),
+      })),
+    [functionalRequirementOptionsQuery.data],
+  )
   const sprintNameMap = useMemo(
     () => new Map((sprintsQuery.data ?? []).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
@@ -177,10 +222,28 @@ export function AiTestingPage() {
       }),
     [tasksQuery.data],
   )
+  const functionalTasksQuery = useQuery({
+    queryKey: ['functionalCaseGenerateTasks', activeProjectId],
+    queryFn: () => api.getFunctionalCaseGenerateTasks(activeProjectId!),
+    enabled: Boolean(activeProjectId),
+  })
+  const functionalTasks = useMemo(
+    () =>
+      [...(functionalTasksQuery.data ?? [])].sort((left, right) => {
+        const leftTime = new Date(left.updatedAt || left.createdAt || '').getTime()
+        const rightTime = new Date(right.updatedAt || right.createdAt || '').getTime()
+        return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
+      }),
+    [functionalTasksQuery.data],
+  )
 
   const pagedTasks = useMemo(
     () => tasks.slice((page - 1) * pageSize, page * pageSize),
     [page, pageSize, tasks],
+  )
+  const pagedFunctionalTasks = useMemo(
+    () => functionalTasks.slice((functionalPage - 1) * functionalPageSize, functionalPage * functionalPageSize),
+    [functionalPage, functionalPageSize, functionalTasks],
   )
   const taskRunQueries = useQueries({
     queries: pagedTasks.map((task) => {
@@ -196,8 +259,25 @@ export function AiTestingPage() {
     const entries = pagedTasks.map((task, index) => [getTaskId(task), getLatestRun(taskRunQueries[index]?.data)] as const)
     return new Map(entries)
   }, [pagedTasks, taskRunQueries])
+  const functionalTaskRunQueries = useQueries({
+    queries: pagedFunctionalTasks.map((task) => {
+      const taskId = getFunctionalTaskId(task)
+      return {
+        queryKey: ['functionalCaseGenerateTaskRuns', taskId],
+        queryFn: () => api.getFunctionalCaseGenerateTaskRuns(taskId),
+        enabled: Boolean(taskId) && activeCategory === 'functional',
+      }
+    }),
+  })
+  const latestFunctionalRunMap = useMemo(() => {
+    const entries = pagedFunctionalTasks.map((task, index) => [getFunctionalTaskId(task), getLatestRun(functionalTaskRunQueries[index]?.data)] as const)
+    return new Map(entries)
+  }, [functionalTaskRunQueries, pagedFunctionalTasks])
   const closeDrawerEffect = useEffectEvent(() => {
     closeDrawer()
+  })
+  const closeFunctionalDrawerEffect = useEffectEvent(() => {
+    closeFunctionalDrawer()
   })
 
   useEffect(() => {
@@ -206,14 +286,23 @@ export function AiTestingPage() {
   }, [page, pageSize, tasks.length])
 
   useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(functionalTasks.length / functionalPageSize))
+    if (functionalPage > maxPage) setFunctionalPage(maxPage)
+  }, [functionalPage, functionalPageSize, functionalTasks.length])
+
+  useEffect(() => {
     setPage(1)
+    setFunctionalPage(1)
   }, [activeProjectId])
 
   useEffect(() => {
     if (activeCategory !== 'api' && drawerOpen) {
       closeDrawerEffect()
     }
-  }, [activeCategory, drawerOpen])
+    if (activeCategory !== 'functional' && functionalDrawerOpen) {
+      closeFunctionalDrawerEffect()
+    }
+  }, [activeCategory, closeDrawerEffect, closeFunctionalDrawerEffect, drawerOpen, functionalDrawerOpen])
 
   const createTaskMutation = useMutation({
     mutationFn: (values: ApiCaseGenerateTaskFormValues) => api.createApiCaseGenerateTask(activeProjectId!, values),
@@ -245,12 +334,51 @@ export function AiTestingPage() {
   })
 
   const runTaskMutation = useMutation({
-    mutationFn: (taskId: string) => api.runApiCaseGenerateTask(taskId),
+    mutationFn: ({ taskId, connectionId }: { taskId: string; connectionId: string }) =>
+      api.runApiCaseGenerateTask(taskId, connectionId),
     onSuccess: (run) => {
       message.success('任务已加入执行队列')
+      setLlmSelectTaskId(null)
       queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTask', run.taskId] })
       queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTaskRuns', run.taskId] })
       queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTasks', activeProjectId] })
+    },
+  })
+  const createFunctionalTaskMutation = useMutation({
+    mutationFn: (values: FunctionalCaseGenerateTaskFormValues) => api.createFunctionalCaseGenerateTask(activeProjectId!, values),
+    onSuccess: () => {
+      message.success('功能测试任务已创建')
+      closeFunctionalDrawer()
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTasks', activeProjectId] })
+    },
+  })
+
+  const updateFunctionalTaskMutation = useMutation({
+    mutationFn: (values: FunctionalCaseGenerateTaskFormValues) =>
+      api.updateFunctionalCaseGenerateTask(getFunctionalTaskId(editingFunctionalTask!), values),
+    onSuccess: () => {
+      message.success('功能测试任务已更新')
+      closeFunctionalDrawer()
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTasks', activeProjectId] })
+    },
+  })
+
+  const deleteFunctionalTaskMutation = useMutation({
+    mutationFn: (taskId: string) => api.deleteFunctionalCaseGenerateTask(taskId),
+    onSuccess: () => {
+      message.success('功能测试任务已删除')
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTasks', activeProjectId] })
+    },
+  })
+  const runFunctionalTaskMutation = useMutation({
+    mutationFn: ({ taskId, connectionId }: { taskId: string; connectionId: string }) =>
+      api.runFunctionalCaseGenerateTask(taskId, { connectionId }),
+    onSuccess: (run) => {
+      message.success('任务已加入执行队列')
+      setFunctionalLlmSelectTaskId(null)
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTask', run.taskId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', run.taskId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTasks', activeProjectId] })
     },
   })
 
@@ -290,6 +418,46 @@ export function AiTestingPage() {
     form.resetFields()
   }
 
+  function openCreateFunctionalDrawer() {
+    setEditingFunctionalTask(null)
+    const defaultSprintId = sprintOptions[0]?.value
+    setFunctionalDrawerSprintId(defaultSprintId)
+    functionalForm.setFieldsValue({
+      name: '',
+      sprintId: defaultSprintId,
+      requirementId: undefined,
+      sourceType: 'text',
+      sourceContent: '',
+      sourceFileName: undefined,
+      file: undefined,
+      instruction: '',
+    })
+    setFunctionalDrawerOpen(true)
+  }
+
+  function openEditFunctionalDrawer(task: FunctionalCaseGenerateTask) {
+    setEditingFunctionalTask(task)
+    setFunctionalDrawerSprintId(task.sprintId)
+    functionalForm.setFieldsValue({
+      name: task.name,
+      sprintId: task.sprintId,
+      requirementId: task.requirementId,
+      sourceType: task.sourceType,
+      sourceContent: task.sourceContent,
+      sourceFileName: getFunctionalSourceFileName(task) || undefined,
+      file: undefined,
+      instruction: task.instruction,
+    })
+    setFunctionalDrawerOpen(true)
+  }
+
+  function closeFunctionalDrawer() {
+    setFunctionalDrawerOpen(false)
+    setEditingFunctionalTask(null)
+    setFunctionalDrawerSprintId(undefined)
+    functionalForm.resetFields()
+  }
+
   function handleCategoryChange(nextCategory: AiTestingCategory) {
     const nextSearchParams = new URLSearchParams(searchParams)
     nextSearchParams.set('tab', nextCategory)
@@ -302,7 +470,26 @@ export function AiTestingPage() {
       message.warning('任务执行中，暂时不能重复运行')
       return
     }
-    runTaskMutation.mutate(getTaskId(task))
+    setLlmSelectTaskId(getTaskId(task))
+  }
+
+  function handleLlmSelectConfirm(connectionId: string) {
+    if (!llmSelectTaskId) return
+    runTaskMutation.mutate({ taskId: llmSelectTaskId, connectionId })
+  }
+
+  function handleRunFunctionalTask(task: FunctionalCaseGenerateTask) {
+    const latestRun = latestFunctionalRunMap.get(getFunctionalTaskId(task))
+    if (!isRunnableApiCaseGenerateTaskRun(latestRun?.status)) {
+      message.warning('任务执行中，暂时不能重复运行')
+      return
+    }
+    setFunctionalLlmSelectTaskId(getFunctionalTaskId(task))
+  }
+
+  function handleFunctionalLlmSelectConfirm(connectionId: string) {
+    if (!functionalLlmSelectTaskId) return
+    runFunctionalTaskMutation.mutate({ taskId: functionalLlmSelectTaskId, connectionId })
   }
 
   const activeCategoryMeta = categoryOptions.find((item) => item.key === activeCategory) ?? categoryOptions[0]
@@ -406,11 +593,6 @@ export function AiTestingPage() {
                             <span className="api-collection-inline-value">{formatTime(pickCreatedAt(task))}</span>
                           </div>
 
-                          <div className="sprint-card-meta ai-task-card-meta-last">
-                            <span className="sprint-card-label">最近更新</span>
-                            <span className="api-collection-inline-value">{formatTime(pickUpdatedAt(task))}</span>
-                          </div>
-
                           <div
                             className="sprint-card-actions ai-task-card-actions"
                             onClick={(event) => event.stopPropagation()}
@@ -435,7 +617,6 @@ export function AiTestingPage() {
                                   icon={<CaretRightOutlined />}
                                   aria-label="运行任务"
                                   disabled={!runnableTask}
-                                  loading={runTaskMutation.isPending && runTaskMutation.variables === taskId}
                                   onClick={() => handleRunTask(task)}
                                 />
                               </span>
@@ -488,6 +669,181 @@ export function AiTestingPage() {
               </div>
             </section>
           </>
+        ) : activeCategory === 'functional' ? (
+          <section className="workbench-panel workbench-board-panel ai-testing-task-panel">
+            <div className="panel-header ai-task-panel-header">
+              <Text strong>功能用例生成任务</Text>
+              <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!activeProjectId} onClick={openCreateFunctionalDrawer}>
+                新建任务
+              </Button>
+            </div>
+
+            {projectsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(projectsQuery.error)} style={{ margin: '12px 18px 0' }} /> : null}
+            {functionalTasksQuery.error ? <Alert showIcon type="error" message={getErrorMessage(functionalTasksQuery.error)} style={{ margin: '12px 18px 0' }} /> : null}
+
+            <div className="table-body-scroll ai-testing-card-scroll">
+              {!activeProjectId ? (
+                <div className="sprint-card-loading ai-testing-empty-shell">
+                  <Empty description="请先选择项目" />
+                </div>
+              ) : functionalTasksQuery.isLoading ? (
+                <div className="sprint-card-loading ai-testing-empty-shell">
+                  <Empty description="任务加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                </div>
+              ) : functionalTasks.length === 0 ? (
+                <div className="ai-testing-empty-shell">
+                  <Empty description="当前项目下暂无功能测试生成任务">
+                    <Button type="primary" icon={<PlusOutlined />} onClick={openCreateFunctionalDrawer}>
+                      创建第一条任务
+                    </Button>
+                  </Empty>
+                </div>
+              ) : (
+                <div className="ai-task-card-grid">
+                  {pagedFunctionalTasks.map((task, index) => {
+                    const taskId = getFunctionalTaskId(task)
+                    const latestRunQuery = functionalTaskRunQueries[index]
+                    const latestRun = latestFunctionalRunMap.get(taskId)
+                    const runnableTask = !latestRunQuery?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
+                    return (
+                      <Card
+                        key={taskId}
+                        hoverable
+                        className="sprint-card api-collection-card ai-task-card ai-functional-task-card"
+                        bodyStyle={{ padding: 20 }}
+                        onClick={() => navigate(`/ai-testing/function-tasks/${taskId}`)}
+                      >
+                        <div className="api-collection-card-top ai-task-card-top">
+                          <Space size={10}>
+                            <Badge status={taskStatusBadge(latestRun?.status)} />
+                            <Text strong className="ai-task-card-title">{task.name || '未命名任务'}</Text>
+                          </Space>
+                          <Space size={6} wrap className="ai-task-card-tags">
+                            {functionalSourceTypeTag(task.sourceType)}
+                          </Space>
+                        </div>
+
+                        <Paragraph className="api-collection-description ai-task-card-description" type="secondary" ellipsis={{ rows: 2 }}>
+                          {task.instruction || '暂无生成指令'}
+                        </Paragraph>
+
+                        <div className="sprint-card-meta api-collection-meta-inline">
+                          <span className="sprint-card-label">所属迭代/需求</span>
+                          <span className="api-collection-inline-value">
+                            {sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'}/
+                            {requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'}
+                          </span>
+                        </div>
+
+                        <div className="sprint-card-meta api-collection-meta-inline">
+                          <span className="sprint-card-label">来源内容</span>
+                          <span className="api-collection-inline-value ai-functional-source-value">
+                            {task.sourceType === 'text' ? (
+                              getFunctionalSourcePreview(task)
+                            ) : (
+                              <a
+                                href={task.sourceContent}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                title={getFunctionalSourceFileName(task) || '下载文件'}
+                              >
+                                下载文件
+                              </a>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="sprint-card-meta">
+                          <span className="sprint-card-label">创建时间</span>
+                          <span className="api-collection-inline-value">{formatTime(pickCreatedAt(task))}</span>
+                        </div>
+
+                        <div
+                          className="sprint-card-actions ai-task-card-actions"
+                          onClick={(event) => event.stopPropagation()}
+                          onMouseDown={(event) => event.stopPropagation()}
+                        >
+                          <Tooltip title="查看详情">
+                            <Button
+                              type="text"
+                              shape="circle"
+                              className="action-btn-read"
+                              icon={<EyeOutlined />}
+                              aria-label="查看详情"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                navigate(`/ai-testing/function-tasks/${taskId}`)
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip title={latestRunQuery?.isLoading ? '运行记录加载中' : '运行任务'}>
+                            <span>
+                              <Button
+                                type="text"
+                                shape="circle"
+                                className="action-btn-run"
+                                icon={<CaretRightOutlined />}
+                                aria-label="运行任务"
+                                disabled={!runnableTask}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleRunFunctionalTask(task)
+                                }}
+                              />
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="编辑任务">
+                            <span>
+                              <Button
+                                type="text"
+                                shape="circle"
+                                className="action-btn-update"
+                                icon={<EditOutlined />}
+                                aria-label="编辑任务"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  openEditFunctionalDrawer(task)
+                                }}
+                              />
+                            </span>
+                          </Tooltip>
+                          <Popconfirm title="确认删除该任务？" onConfirm={() => deleteFunctionalTaskMutation.mutate(taskId)}>
+                            <Tooltip title="删除任务">
+                              <Button
+                                danger
+                                type="text"
+                                shape="circle"
+                                className="action-btn-delete"
+                                icon={<DeleteOutlined />}
+                                aria-label="删除任务"
+                                onClick={(event) => event.stopPropagation()}
+                                loading={deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId}
+                              />
+                            </Tooltip>
+                          </Popconfirm>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="table-footer">
+              <Text type="secondary">{footerRange(functionalTasks.length, functionalPage, functionalPageSize)}</Text>
+              <Pagination
+                current={functionalPage}
+                pageSize={functionalPageSize}
+                total={functionalTasks.length}
+                showSizeChanger
+                onChange={(nextPage, nextPageSize) => {
+                  setFunctionalPage(nextPage)
+                  setFunctionalPageSize(nextPageSize)
+                }}
+              />
+            </div>
+          </section>
         ) : (
           <section className="ai-testing-coming-panel">
             <Card className="ai-testing-coming-card" bordered={false}>
@@ -527,6 +883,42 @@ export function AiTestingPage() {
           }
           createTaskMutation.mutate(values)
         }}
+      />
+
+      <FunctionalCaseGenerateTaskDrawer
+        title={editingFunctionalTask ? '编辑功能用例生成任务' : '新建功能用例生成任务'}
+        open={functionalDrawerOpen}
+        form={functionalForm}
+        editing={Boolean(editingFunctionalTask)}
+        loading={createFunctionalTaskMutation.isPending || updateFunctionalTaskMutation.isPending}
+        error={createFunctionalTaskMutation.error ?? updateFunctionalTaskMutation.error}
+        sprintOptions={sprintOptions}
+        requirementOptions={functionalRequirementOptions}
+        onSprintChange={(value) => {
+          setFunctionalDrawerSprintId(value)
+          functionalForm.setFieldValue('requirementId', undefined)
+        }}
+        onClose={closeFunctionalDrawer}
+        onFinish={(values) => {
+          if (editingFunctionalTask) {
+            updateFunctionalTaskMutation.mutate(values)
+            return
+          }
+          createFunctionalTaskMutation.mutate(values)
+        }}
+      />
+
+      <LlmConnectionSelectModal
+        open={Boolean(llmSelectTaskId)}
+        onClose={() => setLlmSelectTaskId(null)}
+        onConfirm={handleLlmSelectConfirm}
+        loading={runTaskMutation.isPending}
+      />
+      <LlmConnectionSelectModal
+        open={Boolean(functionalLlmSelectTaskId)}
+        onClose={() => setFunctionalLlmSelectTaskId(null)}
+        onConfirm={handleFunctionalLlmSelectConfirm}
+        loading={runFunctionalTaskMutation.isPending}
       />
     </div>
   )

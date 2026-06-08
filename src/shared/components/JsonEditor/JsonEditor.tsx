@@ -123,6 +123,8 @@ type JsonEditorProps = {
   onChange?: (value: string) => void
   minHeight?: number
   toolbar?: ReactNode
+  readOnly?: boolean
+  foldable?: boolean
 }
 
 export const JsonEditor = forwardRef<JsonEditorRef, JsonEditorProps>(({
@@ -130,6 +132,8 @@ export const JsonEditor = forwardRef<JsonEditorRef, JsonEditorProps>(({
   onChange,
   minHeight = 260,
   toolbar,
+  readOnly = false,
+  foldable = false,
 }, ref) => {
   const jsonState = useMemo(() => tryFormatJson(value), [value])
   const themeMode = useThemeStore((state) => state.mode)
@@ -158,15 +162,17 @@ export const JsonEditor = forwardRef<JsonEditorRef, JsonEditorProps>(({
       view.focus()
     },
     formatDocument() {
+      if (readOnly) return
       if (!jsonState.valid || !value?.trim()) return
       if (jsonState.formatted !== value) {
         onChange?.(jsonState.formatted)
       }
       editorViewRef.current?.focus()
     },
-  }), [jsonState.formatted, jsonState.valid, onChange, value])
+  }), [jsonState.formatted, jsonState.valid, onChange, readOnly, value])
 
   function handleBlur() {
+    if (readOnly) return
     if (!jsonState.valid || !value?.trim()) return
     if (jsonState.formatted !== value) {
       onChange?.(jsonState.formatted)
@@ -174,14 +180,16 @@ export const JsonEditor = forwardRef<JsonEditorRef, JsonEditorProps>(({
   }
 
   return (
-    <div className="json-editor-wrap">
+    <div className={`json-editor-wrap${foldable ? ' foldable' : ''}${readOnly ? ' readonly' : ''}`}>
       <div className={`json-editor-shell${jsonState.valid ? '' : ' invalid'}`}>
         {toolbar ? <div className="json-editor-toolbar">{toolbar}</div> : null}
         <CodeMirror
           value={value ?? ''}
           minHeight={`${minHeight}px`}
+          editable={!readOnly}
+          readOnly={readOnly}
           basicSetup={{
-            foldGutter: false,
+            foldGutter: foldable,
             highlightActiveLine: false,
             highlightActiveLineGutter: false,
           }}
@@ -197,7 +205,9 @@ export const JsonEditor = forwardRef<JsonEditorRef, JsonEditorProps>(({
           onCreateEditor={(view) => {
             editorViewRef.current = view
           }}
-          onChange={(nextValue) => onChange?.(nextValue)}
+          onChange={(nextValue) => {
+            if (!readOnly) onChange?.(nextValue)
+          }}
           onBlur={handleBlur}
         />
       </div>

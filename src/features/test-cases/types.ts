@@ -34,6 +34,41 @@ export type FunctionTestCase = {
   updated_at?: string
 }
 
+export type FunctionTestCaseImportResult = {
+  importedCaseCount?: number
+  imported_case_count?: number
+  importedCount?: number
+  imported_count?: number
+}
+
+export type ImportFunctionTestCasesToZentaoPayload = {
+  productId: number
+  caseIds?: string[]
+  moduleId?: number
+}
+
+export type FunctionTestCaseZentaoImportItem = {
+  caseId?: string
+  case_id?: string
+  remoteCaseId?: number
+  remote_case_id?: number
+  status?: string
+}
+
+export type FunctionTestCaseZentaoImportResult = {
+  suiteId?: string
+  suite_id?: string
+  productId?: number
+  product_id?: number
+  remoteProjectId?: number
+  remote_project_id?: number
+  remoteExecutionId?: number
+  remote_execution_id?: number
+  importedCaseCount?: number
+  imported_case_count?: number
+  items?: FunctionTestCaseZentaoImportItem[]
+}
+
 export type CreateFunctionTestCasePayload = {
   title: string
   module?: string

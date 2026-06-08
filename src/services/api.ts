@@ -16,8 +16,16 @@ export type {
   ApiCaseGenerateTaskRunSnapshot,
   ApiCaseGenerateTaskSourceType,
   CreateApiCaseGenerateTaskPayload,
+  CreateFunctionalCaseGenerateTaskPayload,
+  FunctionalCaseGenerateTask,
+  FunctionalCaseGenerateTaskRun,
+  FunctionalCaseGenerateTaskRunSnapshot,
+  FunctionalCaseGenerateTaskSourceType,
   ReviewApiCaseGenerateTaskRunPayload,
+  ReviewFunctionalCaseGenerateTaskRunPayload,
+  RunFunctionalCaseGenerateTaskPayload,
   UpdateApiCaseGenerateTaskPayload,
+  UpdateFunctionalCaseGenerateTaskPayload,
 } from '@/features/ai-testing/types'
 export type {
   ApiAssertComparator,
@@ -56,16 +64,28 @@ export type {
 export type { Project, ProjectUpdatePayload, Sprint, SprintCreatePayload, SprintUpdatePayload } from '@/features/projects/types'
 export type { Requirement, RequirementCreatePayload, RequirementUpdatePayload } from '@/features/requirements/types'
 export type {
+  CreateZentaoBindingPayload,
   CreateZentaoConnectionPayload,
   IntegrationConnectionStatus,
+  LlmConnection,
+  CreateLlmConnectionPayload,
+  UpdateLlmConnectionPayload,
   UpdateZentaoConnectionPayload,
+  ZentaoBindingTargetType,
+  ZentaoBinding,
   ZentaoConnection,
+  ZentaoRemoteListResponse,
+  ZentaoRemoteOption,
 } from '@/features/base-services/types'
 export type {
   CreateFunctionTestCasePayload,
   CreateFunctionTestSuitePayload,
   FunctionTestCase,
+  FunctionTestCaseImportResult,
+  FunctionTestCaseZentaoImportItem,
+  FunctionTestCaseZentaoImportResult,
   FunctionTestSuite,
+  ImportFunctionTestCasesToZentaoPayload,
   UpdateFunctionTestCasePayload,
   UpdateFunctionTestSuitePayload,
 } from '@/features/test-cases/types'

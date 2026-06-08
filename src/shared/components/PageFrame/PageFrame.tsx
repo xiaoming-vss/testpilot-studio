@@ -9,23 +9,27 @@ export function PageFrame({
   actions,
   back,
   children,
+  hideHeader = false,
 }: {
   title: string
   description?: string
   actions?: ReactNode
   back?: ReactNode
   children: ReactNode
+  hideHeader?: boolean
 }) {
   return (
     <Space direction="vertical" size={20} className="page-frame">
-      <div className="page-head">
-        <Space direction="vertical" size={6}>
-          {back}
-          <Title level={2}>{title}</Title>
-          {description ? <Paragraph type="secondary">{description}</Paragraph> : null}
-        </Space>
-        <div className="page-actions">{actions}</div>
-      </div>
+      {hideHeader ? null : (
+        <div className="page-head">
+          <Space direction="vertical" size={6}>
+            {back}
+            <Title level={2}>{title}</Title>
+            {description ? <Paragraph type="secondary">{description}</Paragraph> : null}
+          </Space>
+          <div className="page-actions">{actions}</div>
+        </div>
+      )}
       {children}
     </Space>
   )

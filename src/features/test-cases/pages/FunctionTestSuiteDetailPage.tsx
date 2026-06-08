@@ -1,8 +1,9 @@
-import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Form, Input, InputNumber, Popconfirm, Select, Tag, Tooltip, Typography, message } from 'antd'
+import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, AutoComplete, Button, Checkbox, Empty, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Tag, Tooltip, Typography, Upload, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import { ApiError, api, type CreateFunctionTestCasePayload, type FunctionTestCase } from '@/services/api'
 import {
   formatTime,
@@ -14,16 +15,51 @@ import {
 } from '@/utils/format'
 import '@/features/test-cases/styles/index.css'
 
-const { Paragraph, Text, Title } = Typography
+const { Text, Title } = Typography
 
 type FunctionTestCaseFormValues = CreateFunctionTestCasePayload
+type CaseImportMode = 'upload' | 'editor'
+type ZentaoImportFormValues = {
+  productId: number
+  moduleId?: number
+}
 
 const DRAFT_CASE_ID = '__draft_function_test_case__'
 const priorityOptions = ['P0', 'P1', 'P2', 'P3'].map((value) => ({ label: value, value }))
-const caseTypeOptions = ['功能', '异常', '边界', '流程', '兼容', '安全'].map((value) => ({ label: value, value }))
+const caseTypeOptions = ['功能测试', '异常测试', '边界测试', '流程测试', '兼容测试', '安全测试'].map((value) => ({ label: value, value }))
 
 function compactText(value?: string) {
   return value?.trim() || '-'
+}
+
+function formatFunctionalCaseNavTitle(title?: string, module?: string) {
+  const originalTitle = compactText(title)
+  const leadingSegments: string[] = []
+  let restTitle = originalTitle
+
+  while (restTitle.startsWith('【')) {
+    const match = /^【([^】]+)】\s*/.exec(restTitle)
+    if (!match) break
+    leadingSegments.push(match[1])
+    restTitle = restTitle.slice(match[0].length).trim()
+  }
+
+  if (leadingSegments.length === 0) return originalTitle
+
+  const moduleText = module?.trim() ?? ''
+  const visibleSegments = leadingSegments.filter((segment, index) => !(index === 0 && moduleText.includes(segment)))
+  const body = restTitle.trim()
+
+  if (visibleSegments.length === 0) return body || originalTitle
+  return `${visibleSegments.join(' / ')}${body ? `：${body}` : ''}`
+}
+
+function formatFunctionalCaseTypeLabel(caseType?: string) {
+  return caseType?.replace(/测试$/u, '').trim()
+}
+
+function isJsonFileName(fileName: string) {
+  return /\.json$/i.test(fileName.trim())
 }
 
 function priorityColor(priority?: string) {
@@ -53,7 +89,7 @@ function createDefaultCaseFormValues(orderNo = 1): FunctionTestCaseFormValues {
     title: '',
     module: '',
     priority: 'P2',
-    caseType: '功能',
+    caseType: '功能测试',
     preconditions: '',
     steps: '',
     expectedResults: '',
@@ -67,7 +103,7 @@ function buildCaseFormValues(testCase?: Partial<FunctionTestCase>): FunctionTest
     title: testCase?.title ?? '',
     module: testCase?.module ?? '',
     priority: testCase?.priority ?? 'P2',
-    caseType: testCase?.caseType ?? '功能',
+    caseType: testCase?.caseType ?? '功能测试',
     preconditions: testCase?.preconditions ?? '',
     steps: testCase?.steps ?? '',
     expectedResults: testCase?.expectedResults ?? '',
@@ -84,6 +120,17 @@ function getFunctionCaseErrorMessage(error: unknown) {
   return getErrorMessage(error)
 }
 
+function getZentaoImportErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    const errorText = `${error.message} ${error.code}`.toLowerCase()
+    if (/绑定|禅道|zentao|binding/.test(errorText)) {
+      return '导入失败：请先完成项目和迭代的禅道绑定'
+    }
+  }
+
+  return getFunctionCaseErrorMessage(error)
+}
+
 export function FunctionTestSuiteDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -92,7 +139,15 @@ export function FunctionTestSuiteDetailPage() {
   const [selectedCaseId, setSelectedCaseId] = useState('')
   const [editingCase, setEditingCase] = useState<FunctionTestCase | null>(null)
   const [draftCaseValues, setDraftCaseValues] = useState<FunctionTestCaseFormValues | null>(null)
+  const [caseImportModalOpen, setCaseImportModalOpen] = useState(false)
+  const [caseImportMode, setCaseImportMode] = useState<CaseImportMode>('upload')
+  const [importJsonFile, setImportJsonFile] = useState<File | null>(null)
+  const [importJsonText, setImportJsonText] = useState('')
+  const [zentaoImportModalOpen, setZentaoImportModalOpen] = useState(false)
+  const [selectedZentaoCaseIds, setSelectedZentaoCaseIds] = useState<string[]>([])
   const [form] = Form.useForm<FunctionTestCaseFormValues>()
+  const [zentaoImportForm] = Form.useForm<ZentaoImportFormValues>()
+  const sidebarItemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const suiteQuery = useQuery({
     queryKey: ['functionTestSuite', suiteId],
@@ -169,6 +224,16 @@ export function FunctionTestSuiteDetailPage() {
   }, [draftCaseValues, filteredCases, isCreatingCase])
 
   const normalizedEditingCaseId = editingCase ? normalizeFunctionTestCaseId(editingCase) : ''
+  const selectedZentaoCaseIdSet = useMemo(() => new Set(selectedZentaoCaseIds), [selectedZentaoCaseIds])
+  const savedCaseIds = useMemo(
+    () => orderedCases.map((item) => normalizeFunctionTestCaseId(item)).filter(Boolean),
+    [orderedCases],
+  )
+
+  const selectedImportCaseCount = selectedZentaoCaseIds.length
+  const zentaoImportTargetCount = selectedImportCaseCount || orderedCases.length
+  const allSavedCasesSelected = savedCaseIds.length > 0 && selectedZentaoCaseIds.length === savedCaseIds.length
+  const partialSavedCasesSelected = selectedZentaoCaseIds.length > 0 && selectedZentaoCaseIds.length < savedCaseIds.length
 
   function validateUniqueTitle(_: unknown, value?: string) {
     const nextTitle = value?.trim().toLowerCase()
@@ -224,13 +289,136 @@ export function FunctionTestSuiteDetailPage() {
     form.setFieldsValue(buildCaseFormValues(testCase))
   }
 
+  function handleSelectSidebarCase(item: (typeof sidebarCases)[number]) {
+    if (item.isDraft) {
+      openCreateCase()
+      return
+    }
+    if (item.raw) {
+      handleSelectSavedCase(item.raw)
+    }
+  }
+
+  function handleSidebarCaseKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+
+    event.preventDefault()
+    const nextIndex = event.key === 'ArrowDown'
+      ? Math.min(sidebarCases.length - 1, index + 1)
+      : Math.max(0, index - 1)
+    const nextItem = sidebarCases[nextIndex]
+    if (!nextItem) return
+
+    handleSelectSidebarCase(nextItem)
+    window.requestAnimationFrame(() => {
+      sidebarItemRefs.current[nextItem.id]?.focus()
+      sidebarItemRefs.current[nextItem.id]?.scrollIntoView({ block: 'nearest' })
+    })
+  }
+
+  function openCaseImportModal() {
+    setCaseImportModalOpen(true)
+  }
+
+  function openZentaoImportModal() {
+    zentaoImportForm.setFieldsValue({
+      productId: 1,
+      moduleId: 0,
+    })
+    setZentaoImportModalOpen(true)
+  }
+
+  function closeCaseImportModal() {
+    if (importFunctionCasesMutation.isPending) return
+    setCaseImportModalOpen(false)
+    setCaseImportMode('upload')
+    setImportJsonFile(null)
+    setImportJsonText('')
+  }
+
+  function handleImportFunctionCases() {
+    if (!suiteId) return
+
+    if (caseImportMode === 'upload') {
+      if (!importJsonFile) {
+        message.warning('请上传 JSON 文件')
+        return
+      }
+      if (!isJsonFileName(importJsonFile.name)) {
+        message.warning('仅支持 .json 文件')
+        return
+      }
+
+      importFunctionCasesMutation.mutate({
+        file: importJsonFile,
+        filename: importJsonFile.name,
+      })
+      return
+    }
+
+    const jsonContent = importJsonText.trim()
+    if (!jsonContent) {
+      message.warning('请输入 JSON 内容')
+      return
+    }
+
+    try {
+      JSON.parse(jsonContent)
+    } catch {
+      message.warning('JSON 格式不正确')
+      return
+    }
+
+    const generatedFileName = `function-suite-${suiteId || 'cases'}.json`
+    importFunctionCasesMutation.mutate({
+      file: new File([jsonContent], generatedFileName, { type: 'application/json' }),
+      filename: generatedFileName,
+    })
+  }
+
+  function handleToggleZentaoCase(caseId: string, checked: boolean) {
+    setSelectedZentaoCaseIds((current) => {
+      if (checked) return current.includes(caseId) ? current : [...current, caseId]
+      return current.filter((item) => item !== caseId)
+    })
+  }
+
+  function handleToggleAllZentaoCases(checked: boolean) {
+    setSelectedZentaoCaseIds(checked ? savedCaseIds : [])
+  }
+
+  function closeZentaoImportModal() {
+    if (importZentaoTestCasesMutation.isPending) return
+    setZentaoImportModalOpen(false)
+  }
+
+  async function handleImportZentaoTestCases() {
+    if (!suiteId) return
+    if (orderedCases.length === 0) {
+      message.warning('当前测试集还没有可导入的用例')
+      return
+    }
+
+    const values = await zentaoImportForm.validateFields()
+    importZentaoTestCasesMutation.mutate({
+      productId: values.productId,
+      moduleId: values.moduleId ?? 0,
+      caseIds: selectedZentaoCaseIds.length > 0 ? selectedZentaoCaseIds : undefined,
+    })
+  }
+
   useEffect(() => {
     setCaseSearch('')
     setSelectedCaseId('')
     setEditingCase(null)
     setDraftCaseValues(null)
+    setSelectedZentaoCaseIds([])
     form.setFieldsValue(createDefaultCaseFormValues())
   }, [form, suiteId])
+
+  useEffect(() => {
+    setSelectedZentaoCaseIds((current) => current.filter((caseId) => savedCaseIds.includes(caseId)))
+  }, [savedCaseIds])
 
   useEffect(() => {
     if (isCreatingCase) return
@@ -288,6 +476,36 @@ export function FunctionTestSuiteDetailPage() {
     },
   })
 
+  const importFunctionCasesMutation = useMutation({
+    mutationFn: ({ file, filename }: { file: Blob; filename: string }) => api.importFunctionTestCases(suiteId, file, filename),
+    onSuccess: (result) => {
+      const importedCount = result.importedCaseCount ?? result.imported_case_count ?? result.importedCount ?? result.imported_count ?? 0
+      message.success(`导入成功：${importedCount} 条用例`)
+      setCaseImportModalOpen(false)
+      setCaseImportMode('upload')
+      setImportJsonFile(null)
+      setImportJsonText('')
+      queryClient.invalidateQueries({ queryKey: ['functionTestCases', suiteId] })
+    },
+    onError: (error) => {
+      message.error(getFunctionCaseErrorMessage(error))
+    },
+  })
+
+  const importZentaoTestCasesMutation = useMutation({
+    mutationFn: (values: ZentaoImportFormValues & { caseIds?: string[] }) => api.importFunctionTestCasesToZentao(suiteId, values),
+    onSuccess: (result) => {
+      const importedCount = result.importedCaseCount ?? result.imported_case_count ?? result.items?.length ?? 0
+      message.success(`已导入禅道：${importedCount} 条用例`)
+      setZentaoImportModalOpen(false)
+      setSelectedZentaoCaseIds([])
+      zentaoImportForm.resetFields()
+    },
+    onError: (error) => {
+      message.error(getZentaoImportErrorMessage(error))
+    },
+  })
+
   const deleteCaseMutation = useMutation({
     mutationFn: (caseId: string) => api.deleteFunctionTestCase(caseId),
     onSuccess: (_data, caseId) => {
@@ -318,11 +536,11 @@ export function FunctionTestSuiteDetailPage() {
 
   const suite = suiteQuery.data
   const suiteName = suite?.name || '功能测试集'
-  const suiteDescription = suite?.description || '暂无功能测试集描述'
   const suiteKey = suite ? normalizeFunctionTestSuiteId(suite) : suiteId
   const currentCase = isCreatingCase ? null : editingCase
 
   return (
+    <>
     <div className="workbench-page api-collection-detail-page functional-suite-detail-page">
       <div className="api-automation-content">
         <div className="page-frame api-collection-detail-frame">
@@ -370,9 +588,12 @@ export function FunctionTestSuiteDetailPage() {
                   allowClear
                   value={caseSearch}
                   prefix={<SearchOutlined />}
-                  placeholder="搜索用例名称 / 模块 / 步骤"
+                  placeholder="搜索用例名称 / 步骤 / 预期"
                   onChange={(event) => setCaseSearch(event.target.value)}
                 />
+                <Button className="api-case-import-trigger" icon={<UploadOutlined />} onClick={openCaseImportModal} disabled={!suiteId}>
+                  用例导入
+                </Button>
               </div>
 
               <div className="api-case-sidebar-scroll">
@@ -389,62 +610,71 @@ export function FunctionTestSuiteDetailPage() {
                     </Empty>
                   </div>
                 ) : (
-                  <div className="api-case-nav-list">
-                    {sidebarCases.map((item) => {
-                      const selected = item.id === selectedCaseId
-                      const deleteLoading = deleteCaseMutation.isPending && deleteCaseMutation.variables === item.id
+                  <div className="functional-case-nav-shell">
+                    <div className="functional-case-selection-bar">
+                      <Checkbox
+                        checked={allSavedCasesSelected}
+                        indeterminate={partialSavedCasesSelected}
+                        onChange={(event) => handleToggleAllZentaoCases(event.target.checked)}
+                      >
+                        选择导入禅道
+                      </Checkbox>
+                      <span>{selectedImportCaseCount > 0 ? `已选 ${selectedImportCaseCount} 条` : '未选择时默认导入全部'}</span>
+                    </div>
+                    <div className="api-case-nav-list functional-case-nav-list">
+                      {sidebarCases.map((item, index) => {
+                        const selected = item.id === selectedCaseId
+                        const displayTitle = formatFunctionalCaseNavTitle(item.title, item.module)
+                        const caseTypeLabel = formatFunctionalCaseTypeLabel(item.caseType)
+                        const checkedForZentao = selectedZentaoCaseIdSet.has(item.id)
 
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`api-case-nav-item functional-case-nav-item${selected ? ' selected' : ''}`}
-                          onClick={() => {
-                            if (item.isDraft) {
-                              openCreateCase()
-                              return
-                            }
-                            if (item.raw) {
-                              handleSelectSavedCase(item.raw)
-                            }
-                          }}
-                        >
-                          <div className="api-case-nav-item-main functional-case-nav-item-main">
-                            <span className="functional-case-nav-order">#{item.orderNo ?? '-'}</span>
-                            <div className="functional-case-nav-copy">
-                              <div className="functional-case-nav-title-row">
-                                <span className="api-case-nav-item-name">{item.title}</span>
-                                {item.isDraft ? <Tag color="processing">草稿</Tag> : null}
-                              </div>
-                              <span className="api-case-nav-item-path">{compactText(item.module)}</span>
-                            </div>
-                          </div>
-                          <div className="api-case-nav-item-actions functional-case-nav-item-actions">
-                            <div className="api-case-nav-item-tags functional-case-nav-item-tags">
-                              {item.priority ? <Tag color={priorityColor(item.priority)}>{item.priority}</Tag> : null}
-                              {item.caseType ? <Tag>{item.caseType}</Tag> : null}
-                            </div>
+                        return (
+                          <div key={item.id} className={`functional-case-nav-row${selected ? ' selected' : ''}`}>
                             {!item.isDraft ? (
-                              <Popconfirm
-                                title="确认删除该功能测试用例？"
-                                onConfirm={() => deleteCaseMutation.mutate(item.id)}
-                              >
-                                <Button
-                                  danger
-                                  type="text"
-                                  size="small"
-                                  className="api-case-nav-delete"
-                                  icon={<DeleteOutlined />}
-                                  aria-label="删除功能测试用例"
-                                  loading={deleteLoading}
-                                  onClick={(event) => event.stopPropagation()}
-                                />
-                              </Popconfirm>
-                            ) : null}
+                              <Checkbox
+                                className="functional-case-nav-checkbox"
+                                checked={checkedForZentao}
+                                aria-label={`选择导入禅道：${item.title}`}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => handleToggleZentaoCase(item.id, event.target.checked)}
+                              />
+                            ) : (
+                              <span className="functional-case-nav-checkbox-placeholder" />
+                            )}
+                            <button
+                              ref={(node) => {
+                                sidebarItemRefs.current[item.id] = node
+                              }}
+                              type="button"
+                              className={`api-case-nav-item functional-case-nav-item${selected ? ' selected' : ''}`}
+                              aria-current={selected ? 'true' : undefined}
+                              onClick={() => handleSelectSidebarCase(item)}
+                              onKeyDown={(event) => handleSidebarCaseKeyDown(event, index)}
+                            >
+                              <div className="api-case-nav-item-main functional-case-nav-item-main">
+                                <div className="functional-case-nav-copy">
+                                  <div className="functional-case-nav-title-row">
+                                    <Tooltip title={item.title}>
+                                      <span className="api-case-nav-item-name functional-case-nav-item-name">{displayTitle}</span>
+                                    </Tooltip>
+                                    {item.isDraft ? <Tag color="processing">草稿</Tag> : null}
+                                  </div>
+                                  <Tooltip title={compactText(item.module)}>
+                                    <span className="api-case-nav-item-path functional-case-nav-item-path">{compactText(item.module)}</span>
+                                  </Tooltip>
+                                </div>
+                              </div>
+                              <div className="api-case-nav-item-actions functional-case-nav-item-actions">
+                                <div className="api-case-nav-item-tags functional-case-nav-item-tags">
+                                  {item.priority ? <Tag color={priorityColor(item.priority)}>{item.priority}</Tag> : null}
+                                  {caseTypeLabel ? <Tag>{caseTypeLabel}</Tag> : null}
+                                </div>
+                              </div>
+                            </button>
                           </div>
-                        </button>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -460,27 +690,35 @@ export function FunctionTestSuiteDetailPage() {
                     </span>
                   </div>
                   <div className="api-detail-hover-bar-actions">
+                    <Button
+                      className="functional-case-zentao-import-trigger"
+                      icon={<UploadOutlined />}
+                      onClick={openZentaoImportModal}
+                      disabled={!suiteId || orderedCases.length === 0}
+                    >
+                      导入禅道
+                    </Button>
                     <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateCase}>
                       新建用例
                     </Button>
                   </div>
                 </div>
                 <div className="api-detail-hover-body">
-                  <div className="api-case-summary-grid compact">
-                    <div className="api-summary-item">
-                      <Text type="secondary">测试集 ID</Text>
-                      <strong>{suiteKey || '-'}</strong>
+                  <div className="functional-suite-context">
+                    <div className="functional-suite-context-chip">
+                      <span>测试集</span>
+                      <strong title={suiteKey || '-'}>{suiteKey || '-'}</strong>
                     </div>
-                    <div className="api-summary-item">
-                      <Text type="secondary">所属迭代</Text>
-                      <strong>{sprintQuery.data?.name || sprintId || '-'}</strong>
+                    <div className="functional-suite-context-chip">
+                      <span>迭代</span>
+                      <strong title={sprintQuery.data?.name || sprintId || '-'}>{sprintQuery.data?.name || sprintId || '-'}</strong>
                     </div>
-                    <div className="api-summary-item">
-                      <Text type="secondary">所属需求</Text>
-                      <strong>{requirementQuery.data?.name || requirementId || '-'}</strong>
+                    <div className="functional-suite-context-chip functional-suite-context-chip-wide">
+                      <span>需求</span>
+                      <strong title={requirementQuery.data?.name || requirementId || '-'}>{requirementQuery.data?.name || requirementId || '-'}</strong>
                     </div>
-                    <div className="api-summary-item">
-                      <Text type="secondary">用例数量</Text>
+                    <div className="functional-suite-context-chip">
+                      <span>数量</span>
                       <strong>{orderedCases.length}</strong>
                     </div>
                   </div>
@@ -514,12 +752,13 @@ export function FunctionTestSuiteDetailPage() {
                             const completeValues = {
                               ...getCompleteCaseFormValues(),
                               ...values,
+                              module: suiteName,
                             }
                             saveCaseMutation.mutate(completeValues)
                           }}
                         >
                           <div className="api-case-editor-sticky-head functional-case-editor-sticky-head">
-                            <div className="functional-case-toolbar">
+                            <div className="functional-case-toolbar functional-case-editor-hero">
                               <div className="functional-case-name-block">
                                 <div className="functional-case-title-row">
                                   <Text className="functional-case-inline-label">用例名称</Text>
@@ -568,34 +807,24 @@ export function FunctionTestSuiteDetailPage() {
                           </div>
 
                           <div className="functional-case-editor-body">
-                            <Paragraph className="functional-case-editor-description">
-                              {currentCase?.title ? '编辑当前功能测试用例的模块、优先级、步骤和预期结果。' : suiteDescription}
-                            </Paragraph>
-
-                            <div className="functional-case-form-grid functional-case-editor-grid">
-                              <Form.Item name="module" label="所属模块">
-                                <Input maxLength={120} placeholder="例如：登录 / 订单 / 支付" />
-                              </Form.Item>
+                            <div className="functional-case-form-grid functional-case-editor-grid functional-case-meta-panel">
                               <Form.Item name="priority" label="优先级">
                                 <Select allowClear options={priorityOptions} placeholder="请选择优先级" />
                               </Form.Item>
                               <Form.Item name="caseType" label="用例类型">
-                                <Select allowClear options={caseTypeOptions} placeholder="请选择用例类型" />
-                              </Form.Item>
-                              <Form.Item name="orderNo" label="排序号">
-                                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="数字越小越靠前" />
+                                <AutoComplete allowClear options={caseTypeOptions} placeholder="请选择或输入用例类型" />
                               </Form.Item>
                             </div>
 
-                            <Form.Item name="preconditions" label="前置条件" className="functional-case-section-item">
+                            <Form.Item name="preconditions" label="前置条件" className="functional-case-section-item functional-case-section-card">
                               <Input.TextArea rows={5} placeholder="描述执行该用例前需要满足的条件" />
                             </Form.Item>
 
                             <div className="functional-case-editor-split-grid">
-                              <Form.Item name="steps" label="测试步骤" className="functional-case-section-item">
+                              <Form.Item name="steps" label="测试步骤" className="functional-case-section-item functional-case-section-card">
                                 <Input.TextArea rows={14} placeholder="建议按 1、2、3 分步骤描述操作过程" />
                               </Form.Item>
-                              <Form.Item name="expectedResults" label="预期结果" className="functional-case-section-item">
+                              <Form.Item name="expectedResults" label="预期结果" className="functional-case-section-item functional-case-section-card">
                                 <Input.TextArea rows={14} placeholder="描述每个关键步骤或最终状态的预期结果" />
                               </Form.Item>
                             </div>
@@ -611,5 +840,107 @@ export function FunctionTestSuiteDetailPage() {
         </div>
       </div>
     </div>
+
+    <Modal
+      open={caseImportModalOpen}
+      title="用例导入"
+      width={860}
+      okText="开始导入"
+      onCancel={closeCaseImportModal}
+      confirmLoading={importFunctionCasesMutation.isPending}
+      okButtonProps={{ className: 'action-btn-save' }}
+      onOk={handleImportFunctionCases}
+      rootClassName="api-case-import-modal-root"
+      className="api-case-import-modal-shell"
+      destroyOnClose
+    >
+      <div className="api-case-import-modal">
+        <Segmented
+          className="api-case-import-mode"
+          value={caseImportMode}
+          options={[
+            { label: '上传 JSON', value: 'upload' },
+            { label: '直接输入', value: 'editor' },
+          ]}
+          onChange={(value) => setCaseImportMode(value as CaseImportMode)}
+        />
+        {caseImportMode === 'upload' ? (
+          <div className="api-case-import-upload">
+            <Upload.Dragger
+              accept=".json"
+              maxCount={1}
+              beforeUpload={(file) => {
+                if (!isJsonFileName(file.name)) {
+                  message.error('仅支持 .json 文件')
+                  return Upload.LIST_IGNORE
+                }
+                setImportJsonFile(file)
+                return false
+              }}
+              onRemove={() => {
+                setImportJsonFile(null)
+                return true
+              }}
+            >
+              <p className="ant-upload-drag-icon">
+                <UploadOutlined />
+              </p>
+              <p className="ant-upload-text">点击或拖拽 JSON 文件到这里</p>
+              <p className="ant-upload-hint">仅支持 .json，导入时会自动绑定到当前功能测试集。</p>
+            </Upload.Dragger>
+          </div>
+        ) : (
+          <div className="api-case-import-editor">
+            <div className="api-case-import-hint">直接粘贴 JSON 内容，提交时前端会将文本包装成 `.json` 文件上传。</div>
+            <TextCodeEditor value={importJsonText} onChange={setImportJsonText} minHeight={280} />
+          </div>
+        )}
+      </div>
+    </Modal>
+
+    <Modal
+      open={zentaoImportModalOpen}
+      title="导入到禅道"
+      width={560}
+      okText="开始导入"
+      onCancel={closeZentaoImportModal}
+      confirmLoading={importZentaoTestCasesMutation.isPending}
+      okButtonProps={{ className: 'action-btn-save' }}
+      onOk={handleImportZentaoTestCases}
+      destroyOnClose
+    >
+      <div className="functional-case-zentao-import-modal">
+        <Alert
+          showIcon
+          type="info"
+          message={`已选择 ${selectedImportCaseCount} 条，本次将导入 ${zentaoImportTargetCount} 条用例`}
+          description={
+            selectedImportCaseCount > 0
+              ? '只会导入左侧已勾选的用例。如果导入失败并提示资源绑定相关错误，请先完成项目和迭代的禅道绑定。'
+              : '未选择用例时默认导入当前测试集全部用例。如果导入失败并提示资源绑定相关错误，请先完成项目和迭代的禅道绑定。'
+          }
+        />
+        <Form<ZentaoImportFormValues>
+          form={zentaoImportForm}
+          layout="vertical"
+          initialValues={{ productId: 1, moduleId: 0 }}
+        >
+          <Form.Item
+            name="productId"
+            label="禅道产品 ID"
+            rules={[
+              { required: true, message: '请输入禅道产品 ID' },
+              { type: 'number', min: 1, message: '产品 ID 必须大于 0' },
+            ]}
+          >
+            <InputNumber min={1} precision={0} placeholder="例如：1" />
+          </Form.Item>
+          <Form.Item name="moduleId" label="禅道模块 ID">
+            <InputNumber min={0} precision={0} placeholder="默认 0" />
+          </Form.Item>
+        </Form>
+      </div>
+    </Modal>
+    </>
   )
 }

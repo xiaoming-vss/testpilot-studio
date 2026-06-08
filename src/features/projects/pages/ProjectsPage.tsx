@@ -3,6 +3,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   FileTextOutlined,
+  LinkOutlined,
   PlusOutlined,
   RocketOutlined,
 } from '@ant-design/icons'
@@ -27,6 +28,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { type BindingDepth, ZentaoBindingModal, ZentaoBindingSummary } from '@/features/base-services/components/ZentaoBindingPanel'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { RequirementDrawer, type RequirementFormValues } from '@/features/requirements/components/RequirementDrawer'
 import { SprintDrawer } from '@/features/projects/components/SprintDrawer'
@@ -41,7 +43,6 @@ import {
   pickCreatedAt,
   pickEndTime,
   pickStartTime,
-  pickUpdatedAt,
   statusTag,
 } from '@/utils/format'
 import { buildProjectUpdatePayload, buildRequirementUpdatePayload, buildSprintCreatePayload, buildSprintUpdatePayload } from '@/utils/updatePayload'
@@ -62,6 +63,15 @@ type RequirementViewState = {
   projectId?: string
   page: number
   selectedSprintId?: string
+}
+
+type ZentaoBindingTargetState = {
+  targetType: 'project' | 'sprint' | 'requirement'
+  resourceId: string
+  parentProjectId?: string
+  parentSprintId?: string
+  depth: BindingDepth
+  title: string
 }
 
 function footerRange(total: number, page: number, pageSize: number) {
@@ -89,6 +99,7 @@ export function ProjectsPage() {
   const [requirementDrawerOpen, setRequirementDrawerOpen] = useState(false)
   const [editingRequirement, setEditingRequirement] = useState<RequirementPoolItem | null>(null)
   const [activeBoard, setActiveBoard] = useState<'sprints' | 'requirements'>('sprints')
+  const [zentaoBindingTarget, setZentaoBindingTarget] = useState<ZentaoBindingTargetState | null>(null)
   const [sprintPagination, setSprintPagination] = useState<PaginationState>({ page: 1 })
   const [sprintPageSize, setSprintPageSize] = useState(10)
   const [requirementView, setRequirementView] = useState<RequirementViewState>({ page: 1 })
@@ -273,13 +284,9 @@ export function ProjectsPage() {
     requirementForm.resetFields()
   }
 
-  function openSprintRequirements(sprintId: string) {
-    setActiveBoard('requirements')
-    setRequirementView({
-      projectId: activeProjectId,
-      page: 1,
-      selectedSprintId: sprintId,
-    })
+  function openSprintDetail(sprintId: string) {
+    if (!activeProjectId) return
+    navigate(`/projects/${activeProjectId}/sprints/${sprintId}`)
   }
 
   function openRequirementWorkspace(requirement: RequirementPoolItem) {
@@ -287,6 +294,14 @@ export function ProjectsPage() {
     navigate(
       `/projects/${activeProjectId}/sprints/${requirement.sprintIdForCreate}/requirements/${normalizeRequirementId(requirement)}`,
     )
+  }
+
+  function openZentaoBinding(target: ZentaoBindingTargetState) {
+    setZentaoBindingTarget(target)
+  }
+
+  function renderProjectTime(value?: string) {
+    return <span className="project-time-text">{formatTime(value)}</span>
   }
 
   return (
@@ -306,11 +321,33 @@ export function ProjectsPage() {
           <section className="workbench-project-toolbar">
             <div>
               <Title level={4}>项目概览</Title>
-              <Text type="secondary">项目描述：{activeProject?.description || '暂无描述'}</Text>
+              <div className="zentao-binding-toolbar-line">
+                <Text type="secondary" className="project-description-text">
+                  项目描述：{activeProject?.description || '暂无描述'}
+                </Text>
+                {activeProjectId ? <ZentaoBindingSummary targetType="project" resourceId={activeProjectId} variant="toolbar" /> : null}
+              </div>
             </div>
             <Space size={8} className="project-actions">
               <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={() => openProjectModal()}>
                 新建项目
+              </Button>
+              <Button
+                className="action-btn-read"
+                icon={<LinkOutlined />}
+                disabled={!activeProject}
+                onClick={() =>
+                  activeProjectId &&
+                  activeProject &&
+                  openZentaoBinding({
+                    targetType: 'project',
+                    resourceId: activeProjectId,
+                    depth: 'project',
+                    title: `绑定禅道项目 · ${activeProject.name}`,
+                  })
+                }
+              >
+                禅道绑定
               </Button>
               <Tooltip title="编辑项目">
                 <Button type="text" className="action-btn-update" icon={<EditOutlined />} disabled={!activeProject} onClick={() => activeProject && openProjectModal(activeProject)} />
@@ -358,7 +395,7 @@ export function ProjectsPage() {
                             hoverable
                             className="sprint-card"
                             bodyStyle={{ padding: 20 }}
-                            onClick={() => openSprintRequirements(normalizeSprintId(sprint))}
+                            onClick={() => openSprintDetail(normalizeSprintId(sprint))}
                           >
                             <div className="sprint-card-head">
                               <div className="sprint-card-title-wrap">
@@ -375,54 +412,76 @@ export function ProjectsPage() {
                             </div>
                             <div className="sprint-card-meta">
                               <span className="sprint-card-label">开始时间</span>
-                              <span className="sprint-card-value">{formatTime(pickStartTime(sprint))}</span>
+                              <span className="sprint-card-value project-time-text">{formatTime(pickStartTime(sprint))}</span>
                             </div>
                             <div className="sprint-card-meta">
                               <span className="sprint-card-label">结束时间</span>
-                              <span className="sprint-card-value">{formatTime(pickEndTime(sprint))}</span>
+                              <span className="sprint-card-value project-time-text">{formatTime(pickEndTime(sprint))}</span>
                             </div>
-                            <div className="sprint-card-description">{sprint.description || '暂无迭代描述'}</div>
+                            <div className="sprint-card-binding-line">
+                              <ZentaoBindingSummary targetType="sprint" resourceId={normalizeSprintId(sprint)} />
+                            </div>
+                            <div className="sprint-card-description project-description-text">{sprint.description || '暂无迭代描述'}</div>
                             <div className="sprint-card-actions">
-                              <Tooltip title="编辑迭代">
-                                <Button
-                                  type="text"
-                                  shape="circle"
-                                  className="action-btn-update"
-                                  icon={<EditOutlined />}
-                                  aria-label="编辑迭代"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    openSprintDrawer(sprint)
-                                  }}
-                                />
-                              </Tooltip>
-                              <Popconfirm title="确认删除该迭代？" onConfirm={() => deleteSprintMutation.mutate(normalizeSprintId(sprint))}>
-                                <Tooltip title="删除迭代">
+                                <Tooltip title="编辑迭代">
                                   <Button
-                                    danger
                                     type="text"
                                     shape="circle"
-                                    className="action-btn-delete"
-                                    icon={<DeleteOutlined />}
-                                    aria-label="删除迭代"
-                                    loading={deleteSprintMutation.isPending}
-                                    onClick={(event) => event.stopPropagation()}
+                                    className="action-btn-update"
+                                    icon={<EditOutlined />}
+                                    aria-label="编辑迭代"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      openSprintDrawer(sprint)
+                                    }}
                                   />
                                 </Tooltip>
-                              </Popconfirm>
-                              <Tooltip title="查看需求">
-                                <Button
-                                  type="text"
-                                  shape="circle"
-                                  className="action-btn-read"
-                                  icon={<FileTextOutlined />}
-                                  aria-label="查看需求"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    openSprintRequirements(normalizeSprintId(sprint))
-                                  }}
-                                />
-                              </Tooltip>
+                                <Tooltip title="禅道绑定">
+                                  <Button
+                                    type="text"
+                                    shape="circle"
+                                    className="action-btn-read"
+                                    icon={<LinkOutlined />}
+                                    aria-label="绑定禅道执行"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      openZentaoBinding({
+                                        targetType: 'sprint',
+                                        resourceId: normalizeSprintId(sprint),
+                                        parentProjectId: activeProjectId,
+                                        depth: 'execution',
+                                        title: `绑定禅道执行 · ${sprint.name}`,
+                                      })
+                                    }}
+                                  />
+                                </Tooltip>
+                                <Popconfirm title="确认删除该迭代？" onConfirm={() => deleteSprintMutation.mutate(normalizeSprintId(sprint))}>
+                                  <Tooltip title="删除迭代">
+                                    <Button
+                                      danger
+                                      type="text"
+                                      shape="circle"
+                                      className="action-btn-delete"
+                                      icon={<DeleteOutlined />}
+                                      aria-label="删除迭代"
+                                      loading={deleteSprintMutation.isPending}
+                                      onClick={(event) => event.stopPropagation()}
+                                    />
+                                  </Tooltip>
+                                </Popconfirm>
+                                <Tooltip title="查看迭代详情">
+                                  <Button
+                                    type="text"
+                                    shape="circle"
+                                    className="action-btn-read"
+                                    icon={<FileTextOutlined />}
+                                    aria-label="查看迭代详情"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      openSprintDetail(normalizeSprintId(sprint))
+                                    }}
+                                  />
+                                </Tooltip>
                             </div>
                           </Card>
                         ))}
@@ -519,41 +578,60 @@ export function ProjectsPage() {
                             </div>
                             <div className="sprint-card-meta">
                               <span className="sprint-card-label">创建时间</span>
-                              <span className="sprint-card-value">{formatTime(pickCreatedAt(requirement))}</span>
+                              {renderProjectTime(pickCreatedAt(requirement))}
                             </div>
-                            <div className="sprint-card-meta">
-                              <span className="sprint-card-label">更新时间</span>
-                              <span className="sprint-card-value">{formatTime(pickUpdatedAt(requirement))}</span>
+                            <div className="sprint-card-binding-line">
+                              <ZentaoBindingSummary targetType="requirement" resourceId={normalizeRequirementId(requirement)} />
                             </div>
-                            <div className="sprint-card-description">{requirement.description || '暂无需求描述'}</div>
+                            <div className="sprint-card-description project-description-text">{requirement.description || '暂无需求描述'}</div>
                             <div className="sprint-card-actions">
-                              <Tooltip title="编辑需求">
-                                <Button
-                                  type="text"
-                                  shape="circle"
-                                  className="action-btn-update"
-                                  icon={<EditOutlined />}
-                                  aria-label="编辑需求"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    openRequirementDrawer(requirement)
-                                  }}
-                                />
-                              </Tooltip>
-                              <Popconfirm title="确认删除该需求？" onConfirm={() => deleteRequirementMutation.mutate(normalizeRequirementId(requirement))}>
-                                <Tooltip title="删除需求">
+                                <Tooltip title="编辑需求">
                                   <Button
-                                    danger
                                     type="text"
                                     shape="circle"
-                                    className="action-btn-delete"
-                                    icon={<DeleteOutlined />}
-                                    aria-label="删除需求"
-                                    loading={deleteRequirementMutation.isPending}
-                                    onClick={(event) => event.stopPropagation()}
+                                    className="action-btn-update"
+                                    icon={<EditOutlined />}
+                                    aria-label="编辑需求"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      openRequirementDrawer(requirement)
+                                    }}
                                   />
                                 </Tooltip>
-                              </Popconfirm>
+                                <Tooltip title="禅道绑定">
+                                  <Button
+                                    type="text"
+                                    shape="circle"
+                                    className="action-btn-read"
+                                    icon={<LinkOutlined />}
+                                    aria-label="绑定禅道需求 Story"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      openZentaoBinding({
+                                        targetType: 'requirement',
+                                        resourceId: normalizeRequirementId(requirement),
+                                        parentProjectId: activeProjectId,
+                                        parentSprintId: requirement.sprintIdForCreate,
+                                        depth: 'story',
+                                        title: `绑定禅道需求 Story · ${requirement.name}`,
+                                      })
+                                    }}
+                                  />
+                                </Tooltip>
+                                <Popconfirm title="确认删除该需求？" onConfirm={() => deleteRequirementMutation.mutate(normalizeRequirementId(requirement))}>
+                                  <Tooltip title="删除需求">
+                                    <Button
+                                      danger
+                                      type="text"
+                                      shape="circle"
+                                      className="action-btn-delete"
+                                      icon={<DeleteOutlined />}
+                                      aria-label="删除需求"
+                                      loading={deleteRequirementMutation.isPending}
+                                      onClick={(event) => event.stopPropagation()}
+                                    />
+                                  </Tooltip>
+                                </Popconfirm>
                             </div>
                           </Card>
                         ))}
@@ -624,6 +702,19 @@ export function ProjectsPage() {
         onClose={closeRequirementDrawer}
         onFinish={(values) => saveRequirementMutation.mutate(values)}
       />
+
+      {zentaoBindingTarget ? (
+        <ZentaoBindingModal
+          open
+          onClose={() => setZentaoBindingTarget(null)}
+          targetType={zentaoBindingTarget.targetType}
+          resourceId={zentaoBindingTarget.resourceId}
+          parentProjectId={zentaoBindingTarget.parentProjectId}
+          parentSprintId={zentaoBindingTarget.parentSprintId}
+          depth={zentaoBindingTarget.depth}
+          title={zentaoBindingTarget.title}
+        />
+      ) : null}
     </div>
   )
 }

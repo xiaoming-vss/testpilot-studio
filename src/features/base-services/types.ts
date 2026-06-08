@@ -24,3 +24,73 @@ export type CreateZentaoConnectionPayload = {
 }
 
 export type UpdateZentaoConnectionPayload = Partial<CreateZentaoConnectionPayload>
+
+export type ZentaoRemoteListResponse<T> = {
+  items: T[]
+  total: number
+}
+
+export type ZentaoRemoteOption = {
+  id?: string | number
+  name?: string
+  code?: string
+  title?: string
+  remoteResourceId?: string
+  remote_resource_id?: string
+  remoteNameSnapshot?: string
+  remote_name_snapshot?: string
+  [key: string]: unknown
+}
+
+export type ZentaoBindingTargetType = 'project' | 'sprint' | 'requirement'
+
+export type ZentaoBinding = {
+  bindingId?: string
+  binding_id?: string
+  provider: 'zentao' | string
+  connectionId?: string
+  connection_id?: string
+  remoteResourceId?: string
+  remote_resource_id?: string
+  remoteNameSnapshot?: string
+  remote_name_snapshot?: string
+  status?: string
+  boundAt?: string
+  bound_at?: string
+  createdAt?: string
+  created_at?: string
+}
+
+export type CreateZentaoBindingPayload = {
+  provider: 'zentao'
+  connectionId: string
+  remoteResourceId: string
+}
+
+export type LlmConnection = {
+  connectionId: string
+  provider: 'llm' | string
+  name: string
+  baseUrl: string
+  authType: 'api_key' | string
+  account: string
+  status: IntegrationConnectionStatus
+  hasAccessToken: boolean
+  modelId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type CreateLlmConnectionPayload = {
+  name: string
+  baseUrl: string
+  modelId: string
+  apiKey: string
+}
+
+export type UpdateLlmConnectionPayload = {
+  name?: string
+  baseUrl?: string
+  modelId?: string
+  apiKey?: string
+}

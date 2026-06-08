@@ -290,7 +290,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
       <div className="api-automation-content">
         <section className="workbench-panel workbench-board-panel">
           <div className="panel-header api-panel-header">
-            <div className="requirement-panel-head">
+            <div className="requirement-panel-head api-panel-head-main">
               <Text strong>API测试集</Text>
               {!isRequirementLocked ? (
                 <div className="api-filter-group">
@@ -328,6 +328,30 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
                   </div>
                 </div>
               ) : null}
+              <div className="api-inline-environment">
+                <div className="api-environment-selector">
+                  <span className="api-environment-label">当前环境</span>
+                  <Select
+                    className="api-filter-select business-filter-select"
+                    value={resolvedEnvironmentId}
+                    placeholder="请选择环境"
+                    loading={environmentsQuery.isLoading}
+                    options={environments.map((environment: ApiEnvironment) => ({
+                      label: `${environment.name}${environment.isDefault ? '（启用中）' : ''}`,
+                      value: normalizeEnvironmentId(environment),
+                    }))}
+                    onChange={(value: string) => setSelectedEnvironmentId(value)}
+                    disabled={!activeProjectId || environments.length === 0}
+                  />
+                </div>
+                <div className="api-environment-summary">
+                  <span className="api-environment-summary-item">Base URL：{selectedEnvironment?.baseUrl || '-'}</span>
+                  <span className="api-environment-summary-item">变量数：{environmentVarsQuery.data?.length ?? 0}</span>
+                  <span className="api-environment-summary-item">
+                    更新时间：{formatTime(pickUpdatedAt(selectedEnvironment))}
+                  </span>
+                </div>
+              </div>
             </div>
             <Space size={8}>
               <Button icon={<SettingOutlined />} disabled={!activeProjectId} onClick={() => setEnvironmentDrawerOpen(true)}>
@@ -344,40 +368,6 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
           {!isRequirementLocked ? <>{allRequirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(allRequirementsQuery.error)} /> : null}</> : null}
           {collectionsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(collectionsQuery.error)} /> : null}
           {environmentsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(environmentsQuery.error)} /> : null}
-
-          <div className="api-environment-bar">
-            <div className="api-environment-bar-main">
-              <div className="api-environment-selector">
-                <span className="api-environment-label">当前环境</span>
-                <Select
-                  className="api-filter-select business-filter-select"
-                  value={resolvedEnvironmentId}
-                  placeholder="请选择环境"
-                  loading={environmentsQuery.isLoading}
-                  options={environments.map((environment: ApiEnvironment) => ({
-                    label: `${environment.name}${environment.isDefault ? '（启用中）' : ''}`,
-                    value: normalizeEnvironmentId(environment),
-                  }))}
-                  onChange={(value: string) => setSelectedEnvironmentId(value)}
-                  disabled={!activeProjectId || environments.length === 0}
-                />
-              </div>
-              <div className="api-environment-summary">
-                <span className="api-environment-summary-item">
-                  Base URL：{selectedEnvironment?.baseUrl || '-'}
-                </span>
-                <span className="api-environment-summary-item">
-                  变量数：{environmentVarsQuery.data?.length ?? 0}
-                </span>
-                <span className="api-environment-summary-item">
-                  更新时间：{formatTime(pickUpdatedAt(selectedEnvironment))}
-                </span>
-              </div>
-            </div>
-            <Button type="link" onClick={() => setEnvironmentDrawerOpen(true)} disabled={!activeProjectId}>
-              维护环境与变量
-            </Button>
-          </div>
 
           <div className="table-body-scroll sprint-card-scroll">
             {sprintsQuery.isLoading ? (

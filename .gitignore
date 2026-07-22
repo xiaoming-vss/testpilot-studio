@@ -25,6 +25,12 @@ temp
 # Local helper / generated folders
 _stitch_ref
 *.tmp.png
+.agents/
+.codex/
+.trellis/
+.trae/
+AGENTS.md
+docs/superpowers/plans/
 
 # Editor directories and files
 .vscode/*

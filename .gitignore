@@ -31,6 +31,7 @@ _stitch_ref
 .trae/
 AGENTS.md
 docs/superpowers/plans/
+docs/superpowers/specs/
 
 # Editor directories and files
 .vscode/*

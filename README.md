@@ -1,73 +1,63 @@
-# React + TypeScript + Vite
+# TestPilot Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+TestPilot Studio 是一个面向测试协作的前端工作台，用于围绕项目、迭代和需求管理测试资产与测试活动。
 
-Currently, two official plugins are available:
+## 功能范围
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 项目、迭代、需求管理
+- 功能测试集与测试用例维护
+- API 自动化测试集、环境、用例、断言和运行报告
+- UI 自动化测试集、步骤编排和运行配置
+- AI 测试任务与 Skill 库入口
+- 禅道连接管理与项目/迭代/需求绑定
+- 登录态保护、项目切换、明暗主题切换
 
-## React Compiler
+## 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19
+- TypeScript
+- Vite 8
+- Ant Design 6
+- React Router 7
+- TanStack React Query 5
+- Zustand 5
 
-## Expanding the ESLint configuration
+## 本地开发
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 常用命令
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run type-check
+npm run lint
+npm run build
+npm run verify
 ```
+
+说明：
+
+- `npm run build` 会先执行 TypeScript 构建，再执行 Vite 构建。
+- `npm run verify` 会依次执行 type-check、lint 和 build。
+
+## 文档
+
+- [功能文档](docs/functional-specification.md)
+- [系统设计](docs/system-design.md)
+
+## 本地文件约定
+
+以下内容属于本地工具、运行产物或个人工作区，不应提交到仓库：
+
+- `.agents/`
+- `.codex/`
+- `.trellis/`
+- `.trae/`
+- `AGENTS.md`
+- `output/`
+- `dist/`
+- `node_modules/`
+- `.env`

@@ -6,6 +6,7 @@ const statusMetaMap: Record<string, { label: string; color: string }> = {
   pending: { label: '待执行', color: 'gold' },
   claimed: { label: '已领取', color: 'cyan' },
   running: { label: '执行中', color: 'processing' },
+  waiting_review: { label: '待审核', color: 'gold' },
   success: { label: '成功', color: 'success' },
   failed: { label: '失败', color: 'error' },
   error: { label: '异常', color: 'volcano' },
@@ -18,7 +19,7 @@ export function normalizeApiCaseGenerateTaskRunStatus(status?: ApiCaseGenerateTa
 
 export function isApiCaseGenerateTaskRunInProgress(status?: ApiCaseGenerateTaskRunStatus) {
   const normalizedStatus = normalizeApiCaseGenerateTaskRunStatus(status)
-  return ['pending', 'claimed', 'running'].includes(normalizedStatus)
+  return ['pending', 'claimed', 'running', 'waiting_review'].includes(normalizedStatus)
 }
 
 export function isRunnableApiCaseGenerateTaskRun(status?: ApiCaseGenerateTaskRunStatus) {

@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, CodeOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, PlusOutlined, SearchOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Dropdown, Empty, Form, Input, InputNumber, Modal, Popconfirm, Popover, Segmented, Select, Switch, Tabs, Tag, Tooltip, Typography, Upload, message } from 'antd'
+import { Alert, Button, Card, Dropdown, Empty, Form, Input, InputNumber, Modal, Popconfirm, Popover, Segmented, Select, Space, Switch, Tabs, Tag, Tooltip, Typography, Upload } from 'antd'
 import type { InputRef } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
@@ -72,12 +72,27 @@ import {
   pickUpdatedAt,
 } from '@/utils/format'
 import { buildApiAssertRuleUpdatePayload, buildApiExtractRuleUpdatePayload } from '@/utils/updatePayload'
+import { message } from '@/shared/utils/feedback'
 
 const { Text } = Typography
 
 type AssertRuleFormValues = CreateApiAssertRulePayload
 type ExtractRuleFormValues = CreateApiExtractRulePayload
 type CaseImportMode = 'upload' | 'editor'
+
+const API_RUN_TERMINAL_STATUSES = ['success', 'failed', 'error'] as const
+
+function isApiRunPollingStatus(status?: string) {
+  return status === 'pending' || status === 'running'
+}
+
+function isApiRunTerminalStatus(status?: string) {
+  return API_RUN_TERMINAL_STATUSES.includes(status as typeof API_RUN_TERMINAL_STATUSES[number])
+}
+
+function getApiCaseRunId(run?: ApiCaseRunResult | null) {
+  return run?.runId ?? run?.caseRunId ?? run?.run_id ?? run?.case_run_id ?? ''
+}
 
 function validateJsonText(value?: string) {
   if (!value?.trim()) return Promise.resolve()
@@ -112,6 +127,7 @@ export function ApiCollectionDetailPage() {
   const [envVarPickerSelectedKey, setEnvVarPickerSelectedKey] = useState<string>('')
   const envVarPickerInsertHandlersRef = useRef<Record<string, (templateText: string) => void>>({})
   const [runResult, setRunResult] = useState<ApiCaseRunResult | null>(null)
+  const [activeApiCaseRunId, setActiveApiCaseRunId] = useState('')
   const [runResultView, setRunResultView] = useState<RunResultView>('response')
   const [collectionRunReportOpen, setCollectionRunReportOpen] = useState(false)
   const [collectionRunHistoryOpen, setCollectionRunHistoryOpen] = useState(false)
@@ -141,6 +157,7 @@ export function ApiCollectionDetailPage() {
   const bodyJsonEditorRef = useRef<JsonEditorRef | null>(null)
   const editorLayoutRef = useRef<HTMLDivElement | null>(null)
   const editorResizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
+  const previousApiCaseRunStatusRef = useRef<ApiCaseRunResult['status'] | ''>('')
   const previousActiveRunStatusRef = useRef<ApiCollectionRunSummary['status'] | ''>('')
   const watchedBodyType = Form.useWatch('bodyType', caseForm)
   const watchedQuery = Form.useWatch('query', caseForm)
@@ -209,6 +226,16 @@ export function ApiCollectionDetailPage() {
     enabled: Boolean(activeCaseId),
     refetchOnWindowFocus: false,
   })
+  const activeApiCaseRunQuery = useQuery({
+    queryKey: ['apiCaseRun', activeApiCaseRunId],
+    queryFn: () => api.getApiCaseRun(activeApiCaseRunId),
+    enabled: Boolean(activeApiCaseRunId),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as ApiCaseRunResult | undefined
+      return !data || isApiRunPollingStatus(data.status) ? 1500 : false
+    },
+  })
   const isSelectedCaseReady = isCreatingCase || (Boolean(activeCaseId) && (editingCase ? getCaseId(editingCase) === activeCaseId : false))
   const filteredEnvironmentVars = useMemo(() => {
     const keyword = envVarPickerSearch.trim().toLowerCase()
@@ -229,7 +256,7 @@ export function ApiCollectionDetailPage() {
     refetchOnWindowFocus: false,
     refetchInterval: (query) => {
       const data = (query.state.data as ApiCollectionRunSummary[] | undefined) ?? []
-      return data.some((item) => item.status === 'running') ? 3000 : false
+      return data.some((item) => isApiRunPollingStatus(item.status)) ? 3000 : false
     },
   })
   const activeCollectionRunQuery = useQuery({
@@ -239,7 +266,7 @@ export function ApiCollectionDetailPage() {
     refetchOnWindowFocus: false,
     refetchInterval: (query) => {
       const data = query.state.data as ApiCollectionRunSummary | undefined
-      return data?.status === 'running' || !data ? 3000 : false
+      return !data || isApiRunPollingStatus(data.status) ? 3000 : false
     },
   })
   const collectionRunReportQuery = useQuery({
@@ -249,7 +276,7 @@ export function ApiCollectionDetailPage() {
     refetchOnWindowFocus: false,
     refetchInterval: (query) => {
       const data = query.state.data as ApiCollectionRunReport | undefined
-      return collectionRunReportOpen && (data?.status === 'running' || (!data && Boolean(selectedCollectionRunId))) ? 3000 : false
+      return collectionRunReportOpen && (!data || isApiRunPollingStatus(data.status)) && Boolean(selectedCollectionRunId) ? 3000 : false
     },
   })
 
@@ -290,7 +317,9 @@ export function ApiCollectionDetailPage() {
     setDraftCaseValues(null)
     setSelectedCaseId('')
     setRunResult(null)
+    setActiveApiCaseRunId('')
     setRunResultView('response')
+    previousApiCaseRunStatusRef.current = ''
     caseForm.setFieldsValue(createDefaultCaseFormValues())
   }, [caseForm, collectionId])
 
@@ -318,7 +347,7 @@ export function ApiCollectionDetailPage() {
 
     const previousStatus = previousActiveRunStatusRef.current
     previousActiveRunStatusRef.current = currentRun.status ?? ''
-    if (currentRun.status === 'running') return
+    if (isApiRunPollingStatus(currentRun.status)) return
     if (previousStatus === currentRun.status) return
 
     setActivePollingCollectionRunId('')
@@ -333,6 +362,51 @@ export function ApiCollectionDetailPage() {
   }, [activeCollectionRunQuery.data, collectionId, queryClient])
 
   useEffect(() => {
+    const currentRun = activeApiCaseRunQuery.data
+    const currentRunId = getApiCaseRunId(currentRun) || activeApiCaseRunId
+    if (!currentRun || !currentRunId) return
+
+    const normalizedRun = { ...currentRun, runId: currentRunId }
+    setRunResult(normalizedRun)
+    const previousStatus = previousApiCaseRunStatusRef.current
+    previousApiCaseRunStatusRef.current = normalizedRun.status ?? ''
+
+    if (isApiRunPollingStatus(normalizedRun.status)) return
+    if (!isApiRunTerminalStatus(normalizedRun.status)) return
+    if (previousStatus === normalizedRun.status) return
+
+    setActiveApiCaseRunId('')
+    if (normalizedRun.environmentId) {
+      queryClient.invalidateQueries({ queryKey: ['apiEnvironmentVars', normalizedRun.environmentId] })
+    }
+
+    if (normalizedRun.status === 'success') {
+      message.success('运行完成')
+      return
+    }
+    if (normalizedRun.status === 'failed') {
+      message.error(normalizedRun.errorMessage || '运行完成，断言失败')
+      return
+    }
+    message.error(normalizedRun.errorMessage || '运行异常')
+  }, [activeApiCaseRunId, activeApiCaseRunQuery.data, queryClient])
+
+  useEffect(() => {
+    if (!activeApiCaseRunId || !activeApiCaseRunQuery.error) return
+
+    const errorMessage = getErrorMessage(activeApiCaseRunQuery.error)
+    setRunResult((currentRun) => ({
+      ...(currentRun ?? {}),
+      runId: getApiCaseRunId(currentRun) || activeApiCaseRunId,
+      status: 'error',
+      errorMessage: currentRun?.errorMessage || errorMessage,
+    }))
+    previousApiCaseRunStatusRef.current = 'error'
+    setActiveApiCaseRunId('')
+    message.error(errorMessage)
+  }, [activeApiCaseRunId, activeApiCaseRunQuery.error])
+
+  useEffect(() => {
     const report = collectionRunReportQuery.data
     if (!report) return
 
@@ -342,7 +416,9 @@ export function ApiCollectionDetailPage() {
       if (leftOrderNo !== rightOrderNo) return leftOrderNo - rightOrderNo
       return (left.caseName ?? '').localeCompare(right.caseName ?? '')
     })
-    const firstExpandedIndex = orderedItems.findIndex((item) => item.status === 'failed' || item.status === 'error' || item.status === 'running')
+    const firstExpandedIndex = orderedItems.findIndex(
+      (item) => item.status === 'failed' || item.status === 'error' || isApiRunPollingStatus(item.status),
+    )
     const fallbackExpandedIndex = firstExpandedIndex >= 0 ? firstExpandedIndex : orderedItems.length > 0 ? 0 : -1
     const firstExpandedItem = fallbackExpandedIndex >= 0 ? orderedItems[fallbackExpandedIndex] : undefined
 
@@ -468,11 +544,36 @@ export function ApiCollectionDetailPage() {
     onSuccess: (result) => {
       setRunResult(result)
       setRunResultView('response')
-      if (result.success) {
+      previousApiCaseRunStatusRef.current = result.status ?? ''
+      const resultRunId = getApiCaseRunId(result)
+
+      if (resultRunId && isApiRunPollingStatus(result.status)) {
+        setActiveApiCaseRunId(resultRunId)
+        message.info('已开始运行用例')
+        return
+      }
+
+      if (resultRunId && !isApiRunTerminalStatus(result.status)) {
+        setActiveApiCaseRunId(resultRunId)
+        message.info('已创建运行记录，正在等待结果')
+        return
+      }
+
+      if (isApiRunPollingStatus(result.status)) {
+        message.error('已创建运行记录，但未获取到运行 ID')
+        return
+      }
+
+      setActiveApiCaseRunId('')
+      if (result.status === 'success' || result.success) {
         message.success('运行完成')
         return
       }
-      message.error(result.errorMessage || '运行失败')
+      if (result.status === 'failed') {
+        message.error(result.errorMessage || '运行完成，断言失败')
+        return
+      }
+      message.error(result.errorMessage || '运行异常')
     },
     onSettled: (_result, _error, variables) => {
       if (!variables?.environmentId) return
@@ -480,6 +581,8 @@ export function ApiCollectionDetailPage() {
     },
     onError: () => {
       setRunResult(null)
+      setActiveApiCaseRunId('')
+      previousApiCaseRunStatusRef.current = ''
     },
   })
 
@@ -499,7 +602,7 @@ export function ApiCollectionDetailPage() {
         const currentItems = current ?? []
         return [summary, ...currentItems.filter((item) => item.collectionRunId !== summary.collectionRunId)]
       })
-      message.success(summary.status === 'running' ? '已开始运行测试' : '已创建运行记录')
+      message.success(isApiRunPollingStatus(summary.status) ? '已开始运行测试' : '已创建运行记录')
     },
     onSettled: (_result, _error, variables) => {
       if (!variables?.environmentId) return
@@ -731,7 +834,7 @@ export function ApiCollectionDetailPage() {
     setLoadingCollectionRunHistoryId(historyItem.collectionRunId ?? '')
     setSelectedCollectionRunId(historyItem.collectionRunId ?? '')
     setCollectionRunReportOpen(true)
-    if (historyItem.status === 'running' && historyItem.collectionRunId) {
+    if (isApiRunPollingStatus(historyItem.status) && historyItem.collectionRunId) {
       previousActiveRunStatusRef.current = historyItem.status
       setActivePollingCollectionRunId(historyItem.collectionRunId)
     }
@@ -1116,7 +1219,7 @@ export function ApiCollectionDetailPage() {
         footer={null}
         centered
         width={360}
-        destroyOnClose={false}
+        destroyOnHidden={false}
         className="api-env-var-picker-modal"
         onCancel={closeEnvVarPicker}
       >
@@ -1358,6 +1461,9 @@ export function ApiCollectionDetailPage() {
   const extractRules = useMemo(() => sortRulesByOrderNo(extractRulesQuery.data ?? EMPTY_EXTRACT_RULES), [extractRulesQuery.data])
   const extractResults = runResult?.extractResults ?? []
   const assertResults = runResult?.assertResults ?? []
+  const runResultStatus = runResult?.status ?? (runResult ? (runResult.success ? 'success' : 'failed') : undefined)
+  const runResultStatusMeta = getExecutionStatusMeta(runResultStatus)
+  const isApiCaseRunInProgress = isApiRunPollingStatus(runResultStatus)
   const failedExtractCount = extractResults.filter((item) => !item.success).length
   const failedAssertCount = assertResults.filter((item) => !item.success).length
   const postOperationCount = assertRules.length + extractRules.length
@@ -1493,13 +1599,13 @@ export function ApiCollectionDetailPage() {
       <div className="api-automation-content">
         <div className="page-frame api-collection-detail-frame">
           <div className="api-collection-detail-layout">
-            {collectionQuery.error ? <Alert showIcon type="error" message={getErrorMessage(collectionQuery.error)} /> : null}
-            {casesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(casesQuery.error)} /> : null}
-            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" message={getErrorMessage(selectedCaseDetailQuery.error)} /> : null}
-            {requirementQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementQuery.error)} /> : null}
-            {sprintQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintQuery.error)} /> : null}
-            {assertRulesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(assertRulesQuery.error)} /> : null}
-            {extractRulesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(extractRulesQuery.error)} /> : null}
+            {collectionQuery.error ? <Alert showIcon type="error" title={getErrorMessage(collectionQuery.error)} /> : null}
+            {casesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(casesQuery.error)} /> : null}
+            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" title={getErrorMessage(selectedCaseDetailQuery.error)} /> : null}
+            {requirementQuery.error ? <Alert showIcon type="error" title={getErrorMessage(requirementQuery.error)} /> : null}
+            {sprintQuery.error ? <Alert showIcon type="error" title={getErrorMessage(sprintQuery.error)} /> : null}
+            {assertRulesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(assertRulesQuery.error)} /> : null}
+            {extractRulesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(extractRulesQuery.error)} /> : null}
 
             <aside className="workbench-panel api-case-sidebar">
               <div className="panel-header api-case-sidebar-header">
@@ -1736,7 +1842,7 @@ export function ApiCollectionDetailPage() {
                           <div className="api-case-request-shell">
                             <div className="api-case-request-bar">
                               <Form.Item name="method" className="api-case-method-item" rules={[{ required: true, message: '请选择请求方式' }]}>
-                                <Select options={methodOptions} popupClassName="api-method-dropdown" />
+                                <Select options={methodOptions} classNames={{ popup: { root: 'api-method-dropdown' } }} />
                               </Form.Item>
                               <div className="api-case-url-group">
                                 <Popover
@@ -1804,8 +1910,8 @@ export function ApiCollectionDetailPage() {
                               </div>
                               <div className="api-case-request-actions">
                                 <Button
-                                  loading={runApiCaseMutation.isPending}
-                                  disabled={!isSelectedCaseReady}
+                                  loading={runApiCaseMutation.isPending || isApiCaseRunInProgress}
+                                  disabled={!isSelectedCaseReady || isApiCaseRunInProgress}
                                   onClick={handleSendRequest}
                                   icon={<SendOutlined />}
                                 >
@@ -1839,25 +1945,32 @@ export function ApiCollectionDetailPage() {
                                         <div className="api-kv-toolbar">
                                           <Text strong>Query 参数</Text>
                                         </div>
-                                        {fields.map((field) => (
-                                          <div key={field.key} className="api-kv-row">
-                                            <Form.Item {...field} name={[field.name, 'enabled']} valuePropName="checked" className="api-kv-check-item">
+                                        {fields.map((field) => {
+                                          const { key: fieldKey, ...fieldProps } = field
+
+                                          return (
+                                          <div key={fieldKey} className="api-kv-row">
+                                            <Form.Item {...fieldProps} name={[field.name, 'enabled']} valuePropName="checked" className="api-kv-check-item">
                                               <Switch size="small" />
                                             </Form.Item>
-                                            <Form.Item {...field} name={[field.name, 'key']} className="api-kv-item">
+                                            <Form.Item {...fieldProps} name={[field.name, 'key']} className="api-kv-item">
                                               <Input placeholder="参数名" />
                                             </Form.Item>
-                                            <Form.Item {...field} name={[field.name, 'value']} className="api-kv-item api-kv-value-item">
-                                              <Input
-                                                ref={(node) => setEnvVarInputRef(`query:${field.key}:value`, node)}
-                                                placeholder="参数值"
-                                                addonAfter={renderEnvVarPicker({
+                                            <div className="api-kv-item api-kv-value-item">
+                                              <Space.Compact style={{ width: '100%' }}>
+                                                <Form.Item {...fieldProps} name={[field.name, 'value']} noStyle>
+                                                  <Input
+                                                    ref={(node) => setEnvVarInputRef(`query:${field.key}:value`, node)}
+                                                    placeholder="参数值"
+                                                  />
+                                                </Form.Item>
+                                                {renderEnvVarPicker({
                                                   pickerKey: `query:${field.key}:value`,
                                                   onInsert: (templateText) => insertTemplateText(['query', field.name, 'value'], `query:${field.key}:value`, templateText),
                                                   trigger: <Button type="text" size="small" className="api-env-var-picker-trigger" icon={<CodeOutlined />} />,
                                                 })}
-                                              />
-                                            </Form.Item>
+                                              </Space.Compact>
+                                            </div>
                                             <Tooltip title="删除参数">
                                               <Button
                                                 danger
@@ -1870,7 +1983,8 @@ export function ApiCollectionDetailPage() {
                                               />
                                             </Tooltip>
                                           </div>
-                                        ))}
+                                          )
+                                        })}
                                       </div>
                                     )}
                                   </Form.List>
@@ -1887,25 +2001,32 @@ export function ApiCollectionDetailPage() {
                                       <div className="api-kv-toolbar">
                                         <Text strong>请求头</Text>
                                       </div>
-                                      {fields.map((field) => (
-                                        <div key={field.key} className="api-kv-row">
-                                          <Form.Item {...field} name={[field.name, 'enabled']} valuePropName="checked" className="api-kv-check-item">
+                                      {fields.map((field) => {
+                                        const { key: fieldKey, ...fieldProps } = field
+
+                                        return (
+                                        <div key={fieldKey} className="api-kv-row">
+                                          <Form.Item {...fieldProps} name={[field.name, 'enabled']} valuePropName="checked" className="api-kv-check-item">
                                             <Switch size="small" />
                                           </Form.Item>
-                                          <Form.Item {...field} name={[field.name, 'key']} className="api-kv-item">
+                                          <Form.Item {...fieldProps} name={[field.name, 'key']} className="api-kv-item">
                                             <Input placeholder="Header 名称" />
                                           </Form.Item>
-                                          <Form.Item {...field} name={[field.name, 'value']} className="api-kv-item api-kv-value-item">
-                                            <Input
-                                              ref={(node) => setEnvVarInputRef(`headers:${field.key}:value`, node)}
-                                              placeholder="Header 值"
-                                              addonAfter={renderEnvVarPicker({
+                                          <div className="api-kv-item api-kv-value-item">
+                                            <Space.Compact style={{ width: '100%' }}>
+                                              <Form.Item {...fieldProps} name={[field.name, 'value']} noStyle>
+                                                <Input
+                                                  ref={(node) => setEnvVarInputRef(`headers:${field.key}:value`, node)}
+                                                  placeholder="Header 值"
+                                                />
+                                              </Form.Item>
+                                              {renderEnvVarPicker({
                                                 pickerKey: `headers:${field.key}:value`,
                                                 onInsert: (templateText) => insertTemplateText(['headers', field.name, 'value'], `headers:${field.key}:value`, templateText),
                                                 trigger: <Button type="text" size="small" className="api-env-var-picker-trigger" icon={<CodeOutlined />} />,
                                               })}
-                                            />
-                                          </Form.Item>
+                                            </Space.Compact>
+                                          </div>
                                           <Tooltip title="删除请求头">
                                             <Button
                                               danger
@@ -1918,7 +2039,8 @@ export function ApiCollectionDetailPage() {
                                             />
                                           </Tooltip>
                                         </div>
-                                      ))}
+                                        )
+                                      })}
                                     </div>
                                   )}
                                 </Form.List>
@@ -2195,7 +2317,7 @@ export function ApiCollectionDetailPage() {
                             <div className="api-case-run-result-head">
                               <div className="api-case-run-result-title">
                                 <Text strong>请求结果</Text>
-                                <Tag color={runResult.success ? 'success' : 'error'}>{runResult.success ? '成功' : '失败'}</Tag>
+                                <Tag color={runResultStatusMeta.color}>{runResultStatusMeta.label}</Tag>
                               </div>
                               <div className="api-case-run-result-meta">
                                 <span>环境：{selectedEnvironment?.name ?? runResult.environmentId ?? '-'}</span>
@@ -2205,7 +2327,7 @@ export function ApiCollectionDetailPage() {
                                 <span>断言失败：{failedAssertCount}</span>
                               </div>
                             </div>
-                            {runResult.errorMessage ? <Alert showIcon type="error" message={runResult.errorMessage} className="api-case-run-result-alert" /> : null}
+                            {runResult.errorMessage ? <Alert showIcon type="error" title={runResult.errorMessage} className="api-case-run-result-alert" /> : null}
                             <Segmented
                               className="api-case-run-result-segmented"
                               options={runResultViewOptions}
@@ -2244,7 +2366,7 @@ export function ApiCollectionDetailPage() {
         onOk={handleImportApiCases}
         rootClassName="api-case-import-modal-root"
         className="api-case-import-modal-shell"
-        destroyOnClose
+        destroyOnHidden
       >
         <div className="api-case-import-modal">
           <Segmented
@@ -2297,12 +2419,12 @@ export function ApiCollectionDetailPage() {
         width={760}
         footer={null}
         onCancel={() => setCollectionRunHistoryOpen(false)}
-        destroyOnClose={false}
+        destroyOnHidden={false}
         className="api-collection-run-history-modal"
       >
         <div className="api-collection-run-history-layout">
           {collectionRunHistoryQuery.error ? (
-            <Alert showIcon type="error" message={getErrorMessage(collectionRunHistoryQuery.error)} />
+            <Alert showIcon type="error" title={getErrorMessage(collectionRunHistoryQuery.error)} />
           ) : collectionRunHistoryQuery.isLoading ? (
             <Empty description="运行记录加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : collectionRunHistory.length === 0 ? (
@@ -2361,12 +2483,12 @@ export function ApiCollectionDetailPage() {
           setCollectionRunReportOpen(false)
           setSelectedCollectionRunId('')
         }}
-        destroyOnClose={false}
+        destroyOnHidden={false}
         rootClassName="api-collection-run-report-modal-root"
         className="api-collection-run-report-modal"
       >
         {collectionRunReportQuery.error && !collectionRunReport ? (
-          <Alert showIcon type="error" message={getErrorMessage(collectionRunReportQuery.error)} />
+          <Alert showIcon type="error" title={getErrorMessage(collectionRunReportQuery.error)} />
         ) : collectionRunReportQuery.isLoading && !collectionRunReport ? (
           <Empty description="API测试集报告加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : collectionRunReport ? (
@@ -2432,7 +2554,7 @@ export function ApiCollectionDetailPage() {
               </div>
 
               {collectionRunReport.errorMessage ? (
-                <Alert showIcon type="error" message={collectionRunReport.errorMessage} className="api-case-run-result-alert" />
+                <Alert showIcon type="error" title={collectionRunReport.errorMessage} className="api-case-run-result-alert" />
               ) : null}
 
               <Segmented
@@ -2487,7 +2609,7 @@ export function ApiCollectionDetailPage() {
                                 <span>提取失败：{itemExtractResults.filter((result) => !result.success).length}</span>
                                 <span>断言失败：{itemAssertResults.filter((result) => !result.success).length}</span>
                               </div>
-                              {item.errorMessage ? <Alert showIcon type="error" message={item.errorMessage} className="api-case-run-result-alert" /> : null}
+                              {item.errorMessage ? <Alert showIcon type="error" title={item.errorMessage} className="api-case-run-result-alert" /> : null}
                               <Segmented
                                 className="api-case-run-result-segmented"
                                 options={runResultViewOptions}
@@ -2516,7 +2638,7 @@ export function ApiCollectionDetailPage() {
             </div>
           </div>
         ) : (
-          <Empty description={selectedCollectionRunSummary?.status === 'running' ? '运行中，报告生成中...' : '暂无API测试集报告'} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description={isApiRunPollingStatus(selectedCollectionRunSummary?.status) ? '运行中，报告生成中...' : '暂无API测试集报告'} image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
       </Modal>
 
@@ -2532,7 +2654,7 @@ export function ApiCollectionDetailPage() {
         confirmLoading={saveAssertRuleMutation.isPending}
         okButtonProps={{ className: 'action-btn-save' }}
         onOk={() => assertRuleForm.submit()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form<AssertRuleFormValues>
           form={assertRuleForm}
@@ -2584,7 +2706,7 @@ export function ApiCollectionDetailPage() {
         confirmLoading={saveExtractRuleMutation.isPending}
         okButtonProps={{ className: 'action-btn-save' }}
         onOk={() => extractRuleForm.submit()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form<ExtractRuleFormValues>
           form={extractRuleForm}

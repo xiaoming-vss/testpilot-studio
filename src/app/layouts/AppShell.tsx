@@ -21,10 +21,12 @@ import { ProfilePage } from '@/features/profile/pages/ProfilePage'
 import { ProjectsPage } from '@/features/projects/pages/ProjectsPage'
 import { SprintDetailPage } from '@/features/projects/pages/SprintDetailPage'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
-import { RequirementDetailPage } from '@/features/requirements/pages/RequirementDetailPage'
-import { AiTestingPage } from '@/features/ai-testing/pages/AiTestingPage'
+import { UnifiedAiTestingPage } from '@/features/ai-testing/pages/UnifiedAiTestingPage'
+import { AiSkillLibraryPage } from '@/features/ai-testing/pages/AiSkillLibraryPage'
+import { AiTestingOverviewPage } from '@/features/ai-testing/pages/AiTestingOverviewPage'
 import { ApiCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/ApiCaseGenerateTaskDetailPage'
 import { FunctionalCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/FunctionalCaseGenerateTaskDetailPage'
+import { RequirementAnalysisTaskDetailPage } from '@/features/ai-testing/pages/RequirementAnalysisTaskDetailPage'
 import { BaseServicesPage } from '@/features/base-services/pages/BaseServicesPage'
 import { TestingPage } from '@/features/testing/pages/TestingPage'
 import { FunctionTestSuiteDetailPage } from '@/features/test-cases/pages/FunctionTestSuiteDetailPage'
@@ -55,6 +57,8 @@ export function AppShell() {
     return '/projects'
   }, [location.pathname])
 
+  const shellClassName = `app-shell app-shell-macos${location.pathname.startsWith('/base-services') ? ' app-shell-base-services' : ''}`
+
   const items: MenuProps['items'] = [
     { key: '/projects', icon: <AppstoreOutlined />, label: '项目总览' },
     { key: '/testing', icon: <ExperimentOutlined />, label: '测试' },
@@ -67,7 +71,7 @@ export function AppShell() {
   }
 
   return (
-    <Layout className="app-shell">
+    <Layout className={shellClassName}>
       <Sider
         width={76}
         collapsedWidth={76}
@@ -153,16 +157,15 @@ export function AppShell() {
             <Route path="/" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:projectId/sprints/:sprintId" element={<SprintDetailPage />} />
-            <Route
-              path="/projects/:projectId/sprints/:sprintId/requirements/:requirementId"
-              element={<RequirementDetailPage />}
-            />
             <Route path="/testing" element={<TestingPage />} />
             <Route path="/test-cases" element={<Navigate to="/testing?tab=functional" replace />} />
             <Route path="/test-cases/suites/:suiteId" element={<FunctionTestSuiteDetailPage />} />
-            <Route path="/ai-testing" element={<AiTestingPage />} />
+            <Route path="/ai-testing" element={<AiTestingOverviewPage />} />
+            <Route path="/ai-testing/skills" element={<AiSkillLibraryPage />} />
+            <Route path="/ai-testing/tasks" element={<UnifiedAiTestingPage />} />
             <Route path="/ai-testing/tasks/:taskId" element={<ApiCaseGenerateTaskDetailPage />} />
             <Route path="/ai-testing/function-tasks/:taskId" element={<FunctionalCaseGenerateTaskDetailPage />} />
+            <Route path="/ai-testing/requirement-analysis-tasks/:taskId" element={<RequirementAnalysisTaskDetailPage />} />
             <Route path="/base-services" element={<BaseServicesPage />} />
             <Route path="/api-automation" element={<Navigate to="/testing?tab=api" replace />} />
             <Route path="/api-automation/collections/:collectionId" element={<ApiCollectionDetailPage />} />
@@ -175,3 +178,4 @@ export function AppShell() {
     </Layout>
   )
 }
+

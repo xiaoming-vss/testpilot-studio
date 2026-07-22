@@ -1,8 +1,9 @@
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tag, Tooltip, Typography, message } from 'antd'
+import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { api, type CreateLlmConnectionPayload, type UpdateLlmConnectionPayload, type LlmConnection } from '@/services/api'
+import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage } from '@/utils/format'
 import { LlmConnectionDetailDrawer } from './LlmConnectionDetailDrawer'
 import { LlmConnectionDrawer, type LlmConnectionFormValues } from './LlmConnectionDrawer'
@@ -56,7 +57,7 @@ function buildUpdatePayload(current: LlmConnection, values: LlmConnectionFormVal
 export function LlmConnectionsPanel() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(8)
+  const [pageSize, setPageSize] = useState(18)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingConnection, setEditingConnection] = useState<LlmConnection | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -87,6 +88,7 @@ export function LlmConnectionsPanel() {
     () => connections.slice((page - 1) * pageSize, page * pageSize),
     [connections, page, pageSize],
   )
+  const shouldFillPageGrid = pageSize === 18 && pagedConnections.length === 18
 
   const saveMutation = useMutation({
     mutationFn: (values: LlmConnectionFormValues) => {
@@ -169,7 +171,7 @@ export function LlmConnectionsPanel() {
       </div>
 
       {connectionsQuery.error ? (
-        <Alert showIcon type="error" message={getErrorMessage(connectionsQuery.error)} className="base-services-integration-alert" />
+        <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} className="base-services-integration-alert" />
       ) : null}
 
       <div className="base-services-connection-shell">
@@ -178,7 +180,7 @@ export function LlmConnectionsPanel() {
             showIcon
             type="warning"
             className="base-services-integration-alert"
-            message="存在状态异常的 LLM 连接"
+            title="存在状态异常的 LLM 连接"
             description="请优先检查异常连接，并使用「编辑」更新连接配置。"
           />
         ) : null}
@@ -201,7 +203,7 @@ export function LlmConnectionsPanel() {
               />
             </div>
           ) : (
-            <div className="api-collection-grid base-services-connection-grid">
+            <div className={`api-collection-grid base-services-connection-grid${shouldFillPageGrid ? ' base-services-grid-fill-page' : ''}`}>
               {pagedConnections.map((connection) => {
                 const statusMeta = getConnectionStatusMeta(connection.status)
                 const loadingDelete = deleteMutation.isPending && deleteMutation.variables === connection.connectionId
@@ -210,7 +212,7 @@ export function LlmConnectionsPanel() {
                   <Card
                     key={connection.connectionId}
                     className="sprint-card api-collection-card base-services-connection-card"
-                    bodyStyle={{ padding: 20 }}
+                    styles={{ body: { padding: 20 } }}
                   >
                     <div className="api-collection-card-top base-services-connection-head">
                       <Space size={10} className="base-services-connection-title-wrap">
@@ -295,6 +297,7 @@ export function LlmConnectionsPanel() {
             pageSize={pageSize}
             total={connections.length}
             showSizeChanger
+            pageSizeOptions={['18', '24', '30', '36', '48', '60']}
             onChange={(nextPage, nextPageSize) => {
               setPage(nextPage)
               setPageSize(nextPageSize)

@@ -42,15 +42,26 @@ export type ApiCase = {
   description?: string
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   urlTemplate: string
+  url_template?: string
   bodyJson?: string
+  body_json?: string
   bodyText?: string
+  body_text?: string
   bodyType?: 'json' | 'form' | 'raw' | 'none'
+  body_type?: 'json' | 'form' | 'raw' | 'none'
   headersJson?: string
+  headers_json?: string
+  headers?: unknown
   queryJson?: string
+  query_json?: string
+  query?: unknown
   enabled?: boolean
   continueOnFailure?: boolean
+  continue_on_failure?: boolean
   timeoutMs?: number
+  timeout_ms?: number
   orderNo?: number
+  order_no?: number
   createdAt?: string
   created_at?: string
   updatedAt?: string
@@ -184,6 +195,8 @@ export type RunApiCollectionPayload = {
   environmentId: string
 }
 
+export type ApiCaseRunStatus = 'pending' | 'running' | 'success' | 'failed' | 'error'
+
 export type ApiCaseRunRequestSnapshot = {
   url?: string
   method?: string
@@ -222,6 +235,11 @@ export type ApiCaseRunAssertResult = {
 }
 
 export type ApiCaseRunResult = {
+  runId?: string
+  caseRunId?: string
+  run_id?: string
+  case_run_id?: string
+  status?: ApiCaseRunStatus
   caseId?: string
   environmentId?: string
   durationMs?: number
@@ -257,7 +275,7 @@ export type ApiCollectionRunSummary = {
   collectionRunId?: string
   collectionId?: string
   environmentId?: string
-  status?: 'running' | 'success' | 'failed' | 'error'
+  status?: 'pending' | 'running' | 'success' | 'failed' | 'error'
   totalCount?: number
   successCount?: number
   failedCount?: number

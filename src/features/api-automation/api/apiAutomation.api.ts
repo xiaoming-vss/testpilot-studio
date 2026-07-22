@@ -127,6 +127,8 @@ export const apiAutomationApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  getApiCaseRun: (runId: string) =>
+    request<ApiCaseRunResult>(`/v1/api-case-runs/${runId}`),
   runApiCollection: (collectionId: string, body: RunApiCollectionPayload) =>
     request<ApiCollectionRunSummary>(`/v1/api-collections/${collectionId}/run`, {
       method: 'POST',

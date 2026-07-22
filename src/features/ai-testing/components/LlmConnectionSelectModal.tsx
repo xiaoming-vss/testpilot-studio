@@ -1,5 +1,5 @@
 import { LinkOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Modal, Radio, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Modal, Radio, Space, Spin, Switch, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,11 +13,17 @@ export function LlmConnectionSelectModal({
   onClose,
   onConfirm,
   loading,
+  showCheckpointOption = false,
+  checkpointEnabled = false,
+  onCheckpointEnabledChange,
 }: {
   open: boolean
   onClose: () => void
   onConfirm: (connectionId: string) => void
   loading?: boolean
+  showCheckpointOption?: boolean
+  checkpointEnabled?: boolean
+  onCheckpointEnabledChange?: (enabled: boolean) => void
 }) {
   const navigate = useNavigate()
   const [selectedId, setSelectedId] = useState<string>('')
@@ -40,6 +46,7 @@ export function LlmConnectionSelectModal({
 
   function handleClose() {
     setSelectedId('')
+    onCheckpointEnabledChange?.(false)
     onClose()
   }
 
@@ -54,7 +61,7 @@ export function LlmConnectionSelectModal({
       open={open}
       onCancel={handleClose}
       width={480}
-      destroyOnClose
+      destroyOnHidden
       afterClose={() => setSelectedId('')}
       footer={
         <Space>
@@ -75,7 +82,7 @@ export function LlmConnectionSelectModal({
           <Spin />
         </div>
       ) : connectionsQuery.error ? (
-        <Alert showIcon type="error" message={getErrorMessage(connectionsQuery.error)} />
+        <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} />
       ) : activeConnections.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -119,6 +126,28 @@ export function LlmConnectionSelectModal({
               ))}
             </div>
           </Radio.Group>
+          {showCheckpointOption ? (
+            <div
+              style={{
+                padding: '12px 14px',
+                border: '1px solid var(--tp-border-soft, rgba(148, 163, 184, 0.18))',
+                borderRadius: 10,
+                background: 'var(--tp-surface-soft, rgba(148, 163, 184, 0.06))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <Text strong>开启阶段卡点审核</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  开启后每个生成阶段会暂停，可编辑确认后再继续。
+                </Text>
+              </div>
+              <Switch checked={checkpointEnabled} onChange={onCheckpointEnabledChange} />
+            </div>
+          ) : null}
         </div>
       )}
     </Modal>

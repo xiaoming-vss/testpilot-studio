@@ -33,9 +33,9 @@ export function ZentaoConnectionDetailDrawer({
   const statusMeta = getConnectionStatusMeta(connection?.status)
 
   return (
-    <Drawer title="禅道连接详情" open={open} onClose={onClose} width={560}>
+    <Drawer title="禅道连接详情" open={open} onClose={onClose} size={560}>
       {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : null}
-      {!loading && error ? <Alert showIcon type="error" message={getErrorMessage(error)} /> : null}
+      {!loading && error ? <Alert showIcon type="error" title={getErrorMessage(error)} /> : null}
       {!loading && !error && !connection ? <Empty description="未找到连接详情" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : null}
       {!loading && !error && connection ? (
         <div className="base-services-detail-layout">
@@ -43,7 +43,7 @@ export function ZentaoConnectionDetailDrawer({
             <Alert
               showIcon
               type={connection.status === 'auth_failed' ? 'error' : 'warning'}
-              message="最近鉴权异常"
+              title="最近鉴权异常"
               description={connection.lastAuthError}
               className="base-services-detail-alert"
             />

@@ -31,9 +31,9 @@ export function LlmConnectionDetailDrawer({
   const statusMeta = getConnectionStatusMeta(connection?.status)
 
   return (
-    <Drawer title="LLM 连接详情" open={open} onClose={onClose} width={560}>
+    <Drawer title="LLM 连接详情" open={open} onClose={onClose} size={560}>
       {loading ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
-      {!loading && error ? <Alert showIcon type="error" message={getErrorMessage(error)} /> : null}
+      {!loading && error ? <Alert showIcon type="error" title={getErrorMessage(error)} /> : null}
       {!loading && !error && !connection ? <Empty description="未找到连接详情" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : null}
       {!loading && !error && connection ? (
         <div className="base-services-detail-layout">

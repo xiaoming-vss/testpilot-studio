@@ -1,9 +1,10 @@
 import { UploadOutlined } from '@ant-design/icons'
-import { Alert, Button, Drawer, Form, Input, Segmented, Select, Upload, message } from 'antd'
+import { Alert, Button, Drawer, Form, Input, Segmented, Select, Upload } from 'antd'
 import type { FormInstance } from 'antd'
 import { useEffect, useState } from 'react'
 import type { ApiCaseGenerateTaskSourceType, CreateApiCaseGenerateTaskPayload } from '../types'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
+import { message } from '@/shared/utils/feedback'
 import { getErrorMessage } from '@/utils/format'
 
 export type ApiCaseGenerateTaskFormValues = CreateApiCaseGenerateTaskPayload
@@ -56,16 +57,16 @@ export function ApiCaseGenerateTaskDrawer({
       title={title}
       open={open}
       onClose={onClose}
-      width={640}
+      size={640}
       rootClassName="ai-task-generate-drawer"
-      destroyOnClose={false}
+      destroyOnHidden={false}
       extra={
         <Button type="primary" className="action-btn-save" loading={loading} onClick={() => form.submit()}>
           保存
         </Button>
       }
     >
-      {error ? <Alert showIcon type="error" message={getErrorMessage(error)} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} style={{ marginBottom: 16 }} /> : null}
       <Form<ApiCaseGenerateTaskFormValues> className="ai-task-drawer-form" form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         <div className="ai-task-drawer-basic-grid">
           <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>

@@ -16,7 +16,6 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
@@ -34,6 +33,7 @@ import {
   normalizeEnvironmentVarId,
 } from '@/utils/format'
 import { buildApiEnvironmentUpdatePayload, buildApiEnvironmentVarUpdatePayload } from '@/utils/updatePayload'
+import { message } from '@/shared/utils/feedback'
 
 const { Paragraph, Text } = Typography
 
@@ -329,14 +329,14 @@ export function ApiEnvironmentDrawer({
       <Drawer
         title="API 环境管理"
         open={open}
-        width={960}
+        size={960}
         onClose={onClose}
         className="api-environment-drawer"
       >
         <div className="api-environment-drawer-shell">
-          {!projectId ? <Alert showIcon type="info" message="请先选择项目后再管理环境" /> : null}
-          {environmentsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(environmentsQuery.error)} /> : null}
-          {environmentVarsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(environmentVarsQuery.error)} /> : null}
+          {!projectId ? <Alert showIcon type="info" title="请先选择项目后再管理环境" /> : null}
+          {environmentsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(environmentsQuery.error)} /> : null}
+          {environmentVarsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(environmentVarsQuery.error)} /> : null}
 
           <div className="api-environment-split-layout">
             <section className="api-environment-section api-environment-section-top">
@@ -501,7 +501,7 @@ export function ApiEnvironmentDrawer({
         confirmLoading={saveEnvironmentMutation.isPending}
         okButtonProps={{ className: 'action-btn-save' }}
       >
-        {saveEnvironmentMutation.error ? <Alert showIcon type="error" message={getErrorMessage(saveEnvironmentMutation.error)} /> : null}
+        {saveEnvironmentMutation.error ? <Alert showIcon type="error" title={getErrorMessage(saveEnvironmentMutation.error)} /> : null}
           <Form<EnvironmentFormValues> form={environmentForm} layout="vertical" onFinish={(values) => saveEnvironmentMutation.mutate(values)} requiredMark={false}>
           <Form.Item name="name" label="环境名称" rules={[{ required: true, message: '请输入环境名称' }]}>
             <Input maxLength={64} />
@@ -530,7 +530,7 @@ export function ApiEnvironmentDrawer({
         confirmLoading={saveEnvironmentVarMutation.isPending}
         okButtonProps={{ className: 'action-btn-save' }}
       >
-        {saveEnvironmentVarMutation.error ? <Alert showIcon type="error" message={getErrorMessage(saveEnvironmentVarMutation.error)} /> : null}
+        {saveEnvironmentVarMutation.error ? <Alert showIcon type="error" title={getErrorMessage(saveEnvironmentVarMutation.error)} /> : null}
         <Form<EnvironmentVarFormValues>
           form={environmentVarForm}
           layout="vertical"

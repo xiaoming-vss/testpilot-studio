@@ -1,10 +1,11 @@
 import { CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Select, Space, Tooltip, Typography, message } from 'antd'
+import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Select, Space, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiEnvironmentDrawer } from '@/features/api-automation/components/ApiEnvironmentDrawer'
 import { CollectionDrawer, type CollectionFormValues } from '@/features/api-automation/components/CollectionDrawer'
+import { useProjectRequirements } from '@/features/projects/hooks/useProjectRequirements'
 import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRequirementScope'
 import { api, type ApiCollection, type ApiEnvironment, type Requirement } from '@/services/api'
 import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
@@ -17,6 +18,7 @@ import {
   pickUpdatedAt,
 } from '@/utils/format'
 import { buildApiCollectionUpdatePayload } from '@/utils/updatePayload'
+import { message } from '@/shared/utils/feedback'
 
 const { Paragraph, Text } = Typography
 
@@ -28,13 +30,17 @@ type ApiAutomationPageScope = {
   requirementName?: string
 }
 
+function isApiRunPollingStatus(status?: string) {
+  return status === 'pending' || status === 'running'
+}
+
 export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const workbenchActiveProjectId = useWorkbenchStore((state) => state.activeProjectId)
   const activeProjectId = scope?.projectId ?? workbenchActiveProjectId
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(8)
+  const [pageSize, setPageSize] = useState(18)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
   const [editingCollection, setEditingCollection] = useState<ApiCollection | null>(null)
@@ -60,20 +66,17 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     activeProjectId,
     includeAllRequirementOption: true,
     includeAllSprintOption: true,
+    defaultToAllWhenIncluded: true,
   })
   const selectedSprintId = scope?.sprintId ?? resolvedSelectedSprintId
   const selectedRequirementId = scope?.requirementId ?? resolvedSelectedRequirementId
 
-  const allRequirementsQuery = useQuery({
-    queryKey: ['requirementsPoolForCollections', activeProjectId, sprints.map(normalizeSprintId).join(',')],
-    queryFn: async () => {
-      if (sprints.length === 0) return []
-      const requirementGroups = await Promise.all(sprints.map((sprint) => api.getRequirements(normalizeSprintId(sprint))))
-      return requirementGroups.flat()
-    },
-    enabled: Boolean(activeProjectId) && !sprintsQuery.isLoading && !isRequirementLocked,
-  })
-  const allRequirements = useMemo(() => allRequirementsQuery.data ?? [], [allRequirementsQuery.data])
+  const { allRequirements, allRequirementsQuery, requirementNameMap, requirementSprintMap, sprintNameMap } =
+    useProjectRequirements({
+      activeProjectId,
+      enabled: !sprintsQuery.isLoading && !isRequirementLocked,
+      sprints,
+    })
 
   const collectionsQuery = useQuery({
     queryKey: [
@@ -200,7 +203,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     mutationFn: ({ collectionId, environmentId }: { collectionId: string; environmentId: string }) =>
       api.runApiCollection(collectionId, { environmentId }),
     onSuccess: (result) => {
-      if (result.status === 'running') {
+      if (isApiRunPollingStatus(result.status)) {
         message.success('已开始运行，可在API测试集详情查看运行记录')
         return
       }
@@ -210,27 +213,6 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
       setRunningCollectionId('')
     },
   })
-
-  const sprintNameMap = useMemo(
-    () => new Map(sprints.map((sprint) => [normalizeSprintId(sprint), sprint.name])),
-    [sprints],
-  )
-
-  const requirementNameMap = useMemo(
-    () => new Map(allRequirements.map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
-    [allRequirements],
-  )
-
-  const requirementSprintMap = useMemo(
-    () =>
-      new Map(
-        allRequirements.map((requirement) => [
-          normalizeRequirementId(requirement),
-          requirement.sprintId ?? requirement.sprint_id,
-        ]),
-      ),
-    [allRequirements],
-  )
 
   const pagedCollections = useMemo(
     () => collections.slice((page - 1) * pageSize, page * pageSize),
@@ -363,11 +345,11 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
             </Space>
           </div>
 
-          {sprintsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintsQuery.error)} /> : null}
-          {!isRequirementLocked ? <>{requirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementsQuery.error)} /> : null}</> : null}
-          {!isRequirementLocked ? <>{allRequirementsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(allRequirementsQuery.error)} /> : null}</> : null}
-          {collectionsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(collectionsQuery.error)} /> : null}
-          {environmentsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(environmentsQuery.error)} /> : null}
+          {sprintsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(sprintsQuery.error)} /> : null}
+          {!isRequirementLocked ? <>{requirementsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(requirementsQuery.error)} /> : null}</> : null}
+          {!isRequirementLocked ? <>{allRequirementsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(allRequirementsQuery.error)} /> : null}</> : null}
+          {collectionsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(collectionsQuery.error)} /> : null}
+          {environmentsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(environmentsQuery.error)} /> : null}
 
           <div className="table-body-scroll sprint-card-scroll">
             {sprintsQuery.isLoading ? (
@@ -407,7 +389,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
                       key={collectionId}
                       hoverable
                       className="sprint-card api-collection-card"
-                      bodyStyle={{ padding: 20 }}
+                      styles={{ body: { padding: 20 } }}
                       onClick={() => navigate(`/api-automation/collections/${collectionId}`)}
                     >
                       <div className="api-collection-card-top">
@@ -491,6 +473,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
               pageSize={pageSize}
               total={collections.length}
               showSizeChanger
+              pageSizeOptions={['18', '24', '30', '36', '48', '60']}
               onChange={(nextPage, nextPageSize) => {
                 setPage(nextPage)
                 setPageSize(nextPageSize)
@@ -532,3 +515,4 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     </div>
   )
 }
+

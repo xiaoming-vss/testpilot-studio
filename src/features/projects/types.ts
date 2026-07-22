@@ -45,3 +45,69 @@ export type SprintUpdatePayload = Partial<{
   startTime: string
   endTime: string
 }>
+
+export type SprintDailyMetricsTestStats = {
+  total?: number
+  executed?: number
+  pending?: number
+  unexecuted?: number
+  success?: number
+  failed?: number
+  passed?: number
+}
+
+export type SprintDailyMetricsBugStats = {
+  total?: number
+  fatal?: number
+  serious?: number
+  severe?: number
+  normal?: number
+  suggestion?: number
+  hint?: number
+  resolved?: number
+  unresolved?: number
+}
+
+export type SprintDailyMetricsSnapshot = {
+  sprintId?: string
+  sprint_id?: string
+  snapshotDate?: string
+  snapshot_date?: string
+  date?: string
+  projectId?: string
+  project_id?: string
+  totalCases?: number
+  total_cases?: number
+  functional?: SprintDailyMetricsTestStats
+  function?: SprintDailyMetricsTestStats
+  functionTesting?: SprintDailyMetricsTestStats
+  function_testing?: SprintDailyMetricsTestStats
+  api?: SprintDailyMetricsTestStats
+  ui?: SprintDailyMetricsTestStats
+  bug?: SprintDailyMetricsBugStats
+  bugs?: SprintDailyMetricsBugStats
+  functionTotal?: number
+  function_total?: number
+  apiTotal?: number
+  api_total?: number
+  uiTotal?: number
+  ui_total?: number
+  bugTotal?: number
+  bug_total?: number
+  bugResolved?: number
+  bug_resolved?: number
+  bugUnresolved?: number
+  bug_unresolved?: number
+  bugFatal?: number
+  bug_fatal?: number
+  bugSevere?: number
+  bug_severe?: number
+  bugNormal?: number
+  bug_normal?: number
+  bugHint?: number
+  bug_hint?: number
+  createdAt?: string
+  created_at?: string
+  updatedAt?: string
+  updated_at?: string
+}

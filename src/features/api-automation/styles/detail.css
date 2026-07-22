@@ -3409,3 +3409,367 @@
 :root[data-theme='dark'] .brand .anticon {
   color: var(--tp-accent) !important;
 }
+
+/* macOS frosted white detail workspace */
+.app-shell-macos .api-collection-detail-page {
+  --detail-glass-panel: rgba(255, 255, 255, 0.68);
+  --detail-glass-card: rgba(255, 255, 255, 0.74);
+  --detail-glass-soft: rgba(255, 255, 255, 0.5);
+  --detail-glass-border: rgba(15, 23, 42, 0.065);
+  --detail-glass-border-strong: rgba(15, 23, 42, 0.1);
+  --detail-glass-shadow: 0 12px 30px rgba(15, 23, 42, 0.045);
+  background: transparent !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-automation-content {
+  height: 100%;
+  min-height: 0;
+  padding: 12px 24px 20px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-collection-detail-frame {
+  height: 100%;
+  min-height: 0;
+  gap: 14px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-collection-detail-layout {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-sidebar,
+.app-shell-macos .api-collection-detail-page .api-detail-hover-panel,
+.app-shell-macos .api-collection-detail-page .api-case-editor-panel,
+.app-shell-macos .api-collection-detail-page .api-case-preview-panel {
+  border: 1px solid var(--detail-glass-border) !important;
+  border-radius: 18px !important;
+  background: var(--detail-glass-panel) !important;
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), var(--detail-glass-shadow) !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-sidebar {
+  padding: 0;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-sidebar-header,
+.app-shell-macos .api-collection-detail-page .api-detail-hover-bar,
+.app-shell-macos .api-collection-detail-page .api-case-editor-sticky-head {
+  background: rgba(255, 255, 255, 0.54) !important;
+  border-color: var(--detail-glass-border) !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-sidebar-toolbar {
+  padding: 14px 16px 0;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-sidebar-scroll {
+  padding: 10px 12px 14px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-sidebar .ant-input-affix-wrapper,
+.app-shell-macos .api-collection-detail-page .api-case-sidebar .ant-input,
+.app-shell-macos .api-collection-detail-page .api-case-sidebar .ant-btn,
+.app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-input,
+.app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-input-number,
+.app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-select-selector {
+  border-color: var(--detail-glass-border-strong) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow: none !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-nav-list {
+  gap: 8px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-nav-item {
+  border-color: var(--detail-glass-border) !important;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.58) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-nav-item:hover {
+  border-color: rgba(10, 132, 255, 0.2) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-nav-item.selected {
+  border-color: rgba(10, 132, 255, 0.28) !important;
+  background: rgba(245, 249, 255, 0.86) !important;
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.08), 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.app-shell-macos .api-collection-detail-page .api-detail-hover-bar {
+  min-height: 58px;
+  padding: 0 16px;
+  border-radius: 18px 18px 0 0;
+}
+
+.app-shell-macos .api-collection-detail-page .api-detail-hover-panel:not(:hover) .api-detail-hover-bar {
+  border-radius: 18px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-detail-hover-title,
+.app-shell-macos .api-collection-detail-page .api-case-editor-title .ant-typography,
+.app-shell-macos .api-collection-detail-page .api-case-nav-item-name {
+  color: #172033 !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-detail-hover-preview,
+.app-shell-macos .api-collection-detail-page .api-case-nav-item-path,
+.app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-form-item-label > label {
+  color: rgba(23, 32, 51, 0.56) !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-editor-form {
+  padding: 18px 20px 22px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-editor-sticky-head {
+  margin: -18px -20px 16px;
+  padding: 18px 20px 14px;
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-request-shell,
+.app-shell-macos .api-collection-detail-page .json-editor-shell {
+  border-color: var(--detail-glass-border) !important;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-request-shell:focus-within,
+.app-shell-macos .api-collection-detail-page .json-editor-shell:focus-within {
+  border-color: rgba(10, 132, 255, 0.32) !important;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.86) !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-selector {
+  height: 46px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select {
+  height: 46px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-single .ant-select-selector .ant-select-selection-item,
+.app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
+  line-height: 44px !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-path-item .ant-input {
+  height: 46px;
+  border-radius: 0 12px 12px 0 !important;
+  background: transparent !important;
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-base-url-trigger {
+  height: 36px;
+  border-color: var(--detail-glass-border-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-request-actions {
+  border-left-color: var(--detail-glass-border);
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.app-shell-macos .api-collection-detail-page .api-case-editor-tabs .ant-tabs-nav {
+  top: 110px;
+  margin: 0 -20px 16px;
+  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.58) !important;
+  border-bottom: 1px solid var(--detail-glass-border);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+}
+
+.app-shell-macos .api-collection-detail-page .api-kv-row {
+  gap: 10px;
+}
+
+.app-shell-macos .api-collection-detail-page .api-kv-value-item .ant-input-group-addon {
+  border-color: var(--detail-glass-border-strong) !important;
+  background: rgba(248, 250, 252, 0.84) !important;
+}
+
+.app-shell-macos .api-collection-detail-page .json-editor-toolbar,
+.app-shell-macos .api-collection-detail-page .json-editor-codemirror .cm-editor,
+.app-shell-macos .api-collection-detail-page .json-editor-codemirror .cm-gutters {
+  background: rgba(255, 255, 255, 0.62) !important;
+}
+
+@media (max-width: 1180px) {
+  .app-shell-macos .api-collection-detail-page .api-automation-content {
+    padding: 12px 16px 18px;
+  }
+
+  .app-shell-macos .api-collection-detail-page .api-collection-detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark macOS polish: API detail editor header/request/tabs. */
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-detail-hover-panel,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-panel,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-preview-panel,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar {
+  border-color: rgba(48, 54, 61, 0.9) !important;
+  background: rgba(22, 27, 34, 0.86) !important;
+  box-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04), 0 14px 30px rgba(1, 4, 9, 0.28) !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-detail-hover-bar,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-sticky-head,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar-header,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-tabs .ant-tabs-nav {
+  border-color: rgba(48, 54, 61, 0.72) !important;
+  background: rgba(22, 27, 34, 0.92) !important;
+  box-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04) !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-main-scroll,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-shell,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-main {
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-request-shell,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .json-editor-shell,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-selector,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-input,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-input-number,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-select-selector,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-base-url-trigger,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-kv-value-item .ant-input-group-addon {
+  border-color: rgba(48, 54, 61, 0.9) !important;
+  background: rgba(13, 17, 23, 0.72) !important;
+  color: #f0f6fc !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-path-item .ant-input {
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-request-actions,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .json-editor-toolbar,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .json-editor-codemirror .cm-editor,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .json-editor-codemirror .cm-gutters {
+  border-color: rgba(48, 54, 61, 0.72) !important;
+  background: rgba(22, 27, 34, 0.72) !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-detail-hover-title,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-title .ant-typography,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item-name,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-selection-item,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-input,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-input-number-input {
+  color: #f0f6fc !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-detail-hover-preview,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item-path,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-editor-form .ant-form-item-label > label {
+  color: #8b949e !important;
+}
+
+/* Dark macOS polish: quiet API case sidebar list. */
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar-toolbar > .ant-input-affix-wrapper,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar-toolbar .api-case-import-trigger.ant-btn,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-back-button.ant-btn {
+  border-color: rgba(48, 54, 61, 0.72) !important;
+  background: rgba(13, 17, 23, 0.38) !important;
+  color: #8b949e !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar-toolbar > .ant-input-affix-wrapper:focus-within,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar-toolbar > .ant-input-affix-wrapper:hover,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-sidebar-toolbar .api-case-import-trigger.ant-btn:hover,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-back-button.ant-btn:hover {
+  border-color: rgba(88, 166, 255, 0.26) !important;
+  background: rgba(33, 38, 45, 0.64) !important;
+  color: #58a6ff !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-list {
+  gap: 6px !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item {
+  position: relative;
+  min-height: 40px;
+  border: 1px solid rgba(48, 54, 61, 0.42) !important;
+  border-radius: 10px !important;
+  background: rgba(13, 17, 23, 0.18) !important;
+  box-shadow: none !important;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item:hover {
+  border-color: rgba(88, 166, 255, 0.22) !important;
+  background: rgba(33, 38, 45, 0.5) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item.selected {
+  border-color: rgba(88, 166, 255, 0.34) !important;
+  background: rgba(56, 139, 253, 0.14) !important;
+  box-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04) !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item.selected::before {
+  background: #58a6ff;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item-tags .ant-tag,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-table-method.ant-tag {
+  border-color: rgba(88, 166, 255, 0.22) !important;
+  background: rgba(56, 139, 253, 0.12) !important;
+  color: #58a6ff !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item-name {
+  color: #f0f6fc !important;
+  font-weight: 650;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item-path {
+  color: #6e7681 !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-delete.ant-btn,
+:root[data-theme='dark'] .app-shell-macos .api-collection-detail-page .api-case-nav-item-actions .ant-btn {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: #ff7b72 !important;
+  box-shadow: none !important;
+}

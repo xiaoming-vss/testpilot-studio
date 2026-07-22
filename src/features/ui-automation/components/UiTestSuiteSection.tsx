@@ -1,5 +1,5 @@
 import { AppstoreOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tooltip, Typography, message } from 'antd'
+import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -7,6 +7,7 @@ import { UiTestSuiteDrawer, type UiTestSuiteFormValues } from './UiTestSuiteDraw
 import { DEFAULT_UI_TEST_SUITE_RUN_CONFIG } from '../constants/defaultRunConfig'
 import { api, type UiTestSuite, type UiTestSuiteRunSummary } from '@/services/api'
 import { formatTime, getErrorMessage, normalizeUiTestSuiteId, pickCreatedAt, pickUpdatedAt } from '@/utils/format'
+import { message } from '@/shared/utils/feedback'
 import { buildUiTestSuiteUpdatePayload } from '@/utils/updatePayload'
 
 const { Paragraph, Text } = Typography
@@ -44,23 +45,29 @@ function getUiSuiteRunId(run?: UiTestSuiteRunSummary | null) {
 export const UiTestSuiteSection = forwardRef<
   UiTestSuiteSectionRef,
   {
-    requirementId: string
+    requirementId?: string
+    requirementIds?: string[]
     selectedSprintId?: string
     sprintOptions?: Array<{ label: string; value: string }>
     requirementOptions?: Array<{ label: string; value: string }>
     sprintName?: string
     requirementName?: string
+    sprintNameResolver?: (suite: UiTestSuite) => string
+    requirementNameResolver?: (suite: UiTestSuite) => string
     onCreateSprintChange?: (value?: string) => void
     showInlineCreateButton?: boolean
   }
 >(function UiTestSuiteSection(
   {
     requirementId,
+    requirementIds,
     selectedSprintId,
     sprintOptions,
     requirementOptions,
     sprintName,
     requirementName,
+    sprintNameResolver,
+    requirementNameResolver,
     onCreateSprintChange,
     showInlineCreateButton = true,
   },
@@ -69,15 +76,37 @@ export const UiTestSuiteSection = forwardRef<
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(6)
+  const [pageSize, setPageSize] = useState(18)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingSuite, setEditingSuite] = useState<UiTestSuite | null>(null)
   const [form] = Form.useForm<UiTestSuiteFormValues>()
 
   const suitesQuery = useQuery({
-    queryKey: ['uiTestSuites', requirementId],
-    queryFn: () => api.getUiTestSuites(requirementId),
-    enabled: Boolean(requirementId),
+    queryKey: ['uiTestSuites', requirementId ?? requirementIds?.join(',') ?? ''],
+    queryFn: async () => {
+      if (requirementId) {
+        const suites = await api.getUiTestSuites(requirementId)
+        return suites.map((suite) => ({
+          ...suite,
+          requirementId: suite.requirementId ?? suite.requirement_id ?? requirementId,
+        }))
+      }
+
+      if (!requirementIds || requirementIds.length === 0) return []
+
+      const suiteGroups = await Promise.all(
+        requirementIds.map(async (currentRequirementId) => {
+          const suites = await api.getUiTestSuites(currentRequirementId)
+          return suites.map((suite) => ({
+            ...suite,
+            requirementId: suite.requirementId ?? suite.requirement_id ?? currentRequirementId,
+          }))
+        }),
+      )
+
+      return suiteGroups.flat()
+    },
+    enabled: Boolean(requirementId) || Boolean(requirementIds?.length),
   })
   const suites = useMemo(() => suitesQuery.data ?? [], [suitesQuery.data])
   const resolvedSprintName = sprintName || sprintOptions?.find((item) => item.value === selectedSprintId)?.label || selectedSprintId || '-'
@@ -124,7 +153,6 @@ export const UiTestSuiteSection = forwardRef<
     },
     onSuccess: (suite) => {
       const suiteId = normalizeUiTestSuiteId(suite)
-      const nextRequirementId = suite.requirementId ?? suite.requirement_id ?? requirementId
       message.success(editingSuite ? 'UI测试集已更新' : 'UI测试集已创建')
       setDrawerOpen(false)
       setEditingSuite(null)
@@ -132,7 +160,6 @@ export const UiTestSuiteSection = forwardRef<
       if (suiteId) {
         queryClient.setQueryData(['uiTestSuite', suiteId], suite)
       }
-      queryClient.invalidateQueries({ queryKey: ['uiTestSuites', nextRequirementId] })
       queryClient.invalidateQueries({ queryKey: ['uiTestSuites'] })
     },
   })
@@ -141,7 +168,7 @@ export const UiTestSuiteSection = forwardRef<
     mutationFn: (suiteId: string) => api.deleteUiTestSuite(suiteId),
     onSuccess: () => {
       message.success('UI测试集已删除')
-      queryClient.invalidateQueries({ queryKey: ['uiTestSuites', requirementId] })
+      queryClient.invalidateQueries({ queryKey: ['uiTestSuites'] })
     },
   })
 
@@ -211,7 +238,7 @@ export const UiTestSuiteSection = forwardRef<
         </div>
       ) : null}
 
-      {suitesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(suitesQuery.error)} /> : null}
+      {suitesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(suitesQuery.error)} /> : null}
 
       <div className="table-body-scroll sprint-card-scroll ui-test-suite-scroll">
         {suitesQuery.isLoading ? (
@@ -223,7 +250,7 @@ export const UiTestSuiteSection = forwardRef<
             <Empty
               image={<AppstoreOutlined />}
               description={
-                <Space direction="vertical" size={4}>
+                <Space orientation="vertical" size={4}>
                   <Text strong>当前需求下还没有 UI测试集</Text>
                   <Text type="secondary">支持创建测试集，并进入详情管理用例、步骤与正式运行报告。</Text>
                 </Space>
@@ -238,13 +265,15 @@ export const UiTestSuiteSection = forwardRef<
           <div className="api-collection-grid ui-test-suite-grid">
             {pagedSuites.map((suite) => {
               const suiteId = normalizeUiTestSuiteId(suite)
+              const resolvedSuiteSprintName = sprintNameResolver?.(suite) ?? resolvedSprintName
+              const resolvedSuiteRequirementName = requirementNameResolver?.(suite) ?? resolvedRequirementName
 
               return (
                 <Card
                   key={suiteId}
                   hoverable
                   className="sprint-card api-collection-card ui-test-suite-card"
-                  bodyStyle={{ padding: 20 }}
+                  styles={{ body: { padding: 20 } }}
                   onClick={() => openSuiteCasePage(suiteId)}
                 >
                   <div className="api-collection-card-top">
@@ -261,7 +290,7 @@ export const UiTestSuiteSection = forwardRef<
                   <div className="sprint-card-meta api-collection-meta-inline">
                     <span className="sprint-card-label">所属迭代/需求</span>
                     <span className="api-collection-inline-value">
-                      {resolvedSprintName}/{resolvedRequirementName}
+                      {resolvedSuiteSprintName}/{resolvedSuiteRequirementName}
                     </span>
                   </div>
 
@@ -329,6 +358,7 @@ export const UiTestSuiteSection = forwardRef<
           pageSize={pageSize}
           total={orderedSuites.length}
           showSizeChanger
+          pageSizeOptions={['18', '24', '30', '36', '48', '60']}
           onChange={(nextPage, nextPageSize) => {
             setPage(nextPage)
             setPageSize(nextPageSize)

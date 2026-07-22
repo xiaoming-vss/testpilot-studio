@@ -8,6 +8,11 @@ export type ApiEnvelope<T> = {
   data: T
 }
 
+export type BlobResponse = {
+  blob: Blob
+  filename?: string
+}
+
 export class ApiError extends Error {
   code: number
   status: number
@@ -50,4 +55,48 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   }
 
   return payload.data
+}
+
+function getFilenameFromContentDisposition(contentDisposition: string | null) {
+  if (!contentDisposition) return undefined
+
+  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (encodedMatch?.[1]) {
+    return decodeURIComponent(encodedMatch[1])
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  return plainMatch?.[1]
+}
+
+export async function requestBlob(path: string, options: RequestInit = {}): Promise<BlobResponse> {
+  const token = useAuthStore.getState().token
+  const headers = new Headers(options.headers)
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({
+      code: response.status,
+      message: response.statusText,
+      data: {},
+    }))) as ApiEnvelope<unknown>
+
+    if (payload.code === 1001 || response.status === 401) {
+      useAuthStore.getState().logout()
+    }
+    throw new ApiError(payload.message || '请求失败', payload.code, response.status)
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: getFilenameFromContentDisposition(response.headers.get('Content-Disposition')),
+  }
 }

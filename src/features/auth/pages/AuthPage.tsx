@@ -1,9 +1,10 @@
 import { UserOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Form, Input, Space, Typography, message } from 'antd'
+import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd'
 import { useMutation } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { TestPilotLogo } from '@/shared/components/TestPilotLogo/TestPilotLogo'
+import { message } from '@/shared/utils/feedback'
 import { getErrorMessage } from '@/utils/format'
 import { useAuthStore } from '../store/auth.store'
 
@@ -44,12 +45,12 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <div className="auth-brand-icon" aria-hidden="true">
             <TestPilotLogo size={48} />
           </div>
-          <Space direction="vertical" size={8} className="auth-title">
+          <Space orientation="vertical" size={8} className="auth-title">
             <Title level={1}>TestPilot Studio</Title>
             <Text>{isLogin ? '欢迎回来，请登录您的账号' : '创建账号，开始使用测试平台'}</Text>
           </Space>
 
-          {mutation.error ? <Alert showIcon type="error" message={getErrorMessage(mutation.error)} /> : null}
+          {mutation.error ? <Alert showIcon type="error" title={getErrorMessage(mutation.error)} /> : null}
 
           <Form form={form} layout="vertical" onFinish={(values) => mutation.mutate(values)} requiredMark={false} className="auth-form">
             <Form.Item name="name" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>

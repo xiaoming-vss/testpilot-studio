@@ -1,5 +1,6 @@
 export type ApiCaseGenerateTaskSourceType = 'openapi' | 'swagger'
 export type FunctionalCaseGenerateTaskSourceType = 'text' | 'docx'
+export type RequirementAnalysisTaskSourceType = 'text' | 'word' | 'docx' | string
 export type ApiCaseGenerateTaskRunStatus =
   | 'draft'
   | 'pending'
@@ -12,6 +13,50 @@ export type ApiCaseGenerateTaskRunStatus =
   | string
 
 export type ApiCaseGenerateTaskRunReviewStatus = 'pending' | 'approved' | 'rejected' | string
+
+export type AiSkillLibraryItem = {
+  skillSpaceId: string
+  projectId?: string
+  filename: string
+  isDefault?: boolean
+  downloadUrl?: string
+  hash?: string
+  size?: number
+  version?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type UploadAiSkillPayload = {
+  file: File
+  publicBaseURL?: string
+}
+
+export type FunctionalCaseGenerateTaskStage =
+  | 'enhanced_text'
+  | 'requirement_analysis'
+  | 'case_names'
+  | 'detailed_cases'
+  | 'completed'
+  | string
+
+export type RequirementAnalysisTaskStage =
+  | 'extracting_text'
+  | 'writing_requirement'
+  | 'feature_understanding'
+  | 'completed'
+  | string
+
+export type FunctionalCaseGenerateTaskStageStatus =
+  | 'pending'
+  | 'claimed'
+  | 'running'
+  | 'waiting_review'
+  | 'success'
+  | 'failed'
+  | 'error'
+  | 'canceled'
+  | string
 
 export type ApiCaseGenerateTask = {
   taskId?: string
@@ -86,8 +131,21 @@ export type FunctionalCaseGenerateTask = {
   sprintId?: string
   requirementId?: string
   creatorUserId?: string
-  sourceType: FunctionalCaseGenerateTaskSourceType
-  sourceContent: string
+  instruction: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type RequirementAnalysisTask = {
+  taskId?: string
+  taskType?: 'requirement_analysis' | string
+  name: string
+  projectId?: string
+  sprintId?: string
+  requirementId?: string
+  creatorUserId?: string
+  sourceType?: RequirementAnalysisTaskSourceType
+  sourceContent?: string
   instruction: string
   createdAt?: string
   updatedAt?: string
@@ -104,6 +162,20 @@ export type FunctionalCaseGenerateTaskRunSnapshot = {
   sprintId?: string
   taskId?: string
   taskType?: string
+}
+
+export type RequirementAnalysisTaskRunSnapshot = {
+  instruction?: string
+  name?: string
+  projectId?: string
+  requirementId?: string
+  runId?: string
+  sourceContent?: string
+  sourceType?: RequirementAnalysisTaskSourceType
+  sprintId?: string
+  taskId?: string
+  taskType?: string
+  [key: string]: unknown
 }
 
 export type FunctionalCaseGenerateTaskRun = {
@@ -127,25 +199,74 @@ export type FunctionalCaseGenerateTaskRun = {
   triggerType?: string
   triggerUserId?: string
   snapshot?: FunctionalCaseGenerateTaskRunSnapshot
-  configJson?: string
+  configJson?: unknown
   resultYaml?: string
-  resultSummaryJson?: string
+  resultSummaryJson?: unknown
+  checkpointEnabled?: boolean
+  currentStage?: FunctionalCaseGenerateTaskStage
+  stageStatus?: FunctionalCaseGenerateTaskStageStatus
+  stageOutput?: unknown
+}
+
+export type RequirementAnalysisTaskRun = {
+  runId?: string
+  taskId?: string
+  projectId?: string
+  sprintId?: string
+  requirementId?: string
+  status?: ApiCaseGenerateTaskRunStatus
+  reviewStatus?: ApiCaseGenerateTaskRunReviewStatus
+  importedCollectionId?: string
+  reviewerUserId?: string
+  reviewedAt?: string
+  reviewComment?: string
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
+  errorMessage?: string
+  createdAt?: string
+  updatedAt?: string
+  triggerType?: string
+  triggerUserId?: string
+  checkpointEnabled?: boolean
+  currentStage?: RequirementAnalysisTaskStage
+  stageStatus?: FunctionalCaseGenerateTaskStageStatus
+  snapshotJson?: RequirementAnalysisTaskRunSnapshot
+  configJson?: unknown
+  firstStepOutput?: string
+  secondStepOutput?: string
+  resultYaml?: string
+  resultSummaryJson?: unknown
 }
 
 export type CreateFunctionalCaseGenerateTaskPayload = {
   name: string
   sprintId: string
   requirementId: string
-  sourceType: FunctionalCaseGenerateTaskSourceType
-  sourceContent?: string
   instruction: string
-  file?: File
 }
 
 export type UpdateFunctionalCaseGenerateTaskPayload = Partial<CreateFunctionalCaseGenerateTaskPayload>
 
 export type RunFunctionalCaseGenerateTaskPayload = {
   connectionId: string
+  checkpointEnabled?: boolean
+}
+
+export type CreateRequirementAnalysisTaskPayload = {
+  name: string
+  requirementId: string
+  instruction?: string
+}
+
+export type UpdateRequirementAnalysisTaskPayload = Partial<CreateRequirementAnalysisTaskPayload>
+
+export type RunRequirementAnalysisTaskPayload = {
+  connectionId: string
+  instruction?: string
+  triggerType?: 'manual' | string
+  checkpointEnabled?: boolean
+  configJson?: string
 }
 
 export type ReviewApiCaseGenerateTaskRunPayload =
@@ -168,3 +289,43 @@ export type ReviewFunctionalCaseGenerateTaskRunPayload =
       action: 'reject'
       comment?: string
     }
+
+export type UpdateFunctionalCaseGenerateTaskRunStageOutputPayload = {
+  stage: string
+  configJson: string
+}
+
+export type UpdateRequirementAnalysisTaskRunStageOutputPayload = {
+  stage: string
+  configJson: Record<string, unknown>
+  resultYaml?: string
+}
+
+export type ReviewFunctionalCaseGenerateTaskRunStagePayload =
+  | {
+      stage: string
+      action: 'approve'
+      comment?: string
+    }
+  | {
+      stage: string
+      action: 'reject'
+      comment?: string
+    }
+
+export type RetryFunctionalCaseGenerateTaskRunStagePayload = {
+  stage: string
+}
+
+export type ReviewRequirementAnalysisTaskRunStagePayload = {
+  stage: string
+  action: 'approve'
+  configJson: Record<string, unknown>
+}
+
+export type ReviseRequirementAnalysisTaskRunStagePayload = {
+  stage: string
+  revisionInstruction: string
+  configJson: Record<string, unknown>
+  resultYaml?: string
+}

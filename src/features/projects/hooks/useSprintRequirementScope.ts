@@ -8,10 +8,16 @@ type ProjectScopedSelection = {
   value?: string | null
 }
 
+const UNSET_SELECTION = Symbol('unset-selection')
+type ScopeSelectionValue = string | null | typeof UNSET_SELECTION
+
 type UseSprintRequirementScopeOptions = {
   activeProjectId?: string
   includeAllSprintOption?: boolean
   includeAllRequirementOption?: boolean
+  defaultToAllWhenIncluded?: boolean
+  initialSprintId?: string | null
+  initialRequirementId?: string | null
 }
 
 function pickLatestItem<T>(items: T[], getTime: (item: T) => string | undefined) {
@@ -23,7 +29,14 @@ function pickLatestItem<T>(items: T[], getTime: (item: T) => string | undefined)
 }
 
 export function useSprintRequirementScope(options: UseSprintRequirementScopeOptions) {
-  const { activeProjectId, includeAllSprintOption = false, includeAllRequirementOption = false } = options
+  const {
+    activeProjectId,
+    includeAllSprintOption = false,
+    includeAllRequirementOption = false,
+    defaultToAllWhenIncluded = false,
+    initialSprintId,
+    initialRequirementId,
+  } = options
   const [sprintSelection, setSprintSelection] = useState<ProjectScopedSelection>({})
   const [requirementSelection, setRequirementSelection] = useState<ProjectScopedSelection>({})
 
@@ -35,12 +48,17 @@ export function useSprintRequirementScope(options: UseSprintRequirementScopeOpti
 
   const sprints = useMemo(() => sprintsQuery.data ?? [], [sprintsQuery.data])
   const latestSprint = useMemo(() => pickLatestItem<Sprint>(sprints, pickCreatedAt), [sprints])
-  const currentSprintSelection = sprintSelection.projectId === activeProjectId ? sprintSelection.value : undefined
+  const currentSprintSelection: ScopeSelectionValue =
+    sprintSelection.projectId === activeProjectId ? (sprintSelection.value ?? null) : UNSET_SELECTION
   const resolvedSelectedSprintId =
-    currentSprintSelection === undefined
-      ? latestSprint
-        ? normalizeSprintId(latestSprint)
-        : undefined
+    currentSprintSelection === UNSET_SELECTION
+      ? initialSprintId !== undefined
+        ? initialSprintId ?? undefined
+        : defaultToAllWhenIncluded && includeAllSprintOption
+          ? undefined
+          : latestSprint
+            ? normalizeSprintId(latestSprint)
+            : undefined
       : currentSprintSelection ?? undefined
 
   const requirementsQuery = useQuery({
@@ -51,12 +69,17 @@ export function useSprintRequirementScope(options: UseSprintRequirementScopeOpti
 
   const requirements = useMemo(() => requirementsQuery.data ?? [], [requirementsQuery.data])
   const latestRequirement = useMemo(() => pickLatestItem<Requirement>(requirements, pickCreatedAt), [requirements])
-  const currentRequirementSelection = requirementSelection.projectId === activeProjectId ? requirementSelection.value : undefined
+  const currentRequirementSelection: ScopeSelectionValue =
+    requirementSelection.projectId === activeProjectId ? (requirementSelection.value ?? null) : UNSET_SELECTION
   const resolvedSelectedRequirementId =
-    currentRequirementSelection === undefined
-      ? latestRequirement
-        ? normalizeRequirementId(latestRequirement)
-        : undefined
+    currentRequirementSelection === UNSET_SELECTION
+      ? initialRequirementId !== undefined
+        ? initialRequirementId ?? undefined
+        : defaultToAllWhenIncluded && includeAllRequirementOption
+          ? undefined
+          : latestRequirement
+            ? normalizeRequirementId(latestRequirement)
+            : undefined
       : currentRequirementSelection ?? undefined
 
   const sprintFilterOptions = useMemo(
@@ -78,18 +101,18 @@ export function useSprintRequirementScope(options: UseSprintRequirementScopeOpti
   function selectSprint(value?: string | null) {
     setSprintSelection({
       projectId: activeProjectId,
-      value,
+      value: value ?? null,
     })
     setRequirementSelection({
       projectId: activeProjectId,
-      value: undefined,
+      value: null,
     })
   }
 
   function selectRequirement(value?: string | null) {
     setRequirementSelection({
       projectId: activeProjectId,
-      value,
+      value: value ?? null,
     })
   }
 

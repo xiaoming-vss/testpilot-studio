@@ -1,61 +1,72 @@
-import { ArrowLeftOutlined, CaretRightOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, FullscreenOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Popover, Spin, Tabs, Tag, Tooltip, message } from 'antd'
+import { ArrowLeftOutlined, CaretRightOutlined, DeleteOutlined, DownOutlined, EditOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Popover, Spin, Tabs, Tag } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FunctionalCaseGenerateTaskDrawer, type FunctionalCaseGenerateTaskFormValues } from '../components/FunctionalCaseGenerateTaskDrawer'
+import { AiTaskQuickLinks } from '../components/AiTaskQuickLinks'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
-import type { FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun } from '../types'
-import { getApiCaseGenerateTaskRunStatusMeta, isApiCaseGenerateTaskRunInProgress, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
+import type { FunctionalCaseGenerateTaskRun } from '../types'
+import { getApiCaseGenerateTaskRunStatusMeta, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import { JsonEditor } from '@/shared/components/JsonEditor/JsonEditor'
+import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
+import { message } from '@/shared/utils/feedback'
 import '@/features/ai-testing/styles/index.css'
+import { RequirementDocumentPreviewContent } from '@/features/requirements/components/RequirementDocumentPreviewModal'
+import { hasRequirementDocument } from '@/features/requirements/utils/requirementDocument'
 import { api } from '@/services/api'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickUpdatedAt } from '@/utils/format'
 
 const runResultSectionDefinitions = [
-  { key: 'configJson', label: '中间配置' },
+  { key: 'enhancedText', label: '增强文本' },
+  { key: 'requirementAnalysis', label: '需求分析' },
+  { key: 'caseNames', label: '测试点' },
   { key: 'resultYaml', label: '结果' },
   { key: 'errorMessage', label: '错误信息' },
 ] as const
 
-const configJsonTabDefinitions = [
-  { key: 'enhancedText', label: '增强文本' },
-  { key: 'requirementAnalysis', label: '需求分析' },
-  { key: 'caseNames', label: '测试点' },
-] as const
-
 type CaseNamesViewMode = 'json' | 'tree'
-
-type ConfigJsonTab = {
-  key: string
-  label: string
-  content: string
-}
+type RequirementAnalysisViewMode = 'json' | 'diagram'
+type GeneratedCasesViewMode = 'json' | 'diagram'
 
 type CaseNameTreeNode = {
   id: string
   title: string
+  kind: 'root' | 'model' | 'testModel' | 'point'
   children: CaseNameTreeNode[]
 }
 
-type ExpandedRunResult =
-  | {
-      title: string
-      content: string
-      type?: 'content'
-    }
-  | {
-      type: 'config'
-      title: string
-      tabs: ConfigJsonTab[]
-      activeTabKey: string
-      activeCaseNamesView?: CaseNamesViewMode
-    }
+type RunResultSectionKey = (typeof runResultSectionDefinitions)[number]['key']
+
+type RunResultModalState = {
+  key: RunResultSectionKey
+  label: string
+} | null
+
+type GeneratedCaseImportStats = {
+  moduleCount: number
+  caseCount: number
+  moduleNames: string[]
+}
 
 const reviewStatusMetaMap: Record<string, { label: string; color: string }> = {
-  pending: { label: '待审核', color: 'gold' },
-  approved: { label: '已通过', color: 'success' },
+  pending: { label: '待导入', color: 'gold' },
+  approved: { label: '已导入', color: 'success' },
   rejected: { label: '已丢弃', color: 'default' },
+}
+
+const functionalStageMetaMap: Record<string, { label: string; color: string }> = {
+  enhanced_text: { label: '增强文档输出', color: 'cyan' },
+  requirement_analysis: { label: '测试需求/风险/测试点输出', color: 'blue' },
+  case_names: { label: '测试用例名称/测试点输出', color: 'geekblue' },
+  detailed_cases: { label: '详细测试用例输出', color: 'purple' },
+  completed: { label: '已完成', color: 'success' },
+}
+
+const stageConfigFieldMap: Record<string, { key: string; label: string }> = {
+  enhanced_text: { key: 'enhancedText', label: '增强文本 enhancedText' },
+  requirement_analysis: { key: 'requirementAnalysis', label: '需求分析 requirementAnalysis' },
+  case_names: { key: 'caseNames', label: '测试点 caseNames' },
 }
 
 function formatStructuredContent(value?: unknown) {
@@ -74,24 +85,74 @@ function formatStructuredContent(value?: unknown) {
   }
 }
 
-function parseConfigJsonTabs(content?: string): ConfigJsonTab[] {
-  if (!content) return []
+function parseJsonLikeContent(value?: unknown) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') return value
   try {
-    const parsed = JSON.parse(content)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return []
-
-    return configJsonTabDefinitions
-      .map((definition) => {
-        const value = (parsed as Record<string, unknown>)[definition.key]
-        return {
-          ...definition,
-          content: formatStructuredContent(value),
-        }
-      })
-      .filter((item) => item.content)
+    return JSON.parse(value)
   } catch {
-    return []
+    return undefined
   }
+}
+
+function getGeneratedCaseImportStats(content?: unknown): GeneratedCaseImportStats {
+  const parsed = parseJsonLikeContent(content)
+  const cases = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).cases)
+      ? (parsed as Record<string, unknown>).cases as unknown[]
+      : []
+  const moduleNames = new Set<string>()
+
+  cases.forEach((item) => {
+    if (!item || typeof item !== 'object') {
+      moduleNames.add('未分组')
+      return
+    }
+    const moduleName = toDisplayText((item as Record<string, unknown>).case_module) || '未分组'
+    moduleNames.add(moduleName)
+  })
+
+  return {
+    moduleCount: moduleNames.size,
+    caseCount: cases.length,
+    moduleNames: [...moduleNames],
+  }
+}
+
+function getConfigStageFieldContent(configJson?: unknown, fieldKey?: string) {
+  if (!fieldKey) return ''
+  const parsed = parseJsonLikeContent(configJson)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
+  const record = parsed as Record<string, unknown>
+  const directFieldContent = record[fieldKey]
+  if (directFieldContent !== undefined && directFieldContent !== null && directFieldContent !== '') {
+    return formatStructuredContent(directFieldContent)
+  }
+
+  if (isDirectStageConfigContent(record, fieldKey)) {
+    return formatStructuredContent(record)
+  }
+
+  return ''
+}
+
+function isDirectStageConfigContent(record: Record<string, unknown>, fieldKey: string) {
+  if (fieldKey === 'caseNames') {
+    return Array.isArray(record.categories)
+  }
+
+  if (fieldKey === 'requirementAnalysis') {
+    return Boolean(
+      record.Platform_core_functions ||
+        record.Target_understanding ||
+        record.Risk_point_prediction ||
+        record.function_flow ||
+        record.Scene_Design,
+    )
+  }
+
+  return false
 }
 
 function isJsonText(content?: string) {
@@ -128,6 +189,491 @@ function toTextList(value: unknown): string[] {
   return text ? [text] : []
 }
 
+function toCaseNamePointList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(toDisplayText).filter(Boolean)
+  }
+  const text = toDisplayText(value)
+  return text ? [text] : []
+}
+
+type RequirementAnalysisSection = {
+  Platform_core_functions?: unknown
+  Target_understanding?: unknown
+  Risk_point_prediction?: unknown
+  function_flow?: unknown
+  Scene_Design?: unknown
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+}
+
+function formatTextList(value: unknown) {
+  return toTextList(value).join('\n')
+}
+
+function formatRoleConcerns(value: unknown) {
+  return toRecordArray(value)
+    .map((item) => {
+      const role = toDisplayText(item.role)
+      const concern = toDisplayText(item.concern)
+      if (role && concern) return `${role}：${concern}`
+      return role || concern || toDisplayText(item)
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+type GeneratedTestCase = {
+  moduleName: string
+  displayName: string
+  tagFields: Array<{ key: string; label: string; value: string }>
+  detailFields: Array<{ key: string; label: string; value: string }>
+}
+
+type GeneratedCaseModuleGroup = {
+  moduleName: string
+  cases: GeneratedTestCase[]
+}
+
+const MODULE_FIELD_CANDIDATES = ['case_module', 'module', 'module_name', 'moduleName', 'group', 'category']
+const NAME_FIELD_CANDIDATES = ['Case Title', 'case_title', 'case_name', 'name', 'title', 'caseName', 'test_point', 'testPoint', 'scenario', 'description']
+const TAG_FIELD_CANDIDATES = ['priority', 'case_type', 'caseType', 'type', 'level', 'severity']
+
+const FIELD_LABEL_MAP: Record<string, string> = {
+  case_name: '用例名称',
+  case_title: '用例名称',
+  'Case Title': '用例名称',
+  name: '用例名称',
+  title: '用例名称',
+  caseName: '用例名称',
+  test_point: '测试点',
+  testPoint: '测试点',
+  scenario: '场景',
+  description: '描述',
+  preconditions: '前置条件',
+  precondition: '前置条件',
+  preCondition: '前置条件',
+  steps: '测试步骤',
+  test_steps: '测试步骤',
+  testSteps: '测试步骤',
+  operation: '操作步骤',
+  expected_results: '预期结果',
+  expectedResult: '预期结果',
+  expectedResults: '预期结果',
+  expected_result: '预期结果',
+  priority: '优先级',
+  case_type: '用例类型',
+  caseType: '用例类型',
+  type: '类型',
+  level: '级别',
+  severity: '严重程度',
+  case_module: '模块',
+  module: '模块',
+  module_name: '模块',
+  moduleName: '模块',
+  group: '分组',
+  category: '分类',
+  order: '序号',
+  orderNo: '序号',
+  remark: '备注',
+  note: '备注',
+}
+
+function pickFirstField(record: Record<string, unknown>, candidates: string[]): string {
+  for (const key of candidates) {
+    const val = toDisplayText(record[key])
+    if (val) return val
+  }
+  return ''
+}
+
+function isTagField(key: string, value: string): boolean {
+  if (TAG_FIELD_CANDIDATES.includes(key)) return true
+  if (value.length <= 12 && /^P[1-4]$/.test(value)) return true
+  if (value.length <= 8 && /^\d+$/.test(value)) return true
+  return false
+}
+
+function formatFieldLabel(key: string): string {
+  if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key]
+  return key.replace(/[_-]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function parseGeneratedCases(content?: string): GeneratedCaseModuleGroup[] {
+  if (!content?.trim()) return []
+  try {
+    const parsed = JSON.parse(content)
+    const rawCases: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).cases)
+        ? (parsed as Record<string, unknown>).cases as unknown[]
+        : []
+    if (rawCases.length === 0) return []
+
+    const moduleMap = new Map<string, GeneratedTestCase[]>()
+    rawCases.forEach((item) => {
+      if (!item || typeof item !== 'object') {
+        const group = moduleMap.get('未分组') ?? []
+        group.push({ moduleName: '未分组', displayName: toDisplayText(item) || '未命名用例', tagFields: [], detailFields: [] })
+        moduleMap.set('未分组', group)
+        return
+      }
+      const record = item as Record<string, unknown>
+      const moduleName = pickFirstField(record, MODULE_FIELD_CANDIDATES) || '未分组'
+      const displayName = pickFirstField(record, NAME_FIELD_CANDIDATES) || '未命名用例'
+
+      const tagFields: Array<{ key: string; label: string; value: string }> = []
+      const detailFields: Array<{ key: string; label: string; value: string }> = []
+      const nameKey = NAME_FIELD_CANDIDATES.find((k) => toDisplayText(record[k]))
+      const moduleKey = MODULE_FIELD_CANDIDATES.find((k) => toDisplayText(record[k]))
+
+      Object.entries(record).forEach(([key, rawValue]) => {
+        if (key === nameKey || key === moduleKey) return
+        const value = toDisplayText(rawValue)
+        if (!value) return
+        if (isTagField(key, value)) {
+          tagFields.push({ key, label: formatFieldLabel(key), value })
+        } else {
+          detailFields.push({ key, label: formatFieldLabel(key), value })
+        }
+      })
+
+      const testCase: GeneratedTestCase = { moduleName, displayName, tagFields, detailFields }
+      const group = moduleMap.get(moduleName) ?? []
+      group.push(testCase)
+      moduleMap.set(moduleName, group)
+    })
+
+    return [...moduleMap.entries()].map(([moduleName, cases]) => ({ moduleName, cases }))
+  } catch {
+    return []
+  }
+}
+
+function parseRequirementAnalysisContent(content: string): RequirementAnalysisSection | null {
+  if (!content.trim()) return null
+
+  try {
+    const parsed = JSON.parse(content)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed as RequirementAnalysisSection
+  } catch {
+    return null
+  }
+}
+
+function RequirementAnalysisDiagramView({ content }: { content: string }) {
+  const parsed = useMemo(() => parseRequirementAnalysisContent(content), [content])
+
+  if (!parsed) {
+    return isJsonText(content) ? (
+      <JsonEditor value={content} readOnly foldable minHeight={640} />
+    ) : (
+      <pre className="ai-task-code-block">{content}</pre>
+    )
+  }
+
+  const coreFunctions = toRecordArray(parsed.Platform_core_functions)
+  const targetUnderstanding = toRecord(parsed.Target_understanding)
+  const legacyTargets = toRecordArray(parsed.Target_understanding)
+  const targetSections = targetUnderstanding
+    ? [
+        { key: 'business_goal', title: '业务目标', content: formatTextList(targetUnderstanding.business_goal) },
+        { key: 'test_goal', title: '测试目标', content: formatTextList(targetUnderstanding.test_goal) },
+        { key: 'user_roles_and_concerns', title: '用户角色与关注点', content: formatRoleConcerns(targetUnderstanding.user_roles_and_concerns) },
+        { key: 'quality_attributes', title: '质量属性', content: formatTextList(targetUnderstanding.quality_attributes) },
+      ].filter((item) => item.content)
+    : []
+  const risks = toRecordArray(parsed.Risk_point_prediction)
+  const flows = toRecordArray(parsed.function_flow)
+  const scenes = toRecordArray(parsed.Scene_Design)
+
+  return (
+    <div className="ai-requirement-analysis-view">
+      {coreFunctions.length > 0 ? (
+        <section className="ai-requirement-analysis-section">
+          <div className="ai-requirement-analysis-section-head">
+            <div className="ai-requirement-analysis-section-title">平台核心功能</div>
+            <Tag color="blue">{coreFunctions.length}</Tag>
+          </div>
+          <div className="ai-requirement-analysis-grid two-col">
+            {coreFunctions.map((item, index) => (
+              <article key={`core-${index}`} className="ai-requirement-analysis-card">
+                <div className="ai-requirement-analysis-card-title">{toDisplayText(item.function_name ?? item.function) || `功能 ${index + 1}`}</div>
+                <div className="ai-requirement-analysis-field">
+                  <span>能力说明</span>
+                  <p>{toDisplayText(item.function_description ?? item.description) || '-'}</p>
+                </div>
+                <div className="ai-requirement-analysis-field">
+                  <span>来源依据</span>
+                  <p>{formatTextList(item.derived_from) || '-'}</p>
+                </div>
+                <div className="ai-requirement-analysis-field accent">
+                  <span>业务价值</span>
+                  <p>{toDisplayText(item.business_value) || '-'}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {targetSections.length > 0 || legacyTargets.length > 0 ? (
+        <section className="ai-requirement-analysis-section">
+          <div className="ai-requirement-analysis-section-head">
+            <div className="ai-requirement-analysis-section-title">目标理解</div>
+            <Tag color="cyan">{targetSections.length || legacyTargets.length}</Tag>
+          </div>
+          <div className="ai-requirement-analysis-list">
+            {targetSections.length > 0 ? targetSections.map((item, index) => (
+              <article key={`target-${item.key}`} className="ai-requirement-analysis-row-card">
+                <div className="ai-requirement-analysis-row-index">{index + 1}</div>
+                <div className="ai-requirement-analysis-row-body">
+                  <div className="ai-requirement-analysis-card-title">{item.title}</div>
+                  <p>{item.content}</p>
+                </div>
+              </article>
+            )) : legacyTargets.map((item, index) => (
+              <article key={`target-${index}`} className="ai-requirement-analysis-row-card">
+                <div className="ai-requirement-analysis-row-index">{index + 1}</div>
+                <div className="ai-requirement-analysis-row-body">
+                  <div className="ai-requirement-analysis-card-title">{toDisplayText(item.target) || `目标 ${index + 1}`}</div>
+                  <p>{toDisplayText(item.description) || '-'}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {risks.length > 0 ? (
+        <section className="ai-requirement-analysis-section">
+          <div className="ai-requirement-analysis-section-head">
+            <div className="ai-requirement-analysis-section-title">风险点预测</div>
+            <Tag color="volcano">{risks.length}</Tag>
+          </div>
+          <div className="ai-requirement-analysis-grid two-col">
+            {risks.map((item, index) => (
+              <article key={`risk-${index}`} className="ai-requirement-analysis-card risk">
+                <div className="ai-requirement-analysis-card-title">{toDisplayText(item.risk_category ?? item.risk_area) || `风险 ${index + 1}`}</div>
+                <div className="ai-requirement-analysis-field">
+                  <span>风险说明</span>
+                  <p>{formatTextList(item.risk_points ?? item.risk_description) || '-'}</p>
+                </div>
+                <div className="ai-requirement-analysis-field accent danger">
+                  <span>影响链路</span>
+                  <p>{formatTextList(item.affected_links ?? item.impact) || '-'}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {flows.length > 0 ? (
+        <section className="ai-requirement-analysis-section">
+          <div className="ai-requirement-analysis-section-head">
+            <div className="ai-requirement-analysis-section-title">功能流程</div>
+            <Tag color="geekblue">{flows.length}</Tag>
+          </div>
+          <div className="ai-requirement-analysis-flow-list">
+            {flows.map((item, index) => (
+              <article key={`flow-${index}`} className="ai-requirement-analysis-flow-card">
+                <div className="ai-requirement-analysis-flow-step">0{index + 1}</div>
+                <div className="ai-requirement-analysis-flow-body">
+                  <div className="ai-requirement-analysis-card-title">{toDisplayText(item.flow_name) || `流程 ${index + 1}`}</div>
+                  <div className="ai-requirement-analysis-field">
+                    <span>步骤</span>
+                    <p>{formatTextList(item.steps ?? item.description) || '-'}</p>
+                  </div>
+                  <div className="ai-requirement-analysis-field accent">
+                    <span>依赖</span>
+                    <p>{formatTextList(item.dependencies) || '-'}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {scenes.length > 0 ? (
+        <section className="ai-requirement-analysis-section">
+          <div className="ai-requirement-analysis-section-head">
+            <div className="ai-requirement-analysis-section-title">场景设计</div>
+            <Tag color="purple">{scenes.length}</Tag>
+          </div>
+          <div className="ai-requirement-analysis-scene-groups">
+            {scenes.map((scene, index) => {
+              const subCategories = toRecordArray(scene.subcategories ?? scene.sub_category)
+              return (
+                <article key={`scene-${index}`} className="ai-requirement-analysis-scene-group">
+                  <div className="ai-requirement-analysis-scene-head">
+                    <div className="ai-requirement-analysis-card-title">{toDisplayText(scene.scene_type) || `场景 ${index + 1}`}</div>
+                    <Tag color="default">{subCategories.length} 项</Tag>
+                  </div>
+                  <div className="ai-requirement-analysis-grid two-col">
+                    {subCategories.map((item, subIndex) => (
+                      <article key={`scene-${index}-sub-${subIndex}`} className="ai-requirement-analysis-card nested">
+                        <div className="ai-requirement-analysis-card-title">{toDisplayText(item.name ?? item.scene_type) || `子场景 ${subIndex + 1}`}</div>
+                        <div className="ai-requirement-analysis-field">
+                          <span>覆盖范围</span>
+                          <p>{toDisplayText(item.coverage ?? item.description) || '-'}</p>
+                        </div>
+                        <div className="ai-requirement-analysis-field">
+                          <span>验证重点</span>
+                          <p>{toDisplayText(item.verification_focus) || '-'}</p>
+                        </div>
+                        <div className="ai-requirement-analysis-field accent">
+                          <span>保护价值/风险</span>
+                          <p>{toDisplayText(item.protected_value_or_risk) || '-'}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  )
+}
+
+function RequirementAnalysisView({ content }: { content: string }) {
+  const [activeView, setActiveView] = useState<RequirementAnalysisViewMode>('json')
+  const parsed = useMemo(() => parseRequirementAnalysisContent(content), [content])
+  const isDiagramAvailable = Boolean(parsed)
+
+  return (
+    <Tabs
+      className="ai-requirement-analysis-tabs"
+      size="small"
+      activeKey={activeView}
+      onChange={(key) => setActiveView(key as RequirementAnalysisViewMode)}
+      items={[
+        {
+          key: 'json',
+          label: 'json',
+          children: isJsonText(content) ? (
+            <JsonEditor value={content} readOnly foldable minHeight={640} />
+          ) : (
+            <pre className="ai-task-code-block">{content}</pre>
+          ),
+        },
+        {
+          key: 'diagram',
+          label: '图像',
+          children: isDiagramAvailable ? (
+            <RequirementAnalysisDiagramView content={content} />
+          ) : (
+            <div className="ai-task-run-result-popover-empty">当前内容无法解析为结构化需求分析</div>
+          ),
+        },
+      ]}
+    />
+  )
+}
+
+function GeneratedCasesDiagramView({ content }: { content: string }) {
+  const moduleGroups = useMemo(() => parseGeneratedCases(content), [content])
+
+  if (moduleGroups.length === 0) {
+    return isJsonText(content) ? (
+      <JsonEditor value={content} readOnly foldable minHeight={640} />
+    ) : (
+      <pre className="ai-task-code-block">{content}</pre>
+    )
+  }
+
+  const totalCases = moduleGroups.reduce((sum, group) => sum + group.cases.length, 0)
+
+  return (
+    <div className="ai-generated-cases-view">
+      <div className="ai-generated-cases-stats">
+        <Tag color="purple">模块 {moduleGroups.length}</Tag>
+        <Tag color="blue">用例 {totalCases}</Tag>
+      </div>
+      <div className="ai-generated-cases-module-list">
+        {moduleGroups.map((group, groupIndex) => (
+          <section key={`module-${groupIndex}`} className="ai-generated-cases-module">
+            <div className="ai-generated-cases-module-head">
+              <div className="ai-generated-cases-module-title">{group.moduleName}</div>
+              <Tag color="default">{group.cases.length} 条</Tag>
+            </div>
+            <div className="ai-generated-cases-case-list">
+              {group.cases.map((testCase, caseIndex) => (
+                <article key={`case-${groupIndex}-${caseIndex}`} className="ai-generated-cases-case-card">
+                  <div className="ai-generated-cases-case-header">
+                    <div className="ai-generated-cases-case-name">{testCase.displayName}</div>
+                    <div className="ai-generated-cases-case-badges">
+                      {testCase.tagFields.map((tag) => (
+                        <Tag key={tag.key} color="orange">{tag.value}</Tag>
+                      ))}
+                    </div>
+                  </div>
+                  {testCase.detailFields.map((field) => (
+                    <div key={field.key} className={`ai-generated-cases-case-field${field.key === 'expected_results' || field.key === 'expectedResult' || field.key === 'expectedResults' ? ' accent' : ''}`}>
+                      <span>{field.label}</span>
+                      <p>{field.value}</p>
+                    </div>
+                  ))}
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function GeneratedCasesResultView({
+  content,
+  expanded = false,
+  activeView,
+  onViewChange,
+}: {
+  content: string
+  expanded?: boolean
+  activeView?: GeneratedCasesViewMode
+  onViewChange?: (view: GeneratedCasesViewMode) => void
+}) {
+  return (
+    <Tabs
+      className={`ai-case-names-inner-tabs${expanded ? ' expanded' : ''}`}
+      size="small"
+      activeKey={activeView}
+      onChange={(key) => onViewChange?.(key as GeneratedCasesViewMode)}
+      items={[
+        {
+          key: 'json',
+          label: 'json',
+          children: isJsonText(content) ? (
+            <JsonEditor value={content} readOnly foldable minHeight={expanded ? 520 : 240} />
+          ) : (
+            <pre className="ai-task-code-block">{content}</pre>
+          ),
+        },
+        {
+          key: 'diagram',
+          label: '卡片',
+          children: <GeneratedCasesDiagramView content={content} />,
+        },
+      ]}
+    />
+  )
+}
+
 function parseCaseNameRows(value: unknown, inheritedModel = '', inheritedTestModel = ''): Array<{ model: string; testModel: string; testPoints: string[] }> {
   if (Array.isArray(value)) {
     return value.flatMap((item) => parseCaseNameRows(item, inheritedModel, inheritedTestModel))
@@ -141,7 +687,7 @@ function parseCaseNameRows(value: unknown, inheritedModel = '', inheritedTestMod
   const record = value as Record<string, unknown>
   const model = toDisplayText(record.model) || inheritedModel
   const testModel = toDisplayText(record.test_model) || inheritedTestModel
-  const directPoints = toTextList(record.test_points)
+  const directPoints = toCaseNamePointList(record.test_points)
   const rows = directPoints.length > 0 ? [{ model: model || '未分组模块', testModel: testModel || '未分组场景', testPoints: directPoints }] : []
 
   const nestedRows = Object.entries(record)
@@ -155,11 +701,172 @@ function parseCaseNameRows(value: unknown, inheritedModel = '', inheritedTestMod
   return [...rows, ...nestedRows]
 }
 
+function buildCategoryCaseNameTree(parsed: unknown, rootTitle: string): CaseNameTreeNode | null {
+  const rootRecord = toRecord(parsed)
+  const categories = rootRecord?.categories
+  if (!Array.isArray(categories)) return null
+
+  const categoryNodes = categories.reduce<CaseNameTreeNode[]>((categoryNodes, category, categoryIndex) => {
+    const categoryRecord = toRecord(category)
+    const data = categoryRecord?.data
+    if (!categoryRecord || !Array.isArray(data)) return categoryNodes
+
+    const testModelNodes = data.reduce<CaseNameTreeNode[]>((testModelNodes, item, dataIndex) => {
+      const itemRecord = toRecord(item)
+      const points = itemRecord?.test_points
+      if (!itemRecord || !Array.isArray(points)) return testModelNodes
+
+      const pointNodes = points.reduce<CaseNameTreeNode[]>((pointNodes, point, pointIndex) => {
+        const title = toDisplayText(point)
+        if (!title) return pointNodes
+        pointNodes.push({
+          id: `category-${categoryIndex}-data-${dataIndex}-point-${pointIndex}`,
+          title,
+          kind: 'point',
+          children: [],
+        })
+        return pointNodes
+      }, [])
+
+      testModelNodes.push({
+        id: `category-${categoryIndex}-data-${dataIndex}`,
+        title: toDisplayText(itemRecord.test_model) || '未分组场景',
+        kind: 'testModel',
+        children: pointNodes,
+      })
+
+      return testModelNodes
+    }, [])
+
+    if (testModelNodes.length === 0) return categoryNodes
+
+    categoryNodes.push({
+      id: `category-${categoryIndex}`,
+      title: toDisplayText(categoryRecord.model) || '未分组模块',
+      kind: 'model',
+      children: testModelNodes,
+    })
+
+    return categoryNodes
+  }, [])
+
+  if (categoryNodes.length === 0) return null
+
+  return {
+    id: 'root',
+    title: rootTitle || '功能测试用例生成',
+    kind: 'root',
+    children: categoryNodes,
+  }
+}
+
+type CategoryCaseNameNodePath = {
+  categoryIndex: number
+  dataIndex?: number
+  pointIndex?: number
+}
+
+function parseCategoryCaseNameNodePath(nodeId: string): CategoryCaseNameNodePath | null {
+  const match = /^category-(\d+)(?:-data-(\d+))?(?:-point-(\d+))?$/.exec(nodeId)
+  if (!match) return null
+
+  return {
+    categoryIndex: Number(match[1]),
+    dataIndex: match[2] === undefined ? undefined : Number(match[2]),
+    pointIndex: match[3] === undefined ? undefined : Number(match[3]),
+  }
+}
+
+function updateCaseNamePointTitle(point: unknown, nextTitle: string) {
+  const pointRecord = toRecord(point)
+  if (!pointRecord) return nextTitle
+  if ('case_name' in pointRecord) return { ...pointRecord, case_name: nextTitle }
+  if ('name' in pointRecord) return { ...pointRecord, name: nextTitle }
+  if ('title' in pointRecord) return { ...pointRecord, title: nextTitle }
+  if ('test_point' in pointRecord) return { ...pointRecord, test_point: nextTitle }
+  return { ...pointRecord, case_name: nextTitle }
+}
+
+function updateCategoryCaseNamesContent(content: string, nodeId: string, action: 'rename' | 'delete', nextTitle?: string) {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    return null
+  }
+
+  const rootRecord = toRecord(parsed)
+  const path = parseCategoryCaseNameNodePath(nodeId)
+  if (!rootRecord || !path || !Array.isArray(rootRecord.categories)) return null
+
+  const categories = [...rootRecord.categories]
+  const categoryRecord = toRecord(categories[path.categoryIndex])
+  if (!categoryRecord) return null
+
+  if (path.dataIndex === undefined) {
+    if (action === 'delete') {
+      categories.splice(path.categoryIndex, 1)
+    } else if (nextTitle) {
+      categories[path.categoryIndex] = { ...categoryRecord, model: nextTitle }
+    }
+    return JSON.stringify({ ...rootRecord, categories }, null, 2)
+  }
+
+  const data = categoryRecord.data
+  if (!Array.isArray(data)) return null
+  const nextData = [...data]
+  const itemRecord = toRecord(nextData[path.dataIndex])
+  if (!itemRecord) return null
+
+  if (path.pointIndex === undefined) {
+    if (action === 'delete') {
+      nextData.splice(path.dataIndex, 1)
+      if (nextData.length === 0) {
+        categories.splice(path.categoryIndex, 1)
+      } else {
+        categories[path.categoryIndex] = { ...categoryRecord, data: nextData }
+      }
+    } else if (nextTitle) {
+      nextData[path.dataIndex] = { ...itemRecord, test_model: nextTitle }
+      categories[path.categoryIndex] = { ...categoryRecord, data: nextData }
+    }
+    return JSON.stringify({ ...rootRecord, categories }, null, 2)
+  }
+
+  const points = itemRecord.test_points
+  if (!Array.isArray(points)) return null
+  const nextPoints = [...points]
+
+  if (action === 'delete') {
+    nextPoints.splice(path.pointIndex, 1)
+    if (nextPoints.length === 0) {
+      nextData.splice(path.dataIndex, 1)
+    } else {
+      nextData[path.dataIndex] = { ...itemRecord, test_points: nextPoints }
+    }
+
+    if (nextData.length === 0) {
+      categories.splice(path.categoryIndex, 1)
+    } else {
+      categories[path.categoryIndex] = { ...categoryRecord, data: nextData }
+    }
+  } else if (nextTitle) {
+    nextPoints[path.pointIndex] = updateCaseNamePointTitle(nextPoints[path.pointIndex], nextTitle)
+    nextData[path.dataIndex] = { ...itemRecord, test_points: nextPoints }
+    categories[path.categoryIndex] = { ...categoryRecord, data: nextData }
+  }
+
+  return JSON.stringify({ ...rootRecord, categories }, null, 2)
+}
+
 function buildCaseNameTree(content: string, rootTitle: string): CaseNameTreeNode | null {
   if (!content.trim()) return null
 
   try {
     const parsed = JSON.parse(content)
+    const categoryTree = buildCategoryCaseNameTree(parsed, rootTitle)
+    if (categoryTree) return categoryTree
+
     const rows = parseCaseNameRows(parsed)
     if (rows.length === 0) return null
 
@@ -179,15 +886,19 @@ function buildCaseNameTree(content: string, rootTitle: string): CaseNameTreeNode
     return {
       id: 'root',
       title: rootTitle || '功能测试用例生成',
+      kind: 'root',
       children: [...modelMap.entries()].map(([model, testModelMap], modelIndex) => ({
         id: `model-${modelIndex}`,
         title: model,
+        kind: 'model',
         children: [...testModelMap.entries()].map(([testModel, testPoints], testModelIndex) => ({
           id: `model-${modelIndex}-test-${testModelIndex}`,
           title: testModel,
+          kind: 'testModel',
           children: testPoints.map((point, pointIndex) => ({
             id: `model-${modelIndex}-test-${testModelIndex}-point-${pointIndex}`,
             title: point,
+            kind: 'point',
             children: [],
           })),
         })),
@@ -196,6 +907,53 @@ function buildCaseNameTree(content: string, rootTitle: string): CaseNameTreeNode
   } catch {
     return null
   }
+}
+
+function renameCaseNameTreeNode(tree: CaseNameTreeNode, nodeId: string, nextTitle: string): CaseNameTreeNode {
+  if (tree.id === nodeId) {
+    return { ...tree, title: nextTitle }
+  }
+
+  return {
+    ...tree,
+    children: tree.children.map((child) => renameCaseNameTreeNode(child, nodeId, nextTitle)),
+  }
+}
+
+function pruneEmptyCaseNameTreeNode(node: CaseNameTreeNode): CaseNameTreeNode | null {
+  if (node.kind === 'point') return node
+
+  const children = node.children
+    .map(pruneEmptyCaseNameTreeNode)
+    .filter((child): child is CaseNameTreeNode => Boolean(child))
+
+  if (node.kind !== 'root' && children.length === 0) return null
+  return { ...node, children }
+}
+
+function deleteCaseNameTreeNode(tree: CaseNameTreeNode, nodeId: string): CaseNameTreeNode {
+  if (tree.id === nodeId) return tree
+
+  const nextTree = {
+    ...tree,
+    children: tree.children
+      .filter((child) => child.id !== nodeId)
+      .map((child) => deleteCaseNameTreeNode(child, nodeId)),
+  }
+
+  return pruneEmptyCaseNameTreeNode(nextTree) ?? { ...tree, children: [] }
+}
+
+function serializeCaseNameTree(tree: CaseNameTreeNode) {
+  const rows = tree.children.flatMap((model) =>
+    model.children.map((testModel) => ({
+      model: model.title,
+      test_model: testModel.title,
+      test_points: testModel.children.map((point) => point.title),
+    })),
+  )
+
+  return JSON.stringify(rows, null, 2)
 }
 
 function countCaseNameTree(tree: CaseNameTreeNode | null) {
@@ -209,14 +967,6 @@ const CASE_NAME_TREE_NODE_HEIGHT = 38
 const CASE_NAME_TREE_ROW_GAP = 14
 const CASE_NAME_TREE_POINT_GAP = 10
 const CASE_NAME_TREE_CONNECTOR_WIDTH = 86
-const CASE_NAME_TREE_IMAGE_PADDING_X = 28
-const CASE_NAME_TREE_IMAGE_PADDING_Y = 28
-const CASE_NAME_TREE_IMAGE_NODE_WIDTHS = {
-  root: 220,
-  model: 220,
-  testModel: 240,
-  point: 360,
-}
 
 function getStackHeight(count: number, gap = CASE_NAME_TREE_ROW_GAP) {
   if (count <= 0) return CASE_NAME_TREE_NODE_HEIGHT
@@ -290,245 +1040,107 @@ function CaseNameTreeCurves({ height, targetYs, tone = 'green' }: { height: numb
   )
 }
 
-function escapeSvgText(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function truncateSvgText(value: string, maxLength: number) {
-  const text = value.trim()
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text
-}
-
-function renderCaseNameTreeSvgNode({
-  x,
-  y,
-  width,
-  text,
-  variant,
+function CaseNameTreeNodeView({
+  node,
+  className,
+  editable,
+  onRename,
+  onDelete,
 }: {
-  x: number
-  y: number
-  width: number
-  text: string
-  variant: 'root' | 'model' | 'testModel' | 'point'
+  node: CaseNameTreeNode
+  className: string
+  editable?: boolean
+  onRename?: (nodeId: string, title: string) => void
+  onDelete?: (nodeId: string) => void
 }) {
-  const styles = {
-    root: {
-      fill: '#9fdcbe',
-      stroke: 'rgba(52, 168, 130, 0.48)',
-      text: '#062f24',
-      weight: 700,
-      anchor: 'middle',
-      textX: x + width / 2,
-      maxLength: 18,
-    },
-    model: {
-      fill: '#e7f6ef',
-      stroke: 'rgba(52, 168, 130, 0.34)',
-      text: '#116149',
-      weight: 700,
-      anchor: 'middle',
-      textX: x + width / 2,
-      maxLength: 18,
-    },
-    testModel: {
-      fill: '#e8f5fb',
-      stroke: 'rgba(70, 166, 210, 0.32)',
-      text: '#1f5d80',
-      weight: 700,
-      anchor: 'middle',
-      textX: x + width / 2,
-      maxLength: 20,
-    },
-    point: {
-      fill: '#ffffff',
-      stroke: 'rgba(148, 163, 184, 0.26)',
-      text: '#334155',
-      weight: 600,
-      anchor: 'start',
-      textX: x + 14,
-      maxLength: 28,
-    },
-  }[variant]
+  const [editing, setEditing] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(node.title)
+  const canEdit = Boolean(editable && node.kind !== 'root')
 
-  return `
-    <g>
-      <rect x="${x}" y="${y}" width="${width}" height="${CASE_NAME_TREE_NODE_HEIGHT}" rx="12" fill="${styles.fill}" stroke="${styles.stroke}" />
-      <text x="${styles.textX}" y="${y + 24}" text-anchor="${styles.anchor}" fill="${styles.text}" font-size="12" font-weight="${styles.weight}">${escapeSvgText(truncateSvgText(text, styles.maxLength))}</text>
-    </g>
-  `
-}
+  useEffect(() => {
+    setDraftTitle(node.title)
+  }, [node.title])
 
-function renderCaseNameTreeSvgCurve({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  stroke,
-  width = 2,
-}: {
-  sourceX: number
-  sourceY: number
-  targetX: number
-  targetY: number
-  stroke: string
-  width?: number
-}) {
-  const distance = targetX - sourceX
-  const controlOffset = Math.min(42, Math.max(24, Math.abs(targetY - sourceY) * 0.42 + 18))
-  const c1 = sourceX + Math.min(distance * 0.48, controlOffset)
-  const c2 = targetX - Math.min(distance * 0.48, controlOffset)
-  return `<path d="M ${sourceX} ${sourceY} C ${c1} ${sourceY}, ${c2} ${targetY}, ${targetX} ${targetY}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" />`
-}
-
-function createCaseNameTreeImageSvg(content: string, rootTitle: string) {
-  const tree = buildCaseNameTree(content, rootTitle)
-  if (!tree) return null
-
-  const treeHeight = getTreeHeight(tree)
-  const widths = CASE_NAME_TREE_IMAGE_NODE_WIDTHS
-  const rootX = CASE_NAME_TREE_IMAGE_PADDING_X
-  const modelX = rootX + widths.root + CASE_NAME_TREE_CONNECTOR_WIDTH
-  const testModelX = modelX + widths.model + CASE_NAME_TREE_CONNECTOR_WIDTH
-  const pointX = testModelX + widths.testModel + CASE_NAME_TREE_CONNECTOR_WIDTH
-  const svgWidth = pointX + widths.point + CASE_NAME_TREE_IMAGE_PADDING_X
-  const svgHeight = treeHeight + CASE_NAME_TREE_IMAGE_PADDING_Y * 2
-  const rootY = CASE_NAME_TREE_IMAGE_PADDING_Y + (treeHeight - CASE_NAME_TREE_NODE_HEIGHT) / 2
-  const nodes: string[] = [
-    renderCaseNameTreeSvgNode({ x: rootX, y: rootY, width: widths.root, text: tree.title, variant: 'root' }),
-  ]
-  const curves: string[] = []
-  const rootSourceX = rootX + widths.root
-  const rootSourceY = CASE_NAME_TREE_IMAGE_PADDING_Y + treeHeight / 2
-
-  getModelTargetYs(tree).forEach((targetY) => {
-    curves.push(renderCaseNameTreeSvgCurve({
-      sourceX: rootSourceX,
-      sourceY: rootSourceY,
-      targetX: modelX,
-      targetY: CASE_NAME_TREE_IMAGE_PADDING_Y + targetY,
-      stroke: 'rgba(124, 195, 163, 0.78)',
-    }))
-  })
-
-  let modelTop = CASE_NAME_TREE_IMAGE_PADDING_Y
-  tree.children.forEach((model) => {
-    const modelHeight = getModelHeight(model)
-    const modelY = modelTop + (modelHeight - CASE_NAME_TREE_NODE_HEIGHT) / 2
-    nodes.push(renderCaseNameTreeSvgNode({ x: modelX, y: modelY, width: widths.model, text: model.title, variant: 'model' }))
-
-    getTestModelTargetYs(model).forEach((targetY) => {
-      curves.push(renderCaseNameTreeSvgCurve({
-        sourceX: modelX + widths.model,
-        sourceY: modelTop + modelHeight / 2,
-        targetX: testModelX,
-        targetY: modelTop + targetY,
-        stroke: 'rgba(70, 166, 210, 0.64)',
-      }))
-    })
-
-    let testModelTop = modelTop
-    model.children.forEach((testModel) => {
-      const testModelHeight = getTestModelHeight(testModel)
-      const testModelY = testModelTop + (testModelHeight - CASE_NAME_TREE_NODE_HEIGHT) / 2
-      nodes.push(renderCaseNameTreeSvgNode({ x: testModelX, y: testModelY, width: widths.testModel, text: testModel.title, variant: 'testModel' }))
-
-      getPointTargetYs(testModel).forEach((targetY) => {
-        curves.push(renderCaseNameTreeSvgCurve({
-          sourceX: testModelX + widths.testModel,
-          sourceY: testModelTop + testModelHeight / 2,
-          targetX: pointX,
-          targetY: testModelTop + targetY,
-          stroke: 'rgba(100, 116, 139, 0.52)',
-          width: 1.8,
-        }))
-      })
-
-      testModel.children.forEach((point, pointIndex) => {
-        const pointY = testModelTop + pointIndex * (CASE_NAME_TREE_NODE_HEIGHT + CASE_NAME_TREE_POINT_GAP)
-        nodes.push(renderCaseNameTreeSvgNode({ x: pointX, y: pointY, width: widths.point, text: point.title, variant: 'point' }))
-      })
-
-      testModelTop += testModelHeight + CASE_NAME_TREE_ROW_GAP
-    })
-
-    modelTop += modelHeight + CASE_NAME_TREE_ROW_GAP
-  })
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}">
-      <rect width="100%" height="100%" rx="18" fill="#f8faf9" />
-      <circle cx="34" cy="34" r="28" fill="rgba(124, 195, 163, 0.11)" />
-      <g font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, Arial, sans-serif">
-        ${curves.join('')}
-        ${nodes.join('')}
-      </g>
-    </svg>
-  `.trim()
-
-  return { svg, width: svgWidth, height: svgHeight }
-}
-
-function triggerDownload(url: string, fileName: string) {
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-}
-
-function downloadBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob)
-  triggerDownload(url, fileName)
-  URL.revokeObjectURL(url)
-}
-
-function downloadSvgAsPng(svg: string, width: number, height: number, fileName: string) {
-  return new Promise<void>((resolve, reject) => {
-    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-    const svgUrl = URL.createObjectURL(svgBlob)
-    const image = new Image()
-
-    image.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.ceil(width * 2)
-      canvas.height = Math.ceil(height * 2)
-      const context = canvas.getContext('2d')
-      if (!context) {
-        URL.revokeObjectURL(svgUrl)
-        reject(new Error('Canvas is not supported'))
-        return
-      }
-
-      context.scale(2, 2)
-      context.drawImage(image, 0, 0, width, height)
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(svgUrl)
-        if (!blob) {
-          reject(new Error('Failed to create image'))
-          return
-        }
-        downloadBlob(blob, fileName)
-        resolve()
-      }, 'image/png')
+  function commitEdit() {
+    const nextTitle = draftTitle.trim()
+    if (!nextTitle) {
+      message.warning('节点名称不能为空')
+      setDraftTitle(node.title)
+      setEditing(false)
+      return
     }
 
-    image.onerror = () => {
-      URL.revokeObjectURL(svgUrl)
-      reject(new Error('Failed to load tree image'))
+    if (nextTitle !== node.title) {
+      onRename?.(node.id, nextTitle)
     }
+    setEditing(false)
+  }
 
-    image.src = svgUrl
-  })
+  return (
+    <div className={`${className}${canEdit ? ' editable' : ''}`} title={node.title}>
+      {editing ? (
+        <Input
+          className="ai-case-name-tree-node-input"
+          size="small"
+          value={draftTitle}
+          autoFocus
+          onChange={(event) => setDraftTitle(event.target.value)}
+          onBlur={commitEdit}
+          onPressEnter={commitEdit}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setDraftTitle(node.title)
+              setEditing(false)
+            }
+          }}
+        />
+      ) : (
+        <span className="ai-case-name-tree-node-label">{node.title}</span>
+      )}
+      {canEdit && !editing ? (
+        <span className="ai-case-name-tree-node-actions">
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            aria-label="编辑节点"
+            onClick={(event) => {
+              event.stopPropagation()
+              setEditing(true)
+            }}
+          />
+          <Popconfirm
+            title="确认删除该节点？"
+            onConfirm={() => onDelete?.(node.id)}
+          >
+            <Button
+              danger
+              type="text"
+              size="small"
+              icon={<DeleteOutlined />}
+              aria-label="删除节点"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </Popconfirm>
+        </span>
+      ) : null}
+    </div>
+  )
 }
 
-function CaseNameTreeView({ content, rootTitle, expanded = false }: { content: string; rootTitle: string; expanded?: boolean }) {
+function CaseNameTreeView({
+  content,
+  rootTitle,
+  expanded = false,
+  editable = false,
+  onTreeChange,
+}: {
+  content: string
+  rootTitle: string
+  expanded?: boolean
+  editable?: boolean
+  onTreeChange?: (content: string) => void
+}) {
   const tree = buildCaseNameTree(content, rootTitle)
   const counts = countCaseNameTree(tree)
 
@@ -537,30 +1149,61 @@ function CaseNameTreeView({ content, rootTitle, expanded = false }: { content: s
   }
 
   const treeHeight = getTreeHeight(tree)
+  const handleRename = (nodeId: string, title: string) => {
+    onTreeChange?.(updateCategoryCaseNamesContent(content, nodeId, 'rename', title) ?? serializeCaseNameTree(renameCaseNameTreeNode(tree, nodeId, title)))
+  }
+  const handleDelete = (nodeId: string) => {
+    onTreeChange?.(updateCategoryCaseNamesContent(content, nodeId, 'delete') ?? serializeCaseNameTree(deleteCaseNameTreeNode(tree, nodeId)))
+  }
 
   return (
-    <div className={`ai-case-name-tree${expanded ? ' expanded' : ''}`}>
+    <div className={`ai-case-name-tree${expanded ? ' expanded' : ''}${editable ? ' editable' : ''}`}>
       <div className="ai-case-name-tree-stats">
         <Tag color="green">model {counts.models}</Tag>
         <Tag color="cyan">test_model {counts.testModels}</Tag>
         <Tag color="blue">test_points {counts.testPoints}</Tag>
       </div>
       <div className="ai-case-name-tree-canvas">
-        <div className="ai-case-name-tree-root" title={tree.title}>{tree.title}</div>
+        <CaseNameTreeNodeView
+          node={tree}
+          className="ai-case-name-tree-root"
+          editable={editable}
+          onRename={handleRename}
+          onDelete={handleDelete}
+        />
         <CaseNameTreeCurves height={treeHeight} targetYs={getModelTargetYs(tree)} tone="green" />
         <div className="ai-case-name-tree-branches">
           {tree.children.map((model) => (
             <div key={model.id} className="ai-case-name-tree-row">
-              <div className="ai-case-name-tree-node model" title={model.title}>{model.title}</div>
+              <CaseNameTreeNodeView
+                node={model}
+                className="ai-case-name-tree-node model"
+                editable={editable}
+                onRename={handleRename}
+                onDelete={handleDelete}
+              />
               <CaseNameTreeCurves height={getModelHeight(model)} targetYs={getTestModelTargetYs(model)} tone="blue" />
               <div className="ai-case-name-tree-children">
                 {model.children.map((testModel) => (
                   <div key={testModel.id} className="ai-case-name-tree-row nested">
-                    <div className="ai-case-name-tree-node test-model" title={testModel.title}>{testModel.title}</div>
+                    <CaseNameTreeNodeView
+                      node={testModel}
+                      className="ai-case-name-tree-node test-model"
+                      editable={editable}
+                      onRename={handleRename}
+                      onDelete={handleDelete}
+                    />
                     <CaseNameTreeCurves height={getTestModelHeight(testModel)} targetYs={getPointTargetYs(testModel)} tone="slate" />
                     <div className="ai-case-name-tree-children point-list">
                       {testModel.children.map((point) => (
-                        <div key={point.id} className="ai-case-name-tree-node point" title={point.title}>{point.title}</div>
+                        <CaseNameTreeNodeView
+                          key={point.id}
+                          node={point}
+                          className="ai-case-name-tree-node point"
+                          editable={editable}
+                          onRename={handleRename}
+                          onDelete={handleDelete}
+                        />
                       ))}
                     </div>
                   </div>
@@ -627,6 +1270,15 @@ function normalizeReviewStatus(status?: string) {
   return status ?? 'pending'
 }
 
+function getFunctionalStageMeta(stage?: string) {
+  if (!stage) return { label: '未开始', color: 'default' }
+  return functionalStageMetaMap[stage] ?? { label: stage, color: 'default' }
+}
+
+function getStageConfigField(stage?: string) {
+  return stage ? stageConfigFieldMap[stage] : undefined
+}
+
 function renderReviewStatusTag(status?: string) {
   const normalizedStatus = normalizeReviewStatus(status)
   const meta = reviewStatusMetaMap[normalizedStatus] ?? {
@@ -637,14 +1289,6 @@ function renderReviewStatusTag(status?: string) {
   return <Tag color={meta.color}>{meta.label}</Tag>
 }
 
-function getFileDisplayName(task?: FunctionalCaseGenerateTask | null) {
-  const sourceContent = task?.sourceContent || ''
-  if (!sourceContent) return '-'
-  const normalized = sourceContent.split('?')[0]
-  const segments = normalized.split(/[\\/]/)
-  return segments[segments.length - 1] || normalized
-}
-
 export function FunctionalCaseGenerateTaskDetailPage() {
   const { taskId = '' } = useParams()
   const navigate = useNavigate()
@@ -652,12 +1296,22 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
   const [llmSelectOpen, setLlmSelectOpen] = useState(false)
-  const [expandedSection, setExpandedSection] = useState<'instruction' | 'sourceContent' | 'runHistory' | null>('runHistory')
+  const [documentPreviewOpen, setDocumentPreviewOpen] = useState(false)
+  const [expandedSection, setExpandedSection] = useState<'instruction' | 'document' | 'runHistory' | null>('runHistory')
   const [selectedRunRecordId, setSelectedRunRecordId] = useState<string | null>(null)
-  const [openRunDetailPopoverKey, setOpenRunDetailPopoverKey] = useState<string | null>(null)
+  const [runResultModal, setRunResultModal] = useState<RunResultModalState>(null)
   const [resultModalRunId, setResultModalRunId] = useState<string | null>(null)
   const [reviewSubmitAction, setReviewSubmitAction] = useState<'approve' | 'reject' | null>(null)
-  const [expandedRunResult, setExpandedRunResult] = useState<ExpandedRunResult | null>(null)
+  const [importResultView, setImportResultView] = useState<GeneratedCasesViewMode>('json')
+  const [checkpointEnabled, setCheckpointEnabled] = useState(false)
+  const [stageOutputDraft, setStageOutputDraft] = useState('')
+  const [stageOutputDirty, setStageOutputDirty] = useState(false)
+  const [stageOutputSourceKey, setStageOutputSourceKey] = useState('')
+  const [stageReviewComment, setStageReviewComment] = useState('')
+  const [stageReviewAction, setStageReviewAction] = useState<'approve' | 'reject' | null>(null)
+  const [runResultCaseNamesView, setRunResultCaseNamesView] = useState<CaseNamesViewMode>('json')
+  const [runResultGeneratedCasesView, setRunResultGeneratedCasesView] = useState<GeneratedCasesViewMode>('json')
+  const [stageRequirementAnalysisView, setStageRequirementAnalysisView] = useState<RequirementAnalysisViewMode>('json')
   const [form] = Form.useForm<FunctionalCaseGenerateTaskFormValues>()
   const [reviewForm] = Form.useForm<{ comment?: string }>()
 
@@ -668,6 +1322,11 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   })
 
   const task = taskQuery.data
+  const taskRequirementQuery = useQuery({
+    queryKey: ['requirement', task?.requirementId],
+    queryFn: () => api.getRequirement(task!.requirementId!),
+    enabled: Boolean(task?.requirementId),
+  })
   const runsQuery = useQuery({
     queryKey: ['functionalCaseGenerateTaskRuns', taskId],
     queryFn: () => api.getFunctionalCaseGenerateTaskRuns(taskId),
@@ -727,12 +1386,25 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     refetchInterval: expandedSection === 'runHistory' && selectedRunId ? 5000 : false,
   })
   const selectedRun = selectedRunQuery.data
+  const selectedStage = selectedRun?.currentStage
+  const selectedStageField = getStageConfigField(selectedStage)
+  const selectedStageOutputContent = useMemo(
+    () =>
+      formatStructuredContent(selectedRun?.stageOutput) ||
+      getConfigStageFieldContent(selectedRun?.configJson, selectedStageField?.key),
+    [selectedRun?.configJson, selectedRun?.stageOutput, selectedStageField?.key],
+  )
   const selectedRunResultSections = useMemo(
     () =>
       selectedRun
         ? runResultSectionDefinitions
             .map((section) => {
-              const rawValue = selectedRun[section.key as keyof FunctionalCaseGenerateTaskRun]
+              const rawValue =
+                section.key === 'enhancedText' ||
+                section.key === 'requirementAnalysis' ||
+                section.key === 'caseNames'
+                  ? getConfigStageFieldContent(selectedRun.configJson, section.key)
+                  : selectedRun[section.key as keyof FunctionalCaseGenerateTaskRun]
               return { ...section, value: formatStructuredContent(rawValue) }
             })
             .filter((item) => item.value)
@@ -747,10 +1419,6 @@ export function FunctionalCaseGenerateTaskDetailPage() {
       name: task.name,
       sprintId: task.sprintId,
       requirementId: task.requirementId,
-      sourceType: task.sourceType,
-      sourceContent: task.sourceContent,
-      sourceFileName: task.sourceType === 'text' ? undefined : getFileDisplayName(task),
-      file: undefined,
       instruction: task.instruction,
     })
   }, [form, task])
@@ -770,8 +1438,20 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   }, [runRecords])
 
   useEffect(() => {
-    setOpenRunDetailPopoverKey(null)
+    setRunResultModal(null)
   }, [selectedRunId])
+
+  useEffect(() => {
+    if (runResultModal?.key !== 'caseNames') {
+      setRunResultCaseNamesView('json')
+    }
+    if (runResultModal?.key !== 'resultYaml') {
+      setRunResultGeneratedCasesView('json')
+    }
+    if (runResultModal?.key !== selectedStageField?.key) {
+      setStageRequirementAnalysisView('json')
+    }
+  }, [runResultModal?.key, selectedStageField?.key])
 
   const updateTaskMutation = useMutation({
     mutationFn: (values: FunctionalCaseGenerateTaskFormValues) => api.updateFunctionalCaseGenerateTask(taskId, values),
@@ -784,10 +1464,12 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   })
 
   const runTaskMutation = useMutation({
-    mutationFn: (connectionId: string) => api.runFunctionalCaseGenerateTask(taskId, { connectionId }),
+    mutationFn: ({ connectionId, checkpointEnabled }: { connectionId: string; checkpointEnabled?: boolean }) =>
+      api.runFunctionalCaseGenerateTask(taskId, { connectionId, checkpointEnabled }),
     onSuccess: (run) => {
       message.success('任务已加入执行队列')
       setLlmSelectOpen(false)
+      setCheckpointEnabled(false)
       setExpandedSection('runHistory')
       setSelectedRunRecordId(run.runId ?? null)
       queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTask', taskId] })
@@ -802,7 +1484,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
       body: { action: 'approve'; comment?: string } | { action: 'reject'; comment?: string }
     }) => api.reviewFunctionalCaseGenerateTaskRun(payload.runId, payload.body),
     onSuccess: (updatedRun, payload) => {
-      message.success(payload.body.action === 'approve' ? '审核已通过并自动导入功能测试集' : '已丢弃本次生成结果')
+      message.success(payload.body.action === 'approve' ? '已导入功能测试集' : '已丢弃本次生成结果')
       setResultModalRunId(null)
       setReviewSubmitAction(null)
       reviewForm.resetFields()
@@ -822,6 +1504,62 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     },
   })
 
+  const saveStageOutputMutation = useMutation({
+    mutationFn: (payload: { runId: string; stage: string; configJson: string; silent?: boolean }) =>
+      api.updateFunctionalCaseGenerateTaskRunStageOutput(payload.runId, {
+        stage: payload.stage,
+        configJson: payload.configJson,
+      }),
+    onSuccess: (updatedRun, payload) => {
+      if (!payload.silent) {
+        message.success('阶段产物已保存')
+      }
+      setStageOutputDirty(false)
+      queryClient.setQueryData(['functionalCaseGenerateTaskRun', payload.runId], updatedRun)
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error))
+    },
+  })
+
+  const reviewStageMutation = useMutation({
+    mutationFn: (payload: {
+      runId: string
+      body: { stage: string; action: 'approve'; comment?: string } | { stage: string; action: 'reject'; comment?: string }
+    }) => api.reviewFunctionalCaseGenerateTaskRunStage(payload.runId, payload.body),
+    onSuccess: (updatedRun, payload) => {
+      message.success(payload.body.action === 'approve' ? '阶段审核已通过，继续生成' : '已拒绝并停止继续生成')
+      setStageReviewAction(null)
+      setStageReviewComment('')
+      setSelectedRunRecordId(updatedRun.runId ?? payload.runId)
+      queryClient.setQueryData(['functionalCaseGenerateTaskRun', payload.runId], updatedRun)
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error))
+      setStageReviewAction(null)
+    },
+  })
+
+  const retryStageMutation = useMutation({
+    mutationFn: (payload: { runId: string; stage: string }) =>
+      api.retryFunctionalCaseGenerateTaskRunStage(payload.runId, { stage: payload.stage }),
+    onSuccess: (updatedRun, payload) => {
+      message.success('已提交阶段重试，等待重新执行')
+      setSelectedRunRecordId(updatedRun.runId ?? payload.runId)
+      queryClient.setQueryData(['functionalCaseGenerateTaskRun', payload.runId], updatedRun)
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTask', taskId] })
+    },
+    onError: (error) => {
+      message.error(getErrorMessage(error))
+    },
+  })
+
   const deleteTaskMutation = useMutation({
     mutationFn: () => api.deleteFunctionalCaseGenerateTask(taskId),
     onSuccess: () => {
@@ -830,7 +1568,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
       if (task?.projectId) {
         queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTasks', task.projectId] })
       }
-      navigate('/ai-testing?tab=functional')
+      navigate('/ai-testing?tab=tasks')
     },
   })
 
@@ -841,22 +1579,63 @@ export function FunctionalCaseGenerateTaskDetailPage() {
         ? [
             { label: '任务名称', value: task.name || '-' },
             { label: '迭代', value: sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-' },
-            { label: '需求', value: requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-' },
-            { label: '来源类型', value: <Tag color={task.sourceType === 'text' ? 'blue' : 'purple'}>{task.sourceType}</Tag> },
-            { label: '来源内容', value: task.sourceType === 'text' ? '文本' : '文档链接' },
+            {
+              label: '需求',
+              value:
+                taskRequirementQuery.data?.name ??
+                requirementNameMap.get(task.requirementId ?? '') ??
+                task.requirementId ??
+                '-',
+            },
             { label: '更新时间', value: formatTime(pickUpdatedAt(task)) },
           ]
         : [],
-    [requirementNameMap, sprintNameMap, task],
+    [requirementNameMap, sprintNameMap, task, taskRequirementQuery.data?.name],
   )
   const selectedRunResultSectionMap = useMemo(
     () => new Map(selectedRunResultSections.map((section) => [section.key, section.value])),
     [selectedRunResultSections],
   )
+  const runResultModalContent = runResultModal ? selectedRunResultSectionMap.get(runResultModal.key) : undefined
+  const selectedRunImportStats = useMemo(
+    () => getGeneratedCaseImportStats(selectedRun?.resultYaml),
+    [selectedRun?.resultYaml],
+  )
+  const importTargetRequirementName = task?.requirementId
+    ? taskRequirementQuery.data?.name ?? requirementNameMap.get(task.requirementId) ?? task.requirementId
+    : selectedRun?.requirementId
+      ? requirementNameMap.get(selectedRun.requirementId) ?? selectedRun.requirementId
+      : '-'
   const runHistoryRefreshing = runsQuery.isFetching || selectedRunQuery.isFetching
   const resultModalOpen = Boolean(resultModalRunId)
   const selectedRunReviewStatus = normalizeReviewStatus(selectedRun?.reviewStatus)
-  const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && !isApiCaseGenerateTaskRunInProgress(selectedRun?.status)
+  const selectedRunStatus = String(selectedRun?.status ?? '')
+  const selectedStageMeta = getFunctionalStageMeta(selectedStage)
+  const stageOutputIsCaseNames = selectedStageField?.key === 'caseNames'
+  const stageOutputIsRequirementAnalysis = selectedStageField?.key === 'requirementAnalysis'
+  const selectedStageStatusMeta = getApiCaseGenerateTaskRunStatusMeta(selectedRun?.stageStatus)
+  const canRetryStage = Boolean(
+    selectedRun?.checkpointEnabled &&
+      selectedRun?.stageStatus === 'failed' &&
+      (selectedRunStatus === 'failed' || selectedRunStatus === 'error'),
+  )
+  const checkpointStageWaitingReview = Boolean(
+    selectedRun?.checkpointEnabled &&
+      selectedRunStatus === 'waiting_review' &&
+      selectedRun?.stageStatus === 'waiting_review' &&
+      selectedStage,
+  )
+  const showStageReviewInRunResultModal = runResultModal?.key === selectedStageField?.key && checkpointStageWaitingReview
+  const checkpointStageVisible = Boolean(
+    selectedRun?.checkpointEnabled &&
+      selectedStage &&
+      selectedRunStatus !== 'success' &&
+      selectedRunStatus !== 'failed' &&
+      selectedRunStatus !== 'error' &&
+      selectedRunStatus !== 'canceled',
+  )
+  const stageActionPending = saveStageOutputMutation.isPending || reviewStageMutation.isPending
+  const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && selectedRunStatus === 'success'
 
   useEffect(() => {
     if (!resultModalRunId) {
@@ -866,11 +1645,35 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     reviewForm.setFieldsValue({ comment: selectedRun?.reviewComment || undefined })
   }, [resultModalRunId, reviewForm, selectedRun?.reviewComment])
 
-  function toggleSection(section: 'instruction' | 'sourceContent' | 'runHistory') {
+  useEffect(() => {
+    const nextSourceKey = `${selectedRun?.runId ?? ''}:${selectedRun?.currentStage ?? ''}`
+
+    if (stageOutputSourceKey !== nextSourceKey) {
+      setStageOutputSourceKey(nextSourceKey)
+      setStageOutputDraft(selectedStageOutputContent)
+      setStageOutputDirty(false)
+      setStageRequirementAnalysisView('json')
+      setStageReviewComment('')
+      setStageReviewAction(null)
+      return
+    }
+
+    if (!stageOutputDirty) {
+      setStageOutputDraft(selectedStageOutputContent)
+    }
+  }, [
+    selectedRun?.currentStage,
+    selectedRun?.runId,
+    selectedStageOutputContent,
+    stageOutputDirty,
+    stageOutputSourceKey,
+  ])
+
+  function toggleSection(section: 'instruction' | 'document' | 'runHistory') {
     setExpandedSection((current) => (current === section ? null : section))
   }
 
-  function handleRunTask() {
+  async function handleRunTask() {
     if (runsQuery.isLoading) {
       message.warning('运行记录加载中，请稍后再试')
       return
@@ -879,11 +1682,30 @@ export function FunctionalCaseGenerateTaskDetailPage() {
       message.warning('任务执行中，暂时不能重复运行')
       return
     }
+
+    let requirement = taskRequirementQuery.data
+    if (!requirement && task?.requirementId) {
+      try {
+        requirement = await queryClient.fetchQuery({
+          queryKey: ['requirement', task.requirementId],
+          queryFn: () => api.getRequirement(task.requirementId!),
+        })
+      } catch (error) {
+        message.error(getErrorMessage(error))
+        return
+      }
+    }
+
+    if (!hasRequirementDocument(requirement)) {
+      message.warning('当前需求未配置需求文档，请先在需求中填写纯文本正文或上传 DOCX 文档')
+      return
+    }
+
     setLlmSelectOpen(true)
   }
 
   function handleLlmSelectConfirm(connectionId: string) {
-    runTaskMutation.mutate(connectionId)
+    runTaskMutation.mutate({ connectionId, checkpointEnabled })
   }
 
   function handleRefreshRuns() {
@@ -891,6 +1713,67 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     if (selectedRunId) {
       void selectedRunQuery.refetch()
     }
+  }
+
+  function handleSaveStageOutput() {
+    if (!selectedRun?.runId || !selectedStage) return
+    if (!stageOutputDraft.trim()) {
+      message.warning('阶段产物不能为空')
+      return
+    }
+    saveStageOutputMutation.mutate({
+      runId: selectedRun.runId,
+      stage: selectedStage,
+      configJson: stageOutputDraft,
+    })
+  }
+
+  async function handleApproveStageReview() {
+    if (!selectedRun?.runId || !selectedStage) return
+    if (!stageOutputDraft.trim()) {
+      message.warning('阶段产物不能为空')
+      return
+    }
+    setStageReviewAction('approve')
+    try {
+      await saveStageOutputMutation.mutateAsync({
+        runId: selectedRun.runId,
+        stage: selectedStage,
+        configJson: stageOutputDraft,
+        silent: true,
+      })
+      await reviewStageMutation.mutateAsync({
+        runId: selectedRun.runId,
+        body: {
+          stage: selectedStage,
+          action: 'approve',
+          comment: stageReviewComment.trim() || undefined,
+        },
+      })
+    } catch {
+      setStageReviewAction(null)
+    }
+  }
+
+  function handleRejectStageReview() {
+    if (!selectedRun?.runId || !selectedStage) return
+    setStageReviewAction('reject')
+    reviewStageMutation.mutate({
+      runId: selectedRun.runId,
+      body: {
+        stage: selectedStage,
+        action: 'reject',
+        comment: stageReviewComment.trim() || undefined,
+      },
+    })
+  }
+
+  function handleRetryStage() {
+    if (!selectedRun?.runId || !selectedStage || !canRetryStage) return
+    retryStageMutation.mutate({
+      runId: selectedRun.runId,
+      stage: selectedStage,
+    })
   }
 
   function openResultModal(runId?: string) {
@@ -910,7 +1793,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   function handleApproveReview() {
     if (!resultModalRunId) return
     if (!canReviewSelectedRun) {
-      message.warning('任务执行中，暂时不能审核')
+      message.warning('任务执行中，暂时不能导入')
       return
     }
     const values = reviewForm.getFieldsValue()
@@ -927,7 +1810,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   function handleRejectReview() {
     if (!resultModalRunId) return
     if (!canReviewSelectedRun) {
-      message.warning('任务执行中，暂时不能审核')
+      message.warning('任务执行中，暂时不能导入')
       return
     }
     const values = reviewForm.getFieldsValue()
@@ -941,89 +1824,11 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     })
   }
 
-  function openExpandedRunResult(title: string, content?: string) {
-    if (!content) return
-    setOpenRunDetailPopoverKey(null)
-    setExpandedRunResult({ title, content })
-  }
-
-  function openExpandedConfigResult(tabs: ConfigJsonTab[], activeTabKey?: string) {
-    if (tabs.length === 0) return
-    setOpenRunDetailPopoverKey(null)
-    setExpandedRunResult({
-      type: 'config',
-      title: '中间配置',
-      tabs,
-      activeTabKey: activeTabKey || tabs[0].key,
-      activeCaseNamesView: 'json',
-    })
-  }
-
-  function getExpandedRunResultContent() {
-    if (!expandedRunResult) return ''
-    if (expandedRunResult.type === 'config') {
-      return expandedRunResult.tabs.find((tab) => tab.key === expandedRunResult.activeTabKey)?.content ?? ''
-    }
-    return expandedRunResult.content
-  }
-
-  function getExpandedRunResultTitle() {
-    if (!expandedRunResult) return '运行结果'
-    if (expandedRunResult.type === 'config') {
-      const activeTab = expandedRunResult.tabs.find((tab) => tab.key === expandedRunResult.activeTabKey)
-      const viewLabel = activeTab?.key === 'caseNames' && expandedRunResult.activeCaseNamesView === 'tree' ? '-树图' : ''
-      return activeTab ? `${expandedRunResult.title}-${activeTab.label}${viewLabel}` : expandedRunResult.title
-    }
-    return expandedRunResult.title
-  }
-
-  function isExpandedCaseNameTreeActive() {
-    return expandedRunResult?.type === 'config' && expandedRunResult.activeTabKey === 'caseNames' && expandedRunResult.activeCaseNamesView === 'tree'
-  }
-
-  async function handleCopyExpandedRunResult() {
-    const content = getExpandedRunResultContent()
-    if (!content) return
-    try {
-      await navigator.clipboard.writeText(content)
-      message.success('已复制内容')
-    } catch {
-      message.error('复制失败，请手动复制')
-    }
-  }
-
-  async function handleDownloadExpandedRunResult() {
-    const content = getExpandedRunResultContent()
-    if (!content) return
-    const title = getExpandedRunResultTitle()
-    const safeTitle = title.replace(/[\\/:*?"<>|]/g, '_')
-
-    if (isExpandedCaseNameTreeActive()) {
-      const image = createCaseNameTreeImageSvg(content, task?.name || '功能测试用例生成')
-      if (!image) {
-        message.warning('当前树图暂无可下载内容')
-        return
-      }
-      try {
-        await downloadSvgAsPng(image.svg, image.width, image.height, `${safeTitle}.png`)
-        message.success('已下载图片')
-      } catch {
-        message.error('图片下载失败，请重试')
-      }
-      return
-    }
-
-    const extension = isJsonText(content) ? 'json' : 'txt'
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-    downloadBlob(blob, `${safeTitle}.${extension}`)
-    message.success('已下载内容')
-  }
-
   return (
     <div className="workbench-page ai-testing-page">
       <div className="workbench-tabs">
-        {taskQuery.error ? <Alert showIcon type="error" message={getErrorMessage(taskQuery.error)} /> : null}
-        {runsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(runsQuery.error)} /> : null}
+        {taskQuery.error ? <Alert showIcon type="error" title={getErrorMessage(taskQuery.error)} /> : null}
+        {runsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(runsQuery.error)} /> : null}
 
         {!task && taskQuery.isLoading ? (
           <Spin />
@@ -1031,8 +1836,8 @@ export function FunctionalCaseGenerateTaskDetailPage() {
           <div className="ai-task-detail-layout">
             <Card className="ai-task-detail-summary-card">
               <div className="ai-task-detail-inline-meta">
-                <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-testing?tab=functional')}>
-                  返回
+                <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-testing?tab=tasks')}>
+                  返回生成任务
                 </Button>
                 {detailItems.map((item) => (
                   <div key={item.label} className="ai-task-detail-inline-item">
@@ -1041,6 +1846,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                   </div>
                 ))}
                 <div className="ai-task-detail-inline-actions">
+                  <AiTaskQuickLinks />
                   <Button
                     className="action-btn-run"
                     icon={<CaretRightOutlined />}
@@ -1064,31 +1870,13 @@ export function FunctionalCaseGenerateTaskDetailPage() {
 
             <div className={`ai-task-detail-fold-group${expandedSection === 'runHistory' ? ' run-history-expanded' : ''}`}>
               <Card
-                className={`ai-task-detail-card ai-task-detail-fold-card ai-task-detail-fold-card-source${expandedSection === 'sourceContent' ? ' expanded' : ' collapsed'}`}
+                className="ai-task-detail-card ai-task-detail-fold-card ai-task-detail-fold-card-source collapsed"
                 title={
-                  <button type="button" className="ai-task-detail-fold-trigger" onClick={() => toggleSection('sourceContent')} aria-expanded={expandedSection === 'sourceContent'}>
-                    {expandedSection === 'sourceContent' ? <DownOutlined /> : <RightOutlined />}
-                    <span>来源内容</span>
+                  <button type="button" className="ai-task-detail-fold-trigger" onClick={() => setDocumentPreviewOpen(true)}>
+                    <span>需求文档</span>
                   </button>
                 }
-              >
-                {expandedSection === 'sourceContent' ? (
-                  <div className="ai-task-detail-content-scroll">
-                    {task.sourceType === 'text' ? (
-                      <pre className="ai-task-code-block">{task.sourceContent || '-'}</pre>
-                    ) : task.sourceContent ? (
-                      <div className="ai-task-code-block">
-                        <a href={task.sourceContent} target="_blank" rel="noreferrer">
-                          下载文件
-                        </a>
-                        <div style={{ marginTop: 8 }}>{getFileDisplayName(task)}</div>
-                      </div>
-                    ) : (
-                      <pre className="ai-task-code-block">-</pre>
-                    )}
-                  </div>
-                ) : null}
-              </Card>
+              />
 
               <Card
                 className={`ai-task-detail-card ai-task-detail-fold-card ai-task-detail-fold-card-instruction${expandedSection === 'instruction' ? ' expanded' : ' collapsed'}`}
@@ -1141,11 +1929,21 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                       <div className="ai-task-run-history-list single-list">
                         {runRecords.map((record, index) => {
                           const active = record.runId === selectedRunId
-                          const sectionValues = active ? selectedRunResultSectionMap : new Map<string, string>()
                           const reviewStatus = normalizeReviewStatus(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)
-                          const canReviewRecord = reviewStatus === 'pending' && !isApiCaseGenerateTaskRunInProgress(active && selectedRun ? selectedRun.status : record.status)
+                          const recordStatus = String(active && selectedRun ? selectedRun.status ?? '' : record.status ?? '')
+                          const recordSucceeded = recordStatus.toLowerCase() === 'success'
+                          const recordResultYaml = active && selectedRun ? selectedRun.resultYaml : record.resultYaml
+                          const recordHasResultYaml = Boolean(formatStructuredContent(recordResultYaml))
+                          const canReviewRecord = reviewStatus === 'pending' && recordStatus === 'success'
                           const visibleSections = runResultSectionDefinitions.filter(
-                            (section) => !(section.key === 'errorMessage' && String(record.status ?? '').toLowerCase() === 'success'),
+                            (section) => {
+                              if (section.key === 'enhancedText') {
+                                return active && section.key === selectedStageField?.key && checkpointStageWaitingReview
+                              }
+                              if (section.key === 'resultYaml') return recordSucceeded || recordHasResultYaml
+                              if (section.key === 'errorMessage') return !recordSucceeded
+                              return true
+                            },
                           )
 
                           return (
@@ -1170,8 +1968,15 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                                   </span>
                                 </div>
                                 <div className="ai-task-run-history-record-meta">
-                                  <span className="ai-task-run-history-record-status">{renderRunStatusTag(record.status)}</span>
-                                  <span className="ai-task-run-history-review-status">{renderReviewStatusTag(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)}</span>
+                                  <span className="ai-task-run-history-record-status">{renderRunStatusTag(active && selectedRun ? selectedRun.status : record.status)}</span>
+                                  {active && selectedRun?.checkpointEnabled && selectedRun.currentStage ? (
+                                    <span className="ai-task-run-history-record-stage">
+                                      <Tag color={selectedStageMeta.color}>{selectedStageMeta.label}</Tag>
+                                    </span>
+                                  ) : null}
+                                  {recordSucceeded ? (
+                                    <span className="ai-task-run-history-review-status">{renderReviewStatusTag(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)}</span>
+                                  ) : null}
                                   <span className="ai-task-run-history-record-field">开始：{formatTime(record.startedAt)}</span>
                                   <span className="ai-task-run-history-record-field">结束：{formatTime(record.finishedAt)}</span>
                                   <span className="ai-task-run-history-record-field">耗时：{formatDurationSeconds(record.durationMs)}</span>
@@ -1179,103 +1984,46 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                               </div>
                               <div className="ai-task-run-history-record-actions">
                                 {visibleSections.map((section) => {
-                                  const popoverKey = `${record.runId ?? index}:${section.key}`
-                                  const isOpen = openRunDetailPopoverKey === popoverKey
-                                  const loading = active && selectedRunQuery.isLoading
-                                  const content = active ? sectionValues.get(section.key) : undefined
-                                  const configTabs = section.key === 'configJson' ? parseConfigJsonTabs(content) : []
+                                  const showStageReviewInConfig = active && section.key === selectedStageField?.key && checkpointStageWaitingReview
+                                  const isOpen = active && runResultModal?.key === section.key
+                                  const sectionLabel = showStageReviewInConfig ? '审核' : section.label
 
                                   return (
-                                    <Popover
-                                      key={popoverKey}
-                                      trigger="click"
-                                      placement="bottomRight"
-                                      overlayClassName="ai-task-run-result-popover"
-                                      open={isOpen}
-                                      onOpenChange={(open) => {
+                                    <button
+                                      key={section.key}
+                                      type="button"
+                                      className={`ai-task-run-result-popover-btn${isOpen ? ' active' : ''}${showStageReviewInConfig ? ' review' : ''}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
                                         setSelectedRunRecordId(record.runId ?? null)
-                                        setOpenRunDetailPopoverKey(open ? popoverKey : null)
+                                        setRunResultModal({ key: section.key, label: sectionLabel })
                                       }}
-                                      content={
-                                        <div className="ai-task-run-result-popover-content">
-                                          {loading ? (
-                                            <div className="ai-task-run-result-popover-loading">
-                                              <Spin size="small" />
-                                            </div>
-                                          ) : content ? (
-                                            <>
-                                              <div className="ai-task-run-result-popover-header">
-                                                <span>{section.label}</span>
-                                                {configTabs.length === 0 ? (
-                                                  <Button
-                                                    type="text"
-                                                    size="small"
-                                                    icon={<FullscreenOutlined />}
-                                                    aria-label="放大查看"
-                                                    onClick={(event) => {
-                                                      event.stopPropagation()
-                                                      openExpandedRunResult(section.label, content)
-                                                    }}
-                                                  />
-                                                ) : null}
-                                              </div>
-                                              {configTabs.length > 0 ? (
-                                                <Tabs
-                                                  className="ai-task-run-config-tabs"
-                                                  size="small"
-                                                  tabBarExtraContent={
-                                                    <Button
-                                                      type="text"
-                                                      size="small"
-                                                      icon={<FullscreenOutlined />}
-                                                      aria-label="放大查看"
-                                                      onClick={(event) => {
-                                                        event.stopPropagation()
-                                                        openExpandedConfigResult(configTabs)
-                                                      }}
-                                                    />
-                                                  }
-                                                  items={configTabs.map((tab) => ({
-                                                    key: tab.key,
-                                                    label: tab.label,
-                                                    children: (
-                                                      tab.key === 'caseNames' ? (
-                                                        <CaseNamesResultView content={tab.content} rootTitle={task?.name || '功能测试用例生成'} />
-                                                      ) : isJsonText(tab.content) ? (
-                                                        <JsonEditor value={tab.content} readOnly foldable minHeight={260} />
-                                                      ) : (
-                                                        <pre className="ai-task-code-block">{tab.content}</pre>
-                                                      )
-                                                    ),
-                                                  }))}
-                                                />
-                                              ) : section.key === 'resultYaml' ? (
-                                                <JsonEditor value={content} readOnly foldable minHeight={320} />
-                                              ) : (
-                                                <pre className="ai-task-code-block">{content}</pre>
-                                              )}
-                                            </>
-                                          ) : (
-                                            <div className="ai-task-run-result-popover-empty">暂无内容</div>
-                                          )}
-                                        </div>
-                                      }
                                     >
-                                      <button type="button" className={`ai-task-run-result-popover-btn${isOpen ? ' active' : ''}`} onClick={(event) => event.stopPropagation()}>
-                                        {section.label}
-                                      </button>
-                                    </Popover>
+                                      {sectionLabel}
+                                    </button>
                                   )
                                 })}
                                 {active && selectedRun ? (
                                   <div className="ai-task-run-history-review-inline">
+                                    {canRetryStage ? (
+                                      <Button
+                                        size="small"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          handleRetryStage()
+                                        }}
+                                        loading={retryStageMutation.isPending}
+                                      >
+                                        重试阶段
+                                      </Button>
+                                    ) : null}
                                     {selectedRun.reviewedAt ? (
-                                      <span className="ai-task-run-history-record-field">审核时间：{formatTime(selectedRun.reviewedAt)}</span>
+                                      <span className="ai-task-run-history-record-field">导入时间：{formatTime(selectedRun.reviewedAt)}</span>
                                     ) : null}
                                     {selectedRun.reviewComment ? (
                                       <Popover trigger="click" placement="bottomRight" content={<div className="ai-task-run-review-comment">{selectedRun.reviewComment}</div>}>
                                         <button type="button" className="ai-task-run-review-note-btn" onClick={(event) => event.stopPropagation()}>
-                                          审核备注
+                                          导入备注
                                         </button>
                                       </Popover>
                                     ) : null}
@@ -1288,7 +2036,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                                           openResultModal(record.runId)
                                         }}
                                       >
-                                        审核
+                                        导入
                                       </Button>
                                     ) : null}
                                   </div>
@@ -1302,7 +2050,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="运行详情加载中..." />
                           </div>
                         ) : null}
-                        {selectedRun && selectedRunResultSections.length === 0 ? (
+                        {selectedRun && selectedRunResultSections.length === 0 && !checkpointStageVisible ? (
                           <div className="ai-task-run-history-hint compact">当前选中记录暂无可展示结果</div>
                         ) : null}
                       </div>
@@ -1318,7 +2066,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
             </div>
           </div>
         ) : (
-          <Alert showIcon type="warning" message="未找到对应任务" />
+          <Alert showIcon type="warning" title="未找到对应任务" />
         )}
 
         <FunctionalCaseGenerateTaskDrawer
@@ -1339,7 +2087,229 @@ export function FunctionalCaseGenerateTaskDetailPage() {
         />
 
         <Modal
-          title={canReviewSelectedRun ? '审核 AI 生成结果' : '功能测试用例生成结果'}
+          className="ai-task-run-result-modal"
+          title="需求文档"
+          open={documentPreviewOpen}
+          onCancel={() => setDocumentPreviewOpen(false)}
+          footer={[
+            <Button key="close" type="primary" onClick={() => setDocumentPreviewOpen(false)}>
+              关闭
+            </Button>,
+          ]}
+          width="min(1620px, calc(100vw - 72px))"
+          centered
+          destroyOnHidden
+        >
+          <div className="ai-task-run-result-modal-content ai-task-document-preview-modal-content">
+            {taskRequirementQuery.isLoading ? (
+              <div className="ai-task-run-result-popover-loading">
+                <Spin />
+              </div>
+            ) : taskRequirementQuery.data && hasRequirementDocument(taskRequirementQuery.data) ? (
+              <RequirementDocumentPreviewContent
+                requirementId={normalizeRequirementId(taskRequirementQuery.data)}
+                requirementName={taskRequirementQuery.data.name}
+                documentType={taskRequirementQuery.data.documentType}
+                documentContent={taskRequirementQuery.data.documentContent}
+                documentFilename={taskRequirementQuery.data.documentFilename}
+                documentDownloadUrl={taskRequirementQuery.data.documentDownloadUrl}
+              />
+            ) : (
+              <pre className="ai-task-code-block">-</pre>
+            )}
+          </div>
+        </Modal>
+
+        <Modal
+          className={`ai-task-run-result-modal${showStageReviewInRunResultModal ? ' review' : ''}`}
+          title={showStageReviewInRunResultModal ? '审核' : runResultModal?.label ?? '运行结果'}
+          open={Boolean(runResultModal)}
+          onCancel={() => setRunResultModal(null)}
+          footer={
+            showStageReviewInRunResultModal
+              ? [
+                  <Button key="close" onClick={() => setRunResultModal(null)}>
+                    关闭
+                  </Button>,
+                  <Button
+                    key="save"
+                    onClick={handleSaveStageOutput}
+                    loading={saveStageOutputMutation.isPending && !stageReviewAction}
+                    disabled={reviewStageMutation.isPending}
+                  >
+                    保存
+                  </Button>,
+                  <Button
+                    key="reject"
+                    danger
+                    ghost
+                    onClick={handleRejectStageReview}
+                    loading={reviewStageMutation.isPending && stageReviewAction === 'reject'}
+                    disabled={saveStageOutputMutation.isPending}
+                  >
+                    审核不通过
+                  </Button>,
+                  <Button
+                    key="approve"
+                    type="primary"
+                    onClick={handleApproveStageReview}
+                    loading={stageActionPending && stageReviewAction === 'approve'}
+                    disabled={reviewStageMutation.isPending && stageReviewAction !== 'approve'}
+                  >
+                    审核通过并继续
+                  </Button>,
+                ]
+              : [
+                  <Button key="close" type="primary" onClick={() => setRunResultModal(null)}>
+                    关闭
+                  </Button>,
+                ]
+          }
+          width="min(1620px, calc(100vw - 72px))"
+          centered
+          destroyOnHidden
+        >
+          <div className={`ai-task-run-result-modal-content${showStageReviewInRunResultModal ? ' review' : ''}`}>
+            {selectedRunQuery.isLoading ? (
+              <div className="ai-task-run-result-popover-loading">
+                <Spin />
+              </div>
+            ) : showStageReviewInRunResultModal ? (
+              <div className="ai-task-stage-review-popover">
+                <div className="ai-task-run-result-popover-header">
+                  <span>阶段产物 {selectedStageField?.label ?? '当前阶段'}</span>
+                  <div className="ai-task-stage-review-mini-tags">
+                    <Tag color={selectedStageMeta.color}>{selectedStageMeta.label}</Tag>
+                    <Tag color={selectedStageStatusMeta.color}>{selectedStageStatusMeta.label}</Tag>
+                  </div>
+                </div>
+                <div className="ai-task-stage-review-note compact">
+                  <strong>待审核/可编辑</strong>
+                  <span>当前编辑的是本阶段产物，保存后会写回当前阶段输出，审核通过后继续进入下一阶段。</span>
+                </div>
+                {stageOutputIsCaseNames ? (
+                  <Tabs
+                    className="ai-case-names-inner-tabs expanded review"
+                    size="small"
+                    items={[
+                      {
+                        key: 'json',
+                        label: 'json',
+                        children: (
+                          <TextCodeEditor
+                            value={stageOutputDraft}
+                            onChange={(value) => {
+                              setStageOutputDraft(value)
+                              setStageOutputDirty(true)
+                            }}
+                            minHeight={360}
+                          />
+                        ),
+                      },
+                      {
+                        key: 'tree',
+                        label: '树图',
+                        children: (
+                          <CaseNameTreeView
+                            content={stageOutputDraft}
+                            rootTitle={task?.name || '功能测试用例生成'}
+                            expanded
+                            editable
+                            onTreeChange={(value) => {
+                              setStageOutputDraft(value)
+                              setStageOutputDirty(true)
+                            }}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                ) : stageOutputIsRequirementAnalysis ? (
+                  <Tabs
+                    className="ai-requirement-analysis-tabs review"
+                    size="small"
+                    activeKey={stageRequirementAnalysisView}
+                    onChange={(key) => setStageRequirementAnalysisView(key as RequirementAnalysisViewMode)}
+                    items={[
+                      {
+                        key: 'json',
+                        label: 'json',
+                        children: (
+                          <TextCodeEditor
+                            value={stageOutputDraft}
+                            onChange={(value) => {
+                              setStageOutputDraft(value)
+                              setStageOutputDirty(true)
+                            }}
+                            minHeight={360}
+                          />
+                        ),
+                      },
+                      {
+                        key: 'diagram',
+                        label: '图像',
+                        children: (
+                          <div className="ai-requirement-analysis-review-diagram">
+                            <RequirementAnalysisDiagramView content={stageOutputDraft} />
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                ) : (
+                  <TextCodeEditor
+                    value={stageOutputDraft}
+                    onChange={(value) => {
+                      setStageOutputDraft(value)
+                      setStageOutputDirty(true)
+                    }}
+                    minHeight={360}
+                  />
+                )}
+                <Input.TextArea
+                  className="ai-task-stage-review-comment"
+                  value={stageReviewComment}
+                  onChange={(event) => setStageReviewComment(event.target.value)}
+                  rows={2}
+                  placeholder="审核备注，可选"
+                />
+              </div>
+            ) : runResultModalContent ? (
+              runResultModal?.key === 'caseNames' ? (
+                <CaseNamesResultView
+                  content={runResultModalContent}
+                  rootTitle={task?.name || '功能测试用例生成'}
+                  expanded
+                  activeView={runResultCaseNamesView}
+                  onViewChange={setRunResultCaseNamesView}
+                />
+              ) : runResultModal?.key === 'requirementAnalysis' ? (
+                <RequirementAnalysisView content={runResultModalContent} />
+              ) : runResultModal?.key === 'enhancedText' ? (
+                isJsonText(runResultModalContent) ? (
+                  <JsonEditor value={runResultModalContent} readOnly foldable minHeight={640} />
+                ) : (
+                  <pre className="ai-task-code-block">{runResultModalContent}</pre>
+                )
+              ) : runResultModal?.key === 'resultYaml' ? (
+                <GeneratedCasesResultView
+                  content={runResultModalContent}
+                  expanded
+                  activeView={runResultGeneratedCasesView}
+                  onViewChange={setRunResultGeneratedCasesView}
+                />
+              ) : (
+                <pre className="ai-task-code-block">{runResultModalContent}</pre>
+              )
+            ) : (
+              <div className="ai-task-run-result-popover-empty">暂无内容</div>
+            )}
+          </div>
+        </Modal>
+
+        <Modal
+          className="ai-task-import-result-modal"
+          title={canReviewSelectedRun ? '导入 AI 生成结果' : '功能测试用例生成结果'}
           open={resultModalOpen}
           onCancel={closeResultModal}
           footer={
@@ -1355,7 +2325,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                     loading={reviewRunMutation.isPending && reviewSubmitAction === 'reject'}
                     onClick={handleRejectReview}
                   >
-                    审核不通过
+                    不导入
                   </Button>,
                   <Button
                     key="approve"
@@ -1363,7 +2333,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                     loading={reviewRunMutation.isPending && reviewSubmitAction === 'approve'}
                     onClick={handleApproveReview}
                   >
-                    审核通过并导入
+                    确认导入
                   </Button>,
                 ]
               : [
@@ -1372,105 +2342,60 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                   </Button>,
                 ]
           }
-          width={960}
+          width="min(1620px, calc(100vw - 72px))"
+          centered
           destroyOnHidden
         >
-          <Form form={reviewForm} layout="vertical">
-            <div className="ai-task-review-modal-content ai-task-result-preview-modal-content single-column">
+          <Form form={reviewForm} layout="vertical" className="ai-task-import-result-form">
+            <div className="ai-task-import-target-summary">
+              <div className="ai-task-import-target-copy">
+                <strong>导入到当前任务关联需求</strong>
+                <span title={importTargetRequirementName}>目标需求：{importTargetRequirementName}</span>
+              </div>
+              <div className="ai-task-import-target-stats">
+                <Tag color="cyan">模块 {selectedRunImportStats.moduleCount}</Tag>
+                <Tag color="blue">用例 {selectedRunImportStats.caseCount}</Tag>
+              </div>
+            </div>
+            <div className="ai-task-review-modal-content ai-task-result-preview-modal-content ai-task-import-result-preview-content single-column">
               <div className="ai-task-review-modal-section">
                 <div className="ai-task-review-modal-label">生成结果</div>
-                <div className="ai-task-review-modal-preview">
+                <div className="ai-task-review-modal-preview ai-task-import-result-preview">
                   {selectedRunQuery.isLoading ? (
                     <div className="ai-task-run-result-popover-loading">
                       <Spin />
                     </div>
                   ) : selectedRun?.resultYaml ? (
-                    <JsonEditor value={formatStructuredContent(selectedRun.resultYaml)} readOnly foldable minHeight={480} />
+                    <GeneratedCasesResultView
+                      content={formatStructuredContent(selectedRun.resultYaml)}
+                      expanded
+                      activeView={importResultView}
+                      onViewChange={setImportResultView}
+                    />
                   ) : (
                     <div className="ai-task-run-result-popover-empty">当前记录暂无结果</div>
                   )}
                 </div>
               </div>
             </div>
-            <Form.Item label="审核备注" name="comment">
-              <Input.TextArea rows={4} placeholder="请输入审核备注或驳回原因" disabled={!canReviewSelectedRun} />
+            <Form.Item label="导入备注" name="comment">
+              <Input.TextArea rows={4} placeholder="请输入导入备注或不导入原因" disabled={!canReviewSelectedRun} />
             </Form.Item>
           </Form>
         </Modal>
 
-        <Modal
-          className="ai-task-run-result-expanded-modal"
-          title={
-            <div className="ai-task-run-result-expanded-title">
-              <span>{expandedRunResult?.title ?? '运行结果'}</span>
-              <div className="ai-task-run-result-expanded-actions">
-                <Tooltip title="复制内容">
-                  <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyExpandedRunResult} />
-                </Tooltip>
-                <Tooltip title={isExpandedCaseNameTreeActive() ? '下载图片' : '下载内容'}>
-                  <Button type="text" size="small" icon={<DownloadOutlined />} onClick={handleDownloadExpandedRunResult} />
-                </Tooltip>
-              </div>
-            </div>
-          }
-          open={Boolean(expandedRunResult)}
-          onCancel={() => setExpandedRunResult(null)}
-          footer={[
-            <Button key="close" type="primary" onClick={() => setExpandedRunResult(null)}>
-              关闭
-            </Button>,
-          ]}
-          width="min(1560px, calc(100vw - 160px))"
-          style={{ top: 48 }}
-          destroyOnHidden
-        >
-          <div className="ai-task-run-result-expanded-content">
-            {expandedRunResult?.type === 'config' ? (
-              <Tabs
-                className="ai-task-run-config-tabs expanded"
-                activeKey={expandedRunResult.activeTabKey}
-                onChange={(activeTabKey) => {
-                  setExpandedRunResult((current) => {
-                    if (!current || current.type !== 'config') return current
-                    return {
-                      ...current,
-                      activeTabKey,
-                      activeCaseNamesView: activeTabKey === 'caseNames' ? current.activeCaseNamesView ?? 'json' : 'json',
-                    }
-                  })
-                }}
-                items={expandedRunResult.tabs.map((tab) => ({
-                  key: tab.key,
-                  label: tab.label,
-                  children: tab.key === 'caseNames' ? (
-                    <CaseNamesResultView
-                      content={tab.content}
-                      rootTitle={task?.name || '功能测试用例生成'}
-                      expanded
-                      activeView={expandedRunResult.activeCaseNamesView ?? 'json'}
-                      onViewChange={(activeCaseNamesView) => {
-                        setExpandedRunResult((current) => {
-                          if (!current || current.type !== 'config') return current
-                          return { ...current, activeCaseNamesView }
-                        })
-                      }}
-                    />
-                  ) : isJsonText(tab.content) ? (
-                    <JsonEditor value={tab.content} readOnly foldable minHeight={560} />
-                  ) : (
-                    <pre className="ai-task-code-block">{tab.content}</pre>
-                  ),
-                }))}
-              />
-            ) : expandedRunResult && isJsonText(expandedRunResult.content) ? (
-              <JsonEditor value={expandedRunResult.content} readOnly foldable minHeight={560} />
-            ) : (
-              <pre className="ai-task-code-block">{expandedRunResult?.content ?? ''}</pre>
-            )}
-          </div>
-        </Modal>
-
-        <LlmConnectionSelectModal open={llmSelectOpen} onClose={() => setLlmSelectOpen(false)} onConfirm={handleLlmSelectConfirm} loading={runTaskMutation.isPending} />
+        <LlmConnectionSelectModal
+          open={llmSelectOpen}
+          onClose={() => {
+            setLlmSelectOpen(false)
+            setCheckpointEnabled(false)
+          }}
+          onConfirm={handleLlmSelectConfirm}
+          loading={runTaskMutation.isPending}
+          showCheckpointOption
+          checkpointEnabled={checkpointEnabled}
+          onCheckpointEnabledChange={setCheckpointEnabled}
+        />
       </div>
     </div>
   )

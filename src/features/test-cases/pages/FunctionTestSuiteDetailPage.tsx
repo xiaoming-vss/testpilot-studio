@@ -1,9 +1,10 @@
 import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, AutoComplete, Button, Checkbox, Empty, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Tag, Tooltip, Typography, Upload, message } from 'antd'
+import { Alert, AutoComplete, Button, Checkbox, Empty, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Tag, Tooltip, Typography, Upload } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
+import { message } from '@/shared/utils/feedback'
 import { ApiError, api, type CreateFunctionTestCasePayload, type FunctionTestCase } from '@/services/api'
 import {
   formatTime,
@@ -133,6 +134,7 @@ function getZentaoImportErrorMessage(error: unknown) {
 
 export function FunctionTestSuiteDetailPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { suiteId = '' } = useParams()
   const [caseSearch, setCaseSearch] = useState('')
@@ -148,6 +150,11 @@ export function FunctionTestSuiteDetailPage() {
   const [form] = Form.useForm<FunctionTestCaseFormValues>()
   const [zentaoImportForm] = Form.useForm<ZentaoImportFormValues>()
   const sidebarItemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const backToFunctionalListUrl = useMemo(() => {
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.set('tab', 'functional')
+    return `/testing?${nextSearchParams.toString()}`
+  }, [searchParams])
 
   const suiteQuery = useQuery({
     queryKey: ['functionTestSuite', suiteId],
@@ -545,11 +552,11 @@ export function FunctionTestSuiteDetailPage() {
       <div className="api-automation-content">
         <div className="page-frame api-collection-detail-frame">
           <div className="api-collection-detail-layout functional-suite-detail-layout">
-            {suiteQuery.error ? <Alert showIcon type="error" message={getFunctionCaseErrorMessage(suiteQuery.error)} /> : null}
-            {casesQuery.error ? <Alert showIcon type="error" message={getFunctionCaseErrorMessage(casesQuery.error)} /> : null}
-            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" message={getFunctionCaseErrorMessage(selectedCaseDetailQuery.error)} /> : null}
-            {requirementQuery.error ? <Alert showIcon type="error" message={getFunctionCaseErrorMessage(requirementQuery.error)} /> : null}
-            {sprintQuery.error ? <Alert showIcon type="error" message={getFunctionCaseErrorMessage(sprintQuery.error)} /> : null}
+            {suiteQuery.error ? <Alert showIcon type="error" title={getFunctionCaseErrorMessage(suiteQuery.error)} /> : null}
+            {casesQuery.error ? <Alert showIcon type="error" title={getFunctionCaseErrorMessage(casesQuery.error)} /> : null}
+            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" title={getFunctionCaseErrorMessage(selectedCaseDetailQuery.error)} /> : null}
+            {requirementQuery.error ? <Alert showIcon type="error" title={getFunctionCaseErrorMessage(requirementQuery.error)} /> : null}
+            {sprintQuery.error ? <Alert showIcon type="error" title={getFunctionCaseErrorMessage(sprintQuery.error)} /> : null}
 
             <aside className="workbench-panel api-case-sidebar functional-case-sidebar">
               <div className="panel-header api-case-sidebar-header">
@@ -558,7 +565,7 @@ export function FunctionTestSuiteDetailPage() {
                     type="text"
                     icon={<ArrowLeftOutlined />}
                     className="api-case-back-button"
-                    onClick={() => navigate('/testing?tab=functional')}
+                    onClick={() => navigate(backToFunctionalListUrl)}
                     aria-label="返回功能测试列表"
                   />
                   <div className="api-case-sidebar-title-copy">
@@ -852,7 +859,7 @@ export function FunctionTestSuiteDetailPage() {
       onOk={handleImportFunctionCases}
       rootClassName="api-case-import-modal-root"
       className="api-case-import-modal-shell"
-      destroyOnClose
+      destroyOnHidden
     >
       <div className="api-case-import-modal">
         <Segmented
@@ -907,13 +914,13 @@ export function FunctionTestSuiteDetailPage() {
       confirmLoading={importZentaoTestCasesMutation.isPending}
       okButtonProps={{ className: 'action-btn-save' }}
       onOk={handleImportZentaoTestCases}
-      destroyOnClose
+      destroyOnHidden
     >
       <div className="functional-case-zentao-import-modal">
         <Alert
           showIcon
           type="info"
-          message={`已选择 ${selectedImportCaseCount} 条，本次将导入 ${zentaoImportTargetCount} 条用例`}
+          title={`已选择 ${selectedImportCaseCount} 条，本次将导入 ${zentaoImportTargetCount} 条用例`}
           description={
             selectedImportCaseCount > 0
               ? '只会导入左侧已勾选的用例。如果导入失败并提示资源绑定相关错误，请先完成项目和迭代的禅道绑定。'

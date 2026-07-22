@@ -39,14 +39,14 @@ export function CollectionDrawer({
       title={title}
       open={open}
       onClose={onClose}
-      width={520}
+      size={520}
       extra={
         <Button type="primary" className="action-btn-save" loading={loading} onClick={() => form.submit()}>
           保存
         </Button>
       }
     >
-      {error ? <Alert showIcon type="error" message={getErrorMessage(error)} /> : null}
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} /> : null}
       <Form<CollectionFormValues> form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         {showScopeFields ? (
           <>

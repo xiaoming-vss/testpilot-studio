@@ -1,9 +1,10 @@
 import { LinkOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Modal, Popconfirm, Select, Space, Tag, Typography, message } from 'antd'
+import { Alert, Button, Empty, Modal, Popconfirm, Select, Space, Tag, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import '@/features/base-services/styles/index.css'
 import { api, type ZentaoBinding, type ZentaoBindingTargetType, type ZentaoConnection, type ZentaoRemoteOption } from '@/services/api'
+import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage } from '@/utils/format'
 
 const { Text, Title } = Typography
@@ -430,14 +431,14 @@ export function ZentaoBindingModal({
         )}
       </div>
 
-      {connectionsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(connectionsQuery.error)} /> : null}
-      {bindingsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(bindingsQuery.error)} /> : null}
-      {parentProjectBindingsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(parentProjectBindingsQuery.error)} /> : null}
-      {parentSprintBindingsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(parentSprintBindingsQuery.error)} /> : null}
-      {projectsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(projectsQuery.error)} /> : null}
-      {executionsQuery.error ? <Alert showIcon type="error" message={getErrorMessage(executionsQuery.error)} /> : null}
-      {testtasksQuery.error ? <Alert showIcon type="error" message={getErrorMessage(testtasksQuery.error)} /> : null}
-      {storiesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(storiesQuery.error)} /> : null}
+      {connectionsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} /> : null}
+      {bindingsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(bindingsQuery.error)} /> : null}
+      {parentProjectBindingsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(parentProjectBindingsQuery.error)} /> : null}
+      {parentSprintBindingsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(parentSprintBindingsQuery.error)} /> : null}
+      {projectsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(projectsQuery.error)} /> : null}
+      {executionsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(executionsQuery.error)} /> : null}
+      {testtasksQuery.error ? <Alert showIcon type="error" title={getErrorMessage(testtasksQuery.error)} /> : null}
+      {storiesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(storiesQuery.error)} /> : null}
       {((targetType === 'sprint' || targetType === 'requirement') && inheritedProjectBinding) ||
       (targetType === 'requirement' && inheritedSprintBinding) ? (
         <div className="zentao-binding-inherit-note">

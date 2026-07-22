@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: true,
         },
+        '/__document_preview_proxy': {
+          target: apiTarget,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/__document_preview_proxy/, ''),
+        },
       },
     },
   }

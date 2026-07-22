@@ -34,14 +34,14 @@ export function SprintDrawer({
       title={title}
       open={open}
       onClose={onClose}
-      width={480}
+      size={480}
       extra={
         <Button type="primary" className="action-btn-save" loading={loading} onClick={() => form.submit()}>
           保存
         </Button>
       }
     >
-      {error ? <Alert showIcon type="error" message={getErrorMessage(error)} /> : null}
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} /> : null}
       <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         <Form.Item name="name" label="迭代名称" rules={[{ required: true, message: '请输入迭代名称' }]}>
           <Input maxLength={64} />

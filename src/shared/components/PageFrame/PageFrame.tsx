@@ -19,10 +19,10 @@ export function PageFrame({
   hideHeader?: boolean
 }) {
   return (
-    <Space direction="vertical" size={20} className="page-frame">
+    <Space orientation="vertical" size={20} className="page-frame">
       {hideHeader ? null : (
         <div className="page-head">
-          <Space direction="vertical" size={6}>
+          <Space orientation="vertical" size={6}>
             {back}
             <Title level={2}>{title}</Title>
             {description ? <Paragraph type="secondary">{description}</Paragraph> : null}

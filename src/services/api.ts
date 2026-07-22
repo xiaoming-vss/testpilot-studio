@@ -9,6 +9,7 @@ import { uiAutomationApi } from '@/features/ui-automation/api/uiAutomation.api'
 
 export type { LoginResponse, User } from '@/features/auth/types'
 export type {
+  AiSkillLibraryItem,
   ApiCaseGenerateTask,
   ApiCaseGenerateTaskRun,
   ApiCaseGenerateTaskRunReviewStatus,
@@ -17,15 +18,27 @@ export type {
   ApiCaseGenerateTaskSourceType,
   CreateApiCaseGenerateTaskPayload,
   CreateFunctionalCaseGenerateTaskPayload,
+  CreateRequirementAnalysisTaskPayload,
   FunctionalCaseGenerateTask,
   FunctionalCaseGenerateTaskRun,
   FunctionalCaseGenerateTaskRunSnapshot,
+  FunctionalCaseGenerateTaskStage,
+  FunctionalCaseGenerateTaskStageStatus,
   FunctionalCaseGenerateTaskSourceType,
+  RequirementAnalysisTask,
+  RequirementAnalysisTaskRun,
+  RequirementAnalysisTaskRunSnapshot,
+  RequirementAnalysisTaskSourceType,
   ReviewApiCaseGenerateTaskRunPayload,
   ReviewFunctionalCaseGenerateTaskRunPayload,
+  ReviewFunctionalCaseGenerateTaskRunStagePayload,
   RunFunctionalCaseGenerateTaskPayload,
+  RunRequirementAnalysisTaskPayload,
   UpdateApiCaseGenerateTaskPayload,
   UpdateFunctionalCaseGenerateTaskPayload,
+  UpdateFunctionalCaseGenerateTaskRunStageOutputPayload,
+  UpdateRequirementAnalysisTaskPayload,
+  UploadAiSkillPayload,
 } from '@/features/ai-testing/types'
 export type {
   ApiAssertComparator,
@@ -37,6 +50,7 @@ export type {
   ApiCaseRunRequestSnapshot,
   ApiCaseRunResponseSnapshot,
   ApiCaseRunResult,
+  ApiCaseRunStatus,
   ApiCollection,
   ApiCollectionImportResult,
   ApiCollectionRunItem,
@@ -61,8 +75,21 @@ export type {
   UpdateApiEnvironmentVarPayload,
   UpdateApiExtractRulePayload,
 } from '@/features/api-automation/types'
-export type { Project, ProjectUpdatePayload, Sprint, SprintCreatePayload, SprintUpdatePayload } from '@/features/projects/types'
-export type { Requirement, RequirementCreatePayload, RequirementUpdatePayload } from '@/features/requirements/types'
+export type {
+  Project,
+  ProjectUpdatePayload,
+  Sprint,
+  SprintCreatePayload,
+  SprintDailyMetricsSnapshot,
+  SprintDailyMetricsTestStats,
+  SprintUpdatePayload,
+} from '@/features/projects/types'
+export type {
+  Requirement,
+  RequirementCreatePayload,
+  RequirementDocumentType,
+  RequirementUpdatePayload,
+} from '@/features/requirements/types'
 export type {
   CreateZentaoBindingPayload,
   CreateZentaoConnectionPayload,

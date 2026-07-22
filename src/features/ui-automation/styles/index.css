@@ -100,6 +100,74 @@
   align-content: start;
 }
 
+.ui-test-suite-card {
+  min-width: 0;
+  height: 100%;
+  min-height: 236px;
+}
+
+.ui-test-suite-card .ant-card-body {
+  min-height: 0;
+  gap: 10px;
+}
+
+.ui-test-suite-card .api-collection-card-top {
+  min-height: 22px;
+}
+
+.ui-test-suite-card .api-collection-card-top .ant-typography {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-test-suite-card .api-collection-description {
+  min-height: 44px;
+  line-height: 18px;
+}
+
+.ui-test-suite-card .sprint-card-meta {
+  min-height: 30px;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+
+.ui-test-suite-card .api-collection-inline-value {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-test-suite-card .sprint-card-actions {
+  min-height: 28px;
+  padding-top: 0;
+}
+
+.ui-test-suite-card .sprint-card-actions .ant-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+}
+
+.ui-test-suite-card .sprint-card-meta:last-of-type {
+  min-height: 46px;
+  align-items: flex-start;
+}
+
+.ui-test-suite-card .sprint-card-meta:last-of-type .api-collection-inline-value {
+  white-space: normal;
+  text-align: right;
+  line-height: 20px;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
 .api-case-summary-card .ant-card-body {
   padding: 12px 16px;
 }

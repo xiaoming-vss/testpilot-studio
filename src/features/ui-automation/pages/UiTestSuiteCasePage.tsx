@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, CodeOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Popover, Segmented, Select, Switch, Tag, Tooltip, Typography, Upload, message } from 'antd'
+import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Popover, Segmented, Select, Switch, Tag, Tooltip, Typography, Upload } from 'antd'
 import type { InputRef } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
@@ -52,6 +52,7 @@ import {
 } from '@/utils/format'
 import { uiBuiltinTemplateFunctions } from '@/shared/constants/templateFunctions'
 import { buildUiTestCaseUpdatePayload } from '@/utils/updatePayload'
+import { message } from '@/shared/utils/feedback'
 import {
   buildUiSuiteDebugRunPayload,
   getExecutionStatusMeta,
@@ -975,11 +976,11 @@ export function UiTestSuiteCasePage() {
       <div className="api-automation-content">
         <div className="page-frame api-collection-detail-frame">
           <div className="api-collection-detail-layout ui-suite-case-layout">
-            {suiteQuery.error ? <Alert showIcon type="error" message={getErrorMessage(suiteQuery.error)} /> : null}
-            {casesQuery.error ? <Alert showIcon type="error" message={getErrorMessage(casesQuery.error)} /> : null}
-            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" message={getErrorMessage(selectedCaseDetailQuery.error)} /> : null}
-            {requirementQuery.error ? <Alert showIcon type="error" message={getErrorMessage(requirementQuery.error)} /> : null}
-            {sprintQuery.error ? <Alert showIcon type="error" message={getErrorMessage(sprintQuery.error)} /> : null}
+            {suiteQuery.error ? <Alert showIcon type="error" title={getErrorMessage(suiteQuery.error)} /> : null}
+            {casesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(casesQuery.error)} /> : null}
+            {selectedCaseDetailQuery.error ? <Alert showIcon type="error" title={getErrorMessage(selectedCaseDetailQuery.error)} /> : null}
+            {requirementQuery.error ? <Alert showIcon type="error" title={getErrorMessage(requirementQuery.error)} /> : null}
+            {sprintQuery.error ? <Alert showIcon type="error" title={getErrorMessage(sprintQuery.error)} /> : null}
 
             <aside className="workbench-panel api-case-sidebar ui-suite-case-sidebar">
               <div className="panel-header api-case-sidebar-header">
@@ -1286,6 +1287,7 @@ export function UiTestSuiteCasePage() {
                                   ) : (
                                     <div className="ui-test-case-step-list">
                                       {fields.map((field, index) => {
+                                      const { key: fieldKey, ...fieldProps } = field
                                       const step = watchedSteps[index]
                                       const stepKeyword = step?.keyword?.trim()
                                       const stepMeta = getUiStepFieldMeta(stepKeyword)
@@ -1319,7 +1321,7 @@ export function UiTestSuiteCasePage() {
 
                                       return (
                                         <div
-                                          key={field.key}
+                                          key={fieldKey}
                                           className={`ui-test-case-step-card${expanded ? ' expanded' : ''}${draggingStepIndex === index ? ' dragging' : ''}`}
                                           onDragOver={(event) => {
                                             event.preventDefault()
@@ -1358,7 +1360,7 @@ export function UiTestSuiteCasePage() {
                                                   onMouseDown={(event) => event.stopPropagation()}
                                                 >
                                                   <div className="ui-test-case-step-title-head">
-                                                    <Form.Item {...field} name={[field.name, 'stepName']} className="ui-test-case-step-title-item">
+                                                    <Form.Item {...fieldProps} name={[field.name, 'stepName']} className="ui-test-case-step-title-item">
                                                       <Input
                                                         placeholder="点击输入步骤名称"
                                                         maxLength={120}
@@ -1386,7 +1388,7 @@ export function UiTestSuiteCasePage() {
                                           <div className="ui-test-case-step-body" hidden={!expanded} aria-hidden={!expanded}>
                                               <div className="ui-test-case-step-grid ui-test-case-step-core-grid">
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'keyword']}
                                                   label="关键字"
                                                   rules={[{ required: true, message: '请选择步骤关键字' }]}
@@ -1399,7 +1401,7 @@ export function UiTestSuiteCasePage() {
                                                   />
                                                 </Form.Item>
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'locatorType']}
                                                   label="定位方式"
                                                   hidden={!showLocatorTypeField}
@@ -1435,7 +1437,7 @@ export function UiTestSuiteCasePage() {
                                                 </div>
 
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'locatorValue']}
                                                   label={renderTemplatePickerLabel(field.name, 'locatorValue', '定位值')}
                                                   hidden={!showLocatorFields}
@@ -1461,7 +1463,7 @@ export function UiTestSuiteCasePage() {
                                                 </Form.Item>
 
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'operationValue']}
                                                   label={renderTemplatePickerLabel(field.name, 'operationValue', operationFieldLabel)}
                                                   hidden={!showOperationField}
@@ -1534,7 +1536,7 @@ export function UiTestSuiteCasePage() {
                                                 </div>
 
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'expectValue']}
                                                   label={renderTemplatePickerLabel(field.name, 'expectValue', stepMeta.expectLabel || '期望值')}
                                                   hidden={!showExpectField}
@@ -1579,7 +1581,7 @@ export function UiTestSuiteCasePage() {
                                                 </div>
 
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'comparator']}
                                                   label="比较器"
                                                   hidden={!stepUsesComparator}
@@ -1605,7 +1607,7 @@ export function UiTestSuiteCasePage() {
                                                 <div className="ui-test-case-step-footer-grid">
                                                   <div className="ui-test-case-step-status-row">
                                                   <Form.Item
-                                                    {...field}
+                                                    {...fieldProps}
                                                     name={[field.name, 'timeoutMs']}
                                                     label="超时(ms)"
                                                     className="ui-test-case-step-timeout-item"
@@ -1614,7 +1616,7 @@ export function UiTestSuiteCasePage() {
                                                   </Form.Item>
 
                                                   <Form.Item
-                                                    {...field}
+                                                    {...fieldProps}
                                                     name={[field.name, 'enabled']}
                                                     label="启用"
                                                     valuePropName="checked"
@@ -1623,7 +1625,7 @@ export function UiTestSuiteCasePage() {
                                                     <Switch />
                                                   </Form.Item>
                                                   <Form.Item
-                                                    {...field}
+                                                    {...fieldProps}
                                                     name={[field.name, 'continueOnFailure']}
                                                     label="失败后继续"
                                                     valuePropName="checked"
@@ -1635,7 +1637,7 @@ export function UiTestSuiteCasePage() {
                                                 </div>
 
                                                 <Form.Item
-                                                  {...field}
+                                                  {...fieldProps}
                                                   name={[field.name, 'description']}
                                                   label="说明"
                                                   className="ui-test-case-step-description-item"
@@ -1693,10 +1695,10 @@ export function UiTestSuiteCasePage() {
                               </div>
                             </div>
                             {uiTestCaseRunQuery.error && !currentRun ? (
-                              <Alert showIcon type="error" message={getErrorMessage(uiTestCaseRunQuery.error)} className="api-case-run-result-alert" />
+                              <Alert showIcon type="error" title={getErrorMessage(uiTestCaseRunQuery.error)} className="api-case-run-result-alert" />
                             ) : null}
                             {currentRun?.errorMessage ? (
-                              <Alert showIcon type="error" message={currentRun.errorMessage} className="api-case-run-result-alert" />
+                              <Alert showIcon type="error" title={currentRun.errorMessage} className="api-case-run-result-alert" />
                             ) : null}
                             <Segmented
                               className="api-case-run-result-segmented"
@@ -1732,7 +1734,7 @@ export function UiTestSuiteCasePage() {
           onOk={handleImportUiCases}
           rootClassName="api-case-import-modal-root"
           className="api-case-import-modal-shell"
-          destroyOnClose
+          destroyOnHidden
         >
           <div className="api-case-import-modal">
             <Segmented
@@ -1785,12 +1787,12 @@ export function UiTestSuiteCasePage() {
           width={920}
           footer={null}
           onCancel={() => setSuiteRunHistoryOpen(false)}
-          destroyOnClose={false}
+          destroyOnHidden={false}
           className="api-collection-run-history-modal"
         >
           <div className="api-collection-run-history-layout">
             {suiteRunHistoryQuery.error ? (
-              <Alert showIcon type="error" message={getErrorMessage(suiteRunHistoryQuery.error)} />
+              <Alert showIcon type="error" title={getErrorMessage(suiteRunHistoryQuery.error)} />
             ) : suiteRunHistoryQuery.isLoading ? (
               <Empty description="运行记录加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : suiteRunHistory.length === 0 ? (
@@ -1843,12 +1845,12 @@ export function UiTestSuiteCasePage() {
           width={1180}
           footer={null}
           onCancel={closeSuiteRunReport}
-          destroyOnClose={false}
+          destroyOnHidden={false}
           rootClassName="api-collection-run-report-modal-root"
           className="api-collection-run-report-modal"
         >
           {suiteRunReportQuery.error && !suiteRunReport ? (
-            <Alert showIcon type="error" message={getErrorMessage(suiteRunReportQuery.error)} />
+            <Alert showIcon type="error" title={getErrorMessage(suiteRunReportQuery.error)} />
           ) : suiteRunReportQuery.isLoading && !suiteRunReport ? (
             <Empty description="测试集报告加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : suiteRunReport ? (
@@ -1903,7 +1905,7 @@ export function UiTestSuiteCasePage() {
                 </div>
 
                 {suiteRunReport.errorMessage ? (
-                  <Alert showIcon type="error" message={suiteRunReport.errorMessage} className="api-case-run-result-alert" />
+                  <Alert showIcon type="error" title={suiteRunReport.errorMessage} className="api-case-run-result-alert" />
                 ) : null}
 
                 <Segmented
@@ -1960,7 +1962,7 @@ export function UiTestSuiteCasePage() {
                                   <span>步骤数：{item.stepResults?.length ?? 0}</span>
                                   <span>失败后继续：{item.continueOnFailure ? '是' : '否'}</span>
                                 </div>
-                                {item.errorMessage ? <Alert showIcon type="error" message={item.errorMessage} className="api-case-run-result-alert" /> : null}
+                                {item.errorMessage ? <Alert showIcon type="error" title={item.errorMessage} className="api-case-run-result-alert" /> : null}
                                 <div className="api-case-run-result-block">
                                   {renderUiRunStepResultList(item.stepResults ?? [], '该用例暂无步骤结果')}
                                   {item.snapshot ? <pre className="api-case-run-result-pre compact">{prettyPrintValue(item.snapshot)}</pre> : null}

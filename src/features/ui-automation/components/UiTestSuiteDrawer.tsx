@@ -46,7 +46,7 @@ export function UiTestSuiteDrawer({
       title={title}
       open={open}
       onClose={onClose}
-      width={780}
+      size={780}
       className="ui-test-suite-drawer"
       extra={
         <Button type="primary" className="action-btn-save" loading={loading} onClick={() => form.submit()}>
@@ -54,7 +54,7 @@ export function UiTestSuiteDrawer({
         </Button>
       }
     >
-      {error ? <Alert showIcon type="error" message={getErrorMessage(error)} /> : null}
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} /> : null}
       <Form<UiTestSuiteFormValues>
         form={form}
         layout="vertical"

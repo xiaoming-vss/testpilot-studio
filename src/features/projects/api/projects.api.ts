@@ -1,5 +1,12 @@
 import { request } from '@/shared/api/request'
-import type { Project, ProjectUpdatePayload, Sprint, SprintCreatePayload, SprintUpdatePayload } from '../types'
+import type {
+  Project,
+  ProjectUpdatePayload,
+  Sprint,
+  SprintCreatePayload,
+  SprintDailyMetricsSnapshot,
+  SprintUpdatePayload,
+} from '../types'
 
 export const projectsApi = {
   getProjects: () => request<Project[]>('/v1/projects'),
@@ -18,4 +25,12 @@ export const projectsApi = {
     request<Sprint>(`/v1/sprints/${sprintId}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteSprint: (sprintId: string) =>
     request<Record<string, never>>(`/v1/sprints/${sprintId}`, { method: 'DELETE' }),
+  getSprintDailyMetricsByDate: (sprintId: string, snapshotDate: string) =>
+    request<SprintDailyMetricsSnapshot>(`/v1/sprints/${sprintId}/daily-metrics/${snapshotDate}`),
+  getSprintDailyMetrics: (sprintId: string, params: { startDate: string; endDate: string }) =>
+    request<SprintDailyMetricsSnapshot[]>(
+      `/v1/sprints/${sprintId}/daily-metrics?${new URLSearchParams(params).toString()}`,
+    ),
+  generateSprintDailyMetrics: (sprintId: string, snapshotDate: string) =>
+    request<SprintDailyMetricsSnapshot>(`/v1/sprints/${sprintId}/daily-metrics/${snapshotDate}`, { method: 'PUT' }),
 }

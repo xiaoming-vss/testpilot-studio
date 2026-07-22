@@ -1,6 +1,17 @@
-import { ConfigProvider, theme as antdTheme } from 'antd'
+import { App as AntdApp, ConfigProvider, theme as antdTheme } from 'antd'
 import { useEffect, useMemo, type ReactNode } from 'react'
 import { useThemeStore } from '@/shared/store/theme.store'
+import { bindFeedbackMessage } from '@/shared/utils/feedback'
+
+function FeedbackProvider({ children }: { children: ReactNode }) {
+  const { message } = AntdApp.useApp()
+
+  useEffect(() => {
+    bindFeedbackMessage(message)
+  }, [message])
+
+  return children
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const mode = useThemeStore((state) => state.mode)
@@ -56,5 +67,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [mode],
   )
 
-  return <ConfigProvider theme={themeConfig}>{children}</ConfigProvider>
+  return (
+    <ConfigProvider theme={themeConfig}>
+      <AntdApp component="div">
+        <FeedbackProvider>{children}</FeedbackProvider>
+      </AntdApp>
+    </ConfigProvider>
+  )
 }

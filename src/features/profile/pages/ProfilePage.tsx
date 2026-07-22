@@ -1,10 +1,11 @@
-import { Alert, Avatar, Button, Form, Input, Popconfirm, Space, Typography, message } from 'antd'
+import { Alert, Avatar, Button, Form, Input, Popconfirm, Space, Typography } from 'antd'
 import { SafetyOutlined, UserOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/features/auth/store/auth.store'
 import { api } from '@/services/api'
+import { message } from '@/shared/utils/feedback'
 import { getErrorMessage, normalizeUserName } from '@/utils/format'
 
 const { Text, Title, Paragraph } = Typography
@@ -67,7 +68,7 @@ export function ProfilePage() {
             </div>
           </div>
 
-          {updateMutation.error ? <Alert showIcon type="error" message={getErrorMessage(updateMutation.error)} /> : null}
+          {updateMutation.error ? <Alert showIcon type="error" title={getErrorMessage(updateMutation.error)} /> : null}
 
           <Form form={form} layout="vertical" onFinish={(values) => updateMutation.mutate(values)} requiredMark={false} className="settings-form">
             <Form.Item name="name" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>

@@ -322,7 +322,29 @@
 .functional-case-zentao-import-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
+}
+
+.functional-suite-card .api-collection-meta-inline {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.functional-suite-card .api-collection-description {
+  min-height: 40px;
+}
+
+.functional-suite-card .api-collection-inline-value {
+  min-width: 0;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.functional-suite-card .sprint-card-actions {
+  gap: 6px;
 }
 
 .functional-case-editor-body {
@@ -575,4 +597,424 @@
   .functional-case-zentao-import-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* macOS compact functional suite cards */
+.app-shell-macos .functional-test-page .functional-suite-scroll {
+  padding: 14px 16px 16px;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card {
+  height: auto !important;
+  min-height: 146px !important;
+  border: 1px solid rgba(15, 23, 42, 0.065) !important;
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.66) !important;
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card:hover {
+  border-color: rgba(10, 132, 255, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 14px 28px rgba(15, 23, 42, 0.065) !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .api-collection-card-top {
+  min-height: 22px;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .api-collection-card-top .ant-typography {
+  color: #172033;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .api-collection-description {
+  min-height: 18px;
+  margin: 0;
+  color: rgba(23, 32, 51, 0.5) !important;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .sprint-card-meta {
+  min-height: 22px;
+  padding-bottom: 0;
+  border-bottom-color: rgba(15, 23, 42, 0.045);
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .sprint-card-label {
+  color: rgba(23, 32, 51, 0.48);
+  font-size: 12px;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .api-collection-inline-value {
+  color: rgba(23, 32, 51, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .sprint-card-actions {
+  min-height: 26px;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 2px;
+  opacity: 0.62;
+  transition: opacity 0.18s ease;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card:hover .sprint-card-actions {
+  opacity: 1;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .sprint-card-actions .ant-btn {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  color: rgba(23, 32, 51, 0.52);
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .sprint-card-actions .ant-btn:hover {
+  background: rgba(10, 132, 255, 0.08) !important;
+  color: rgba(10, 75, 160, 0.78) !important;
+}
+
+@media (max-width: 1800px) {
+  .app-shell-macos .functional-test-page .functional-suite-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .app-shell-macos .functional-test-page .functional-suite-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell-macos .functional-test-page .functional-suite-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell-macos .functional-test-page .functional-suite-scroll {
+    padding: 12px;
+  }
+
+  .app-shell-macos .functional-test-page .functional-suite-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* macOS frosted white functional case editor */
+.app-shell-macos .functional-suite-detail-page .functional-suite-context-chip,
+.app-shell-macos .functional-suite-detail-page .functional-case-selection-bar,
+.app-shell-macos .functional-suite-detail-page .functional-case-editor-hero,
+.app-shell-macos .functional-suite-detail-page .functional-case-meta-panel,
+.app-shell-macos .functional-suite-detail-page .functional-case-section-card {
+  border-color: rgba(15, 23, 42, 0.065) !important;
+  background: rgba(255, 255, 255, 0.68) !important;
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-editor-form {
+  padding: 18px 20px 22px;
+  background: transparent !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-editor-body {
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-editor-hero {
+  padding: 18px 20px;
+  border-radius: 18px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-title-input.ant-input {
+  min-height: 40px;
+  border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+  background: transparent !important;
+  color: #172033;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-title-input.ant-input:focus,
+.app-shell-macos .functional-suite-detail-page .functional-case-title-input.ant-input-focused {
+  border-bottom-color: rgba(10, 132, 255, 0.34) !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-inline-label {
+  color: rgba(23, 32, 51, 0.72);
+  letter-spacing: 0;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-title-meta,
+.app-shell-macos .functional-suite-detail-page .functional-suite-context-chip span,
+.app-shell-macos .functional-suite-detail-page .functional-case-selection-bar,
+.app-shell-macos .functional-suite-detail-page .functional-case-editor-description {
+  color: rgba(23, 32, 51, 0.56) !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-suite-context-chip strong,
+.app-shell-macos .functional-suite-detail-page .functional-case-section-card .ant-form-item-label > label,
+.app-shell-macos .functional-suite-detail-page .functional-case-meta-panel .ant-form-item-label > label,
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-item-name {
+  color: #172033 !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-shell {
+  gap: 10px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-selection-bar {
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-list {
+  gap: 8px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-row {
+  gap: 8px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-item {
+  border-left-width: 1px;
+  border-color: rgba(15, 23, 42, 0.065) !important;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-item:hover {
+  border-color: rgba(10, 132, 255, 0.2) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-item.selected {
+  border-color: rgba(10, 132, 255, 0.28) !important;
+  background: rgba(245, 249, 255, 0.88) !important;
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.08), 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-item-path {
+  color: rgba(23, 32, 51, 0.52) !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-nav-item-tags .ant-tag {
+  background: rgba(10, 132, 255, 0.08);
+  color: rgba(10, 75, 160, 0.72);
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-meta-panel,
+.app-shell-macos .functional-suite-detail-page .functional-case-section-card {
+  border-radius: 16px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-meta-panel {
+  padding: 14px 16px 0;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-section-card {
+  padding: 14px 16px 16px;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-input,
+.app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-input-number,
+.app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-select-selector,
+.app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-input,
+.app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-input-number,
+.app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-select-selector {
+  border-color: rgba(15, 23, 42, 0.09) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow: none !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-input:focus,
+.app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-input-focused,
+.app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-input:focus,
+.app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-input-focused {
+  border-color: rgba(10, 132, 255, 0.34) !important;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.08) !important;
+}
+
+.app-shell-macos .functional-suite-detail-page .functional-case-toolbar-actions .ant-btn {
+  border-radius: 10px;
+}
+
+@media (max-width: 900px) {
+  .app-shell-macos .functional-suite-detail-page .functional-case-editor-form {
+    padding: 16px;
+  }
+}
+
+
+
+/* Functional suite cards: align layout with AI requirement-analysis task cards. */
+.functional-suite-card-top {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.functional-suite-card-title {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 20px;
+}
+
+.functional-suite-card-tags {
+  flex: 0 0 auto;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-scroll {
+  padding: 18px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+  grid-auto-rows: minmax(178px, auto) !important;
+  align-content: start !important;
+  align-items: stretch !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-grid-fill-page {
+  flex: 0 0 auto;
+  min-height: 0;
+  grid-template-rows: none !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card.ant-card {
+  min-height: 178px !important;
+  border: 1px solid rgba(15, 23, 42, 0.052) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.54)), rgba(255,255,255,0.58) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 22px rgba(31,41,55,0.042) !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card.ant-card:hover {
+  border-color: rgba(10, 132, 255, 0.16) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.64)), rgba(255,255,255,0.72) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.94), 0 12px 28px rgba(31,41,55,0.065) !important;
+  transform: translateY(-1px);
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card .ant-card-body {
+  gap: 10px !important;
+  height: 100% !important;
+  min-height: 178px !important;
+  padding: 15px 16px !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card-title {
+  color: var(--mac-glass-text) !important;
+  font-size: 14px !important;
+  font-weight: 720 !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card-tags .ant-tag {
+  margin-inline-end: 0;
+  border-color: rgba(10,132,255,0.11) !important;
+  background: rgba(10,132,255,0.07) !important;
+  color: rgba(10,96,190,0.82) !important;
+  font-weight: 650;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card-description.ant-typography {
+  min-height: 36px !important;
+  margin: 0 !important;
+  color: rgba(23,32,51,0.46) !important;
+  line-height: 18px !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-card-actions {
+  margin-top: auto !important;
+}
+
+@media (max-width: 1100px) {
+  .app-shell-macos .functional-test-page .functional-suite-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-shell-macos .functional-test-page .functional-suite-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Dark macOS polish: functional suite case editor hero. */
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-editor-hero,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-toolbar,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-meta-panel,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-section-card,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-suite-context-chip,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-selection-bar {
+  border-color: rgba(48, 54, 61, 0.9) !important;
+  background: rgba(22, 27, 34, 0.78) !important;
+  color: #f0f6fc !important;
+  box-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04) !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-editor-sticky-head,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-editor-form,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-editor-body,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-editor-grid {
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-title-input.ant-input,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-input,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-input-number,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-section-item .ant-select-selector,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-input,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-input-number,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-form-grid .ant-select-selector {
+  border-color: rgba(48, 54, 61, 0.9) !important;
+  background: rgba(13, 17, 23, 0.72) !important;
+  color: #f0f6fc !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-title-input.ant-input {
+  background: rgba(13, 17, 23, 0.88) !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-inline-label,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-suite-context-chip strong,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-section-card .ant-form-item-label > label,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-meta-panel .ant-form-item-label > label,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-nav-item-name {
+  color: #f0f6fc !important;
+}
+
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-title-meta,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-suite-context-chip span,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-selection-bar,
+:root[data-theme='dark'] .app-shell-macos .functional-suite-detail-page .functional-case-editor-description {
+  color: #8b949e !important;
 }

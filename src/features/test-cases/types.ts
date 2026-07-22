@@ -4,6 +4,10 @@ export type FunctionTestSuite = {
   requirement_id?: string
   name: string
   description?: string
+  caseCount?: number
+  case_count?: number
+  testcaseCount?: number
+  testcase_count?: number
   createdAt?: string
   created_at?: string
   updatedAt?: string

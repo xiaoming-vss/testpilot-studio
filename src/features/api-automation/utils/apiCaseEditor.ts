@@ -48,17 +48,65 @@ export function createDefaultCaseFormValues(): ApiCaseFormValues {
   }
 }
 
-export function parseKeyValueJson(value?: string) {
-  if (!value) return [{ enabled: false, key: '', value: '' }]
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>
-    const entries = Object.entries(parsed).map(([key, itemValue]) => ({
+function normalizeKeyValueRows(rows: Array<{ enabled?: boolean; key?: string; value?: string }>) {
+  return rows.length > 0 ? [...rows, { enabled: false, key: '', value: '' }] : [{ enabled: false, key: '', value: '' }]
+}
+
+function pickStringField(source: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  }
+  return ''
+}
+
+function parseKeyValueObject(value: Record<string, unknown>) {
+  const entries = Object.entries(value).map(([key, itemValue]) => {
+    if (isRecord(itemValue)) {
+      return {
+        enabled: itemValue.enabled === undefined ? true : Boolean(itemValue.enabled),
+        key,
+        value: pickStringField(itemValue, 'value', 'values', 'defaultValue', 'default_value'),
+      }
+    }
+
+    return {
       enabled: true,
       key,
       value: itemValue == null ? '' : String(itemValue),
+    }
+  })
+
+  return normalizeKeyValueRows(entries)
+}
+
+function parseKeyValueArray(value: unknown[]) {
+  const entries = value
+    .filter(isRecord)
+    .map((item) => ({
+      enabled: item.enabled === undefined ? true : Boolean(item.enabled),
+      key: pickStringField(item, 'key', 'name', 'header', 'paramKey', 'param_key'),
+      value: pickStringField(item, 'value', 'values', 'paramValue', 'param_value'),
     }))
-    return entries.length > 0 ? [...entries, { enabled: false, key: '', value: '' }] : [{ enabled: false, key: '', value: '' }]
+    .filter((item) => item.key || item.value)
+
+  return normalizeKeyValueRows(entries)
+}
+
+export function parseKeyValueJson(value?: unknown) {
+  if (!value) return [{ enabled: false, key: '', value: '' }]
+
+  if (Array.isArray(value)) return parseKeyValueArray(value)
+  if (isRecord(value)) return parseKeyValueObject(value)
+
+  try {
+    const parsed = JSON.parse(String(value)) as unknown
+    return parseKeyValueJson(parsed)
   } catch {
     return [{ enabled: false, key: '', value: '' }]
   }
@@ -104,16 +152,16 @@ export function buildCaseFormValues(apiCase: ApiCase): ApiCaseFormValues {
     ...defaults,
     name: apiCase.name ?? defaults.name,
     method: apiCase.method ?? defaults.method,
-    path: apiCase.urlTemplate ?? defaults.path,
+    path: apiCase.urlTemplate ?? apiCase.url_template ?? defaults.path,
     description: apiCase.description ?? defaults.description,
-    headers: parseKeyValueJson(apiCase.headersJson),
-    query: parseKeyValueJson(apiCase.queryJson),
-    bodyType: apiCase.bodyType ?? defaults.bodyType,
-    bodyJson: apiCase.bodyJson ?? defaults.bodyJson,
-    bodyText: apiCase.bodyText ?? defaults.bodyText,
-    timeoutMs: apiCase.timeoutMs ?? defaults.timeoutMs,
+    headers: parseKeyValueJson(apiCase.headersJson ?? apiCase.headers_json ?? apiCase.headers),
+    query: parseKeyValueJson(apiCase.queryJson ?? apiCase.query_json ?? apiCase.query),
+    bodyType: apiCase.bodyType ?? apiCase.body_type ?? defaults.bodyType,
+    bodyJson: apiCase.bodyJson ?? apiCase.body_json ?? defaults.bodyJson,
+    bodyText: apiCase.bodyText ?? apiCase.body_text ?? defaults.bodyText,
+    timeoutMs: apiCase.timeoutMs ?? apiCase.timeout_ms ?? defaults.timeoutMs,
     enabled: apiCase.enabled ?? defaults.enabled,
-    continueOnFailure: apiCase.continueOnFailure ?? defaults.continueOnFailure,
+    continueOnFailure: apiCase.continueOnFailure ?? apiCase.continue_on_failure ?? defaults.continueOnFailure,
   }
 }
 
@@ -196,7 +244,7 @@ export function getCaseDisplayPath(urlTemplate: string) {
 }
 
 function getCaseOrderNo(apiCase: ApiCase) {
-  return apiCase.orderNo ?? Number.MAX_SAFE_INTEGER
+  return apiCase.orderNo ?? apiCase.order_no ?? Number.MAX_SAFE_INTEGER
 }
 
 function getCaseCreatedTime(apiCase: ApiCase) {

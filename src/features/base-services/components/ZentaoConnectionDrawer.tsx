@@ -30,17 +30,18 @@ export function ZentaoConnectionDrawer({
 }) {
   return (
     <Drawer
+     
       title={title}
       open={open}
       onClose={onClose}
-      width={520}
+      size={520}
       extra={
         <Button type="primary" className="action-btn-save" loading={loading} onClick={() => form.submit()}>
           保存
         </Button>
       }
     >
-      {error ? <Alert showIcon type="error" message={getErrorMessage(error)} className="base-services-drawer-alert" /> : null}
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} className="base-services-drawer-alert" /> : null}
       <Form<ZentaoConnectionFormValues> form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
         <Form.Item name="name" label="连接名称" rules={[{ required: true, message: '请输入连接名称' }]}>
           <Input maxLength={64} placeholder="例如：公司禅道-测试环境" />

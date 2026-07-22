@@ -73,15 +73,28 @@ export function buildSprintUpdatePayload(sprint: Sprint, values: SprintFormValue
 
 export function buildRequirementUpdatePayload(
   requirement: Requirement,
-  values: Partial<Pick<Requirement, 'name' | 'description' | 'status'>>,
+  values: Partial<Pick<Requirement, 'name' | 'documentType' | 'documentContent'>>,
 ): RequirementUpdatePayload {
   const payload: RequirementUpdatePayload = {}
 
   if (values.name !== undefined) {
     setValueIfChanged(payload, 'name', requirement.name, values.name)
   }
-  setNormalizedTextIfChanged(payload, 'description', requirement.description, values.description)
-  setDefinedValueIfChanged(payload, 'status', requirement.status, values.status)
+  setDefinedValueIfChanged(payload, 'documentType', requirement.documentType, values.documentType)
+  setNormalizedTextIfChanged(payload, 'documentContent', requirement.documentContent, values.documentContent)
+
+  return payload
+}
+
+export function buildRequirementMetadataUpdatePayload(
+  requirement: Requirement,
+  values: Partial<Pick<Requirement, 'name'>>,
+): RequirementUpdatePayload {
+  const payload: RequirementUpdatePayload = {}
+
+  if (values.name !== undefined) {
+    setValueIfChanged(payload, 'name', requirement.name, values.name)
+  }
 
   return payload
 }

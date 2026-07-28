@@ -552,6 +552,118 @@
   color: var(--github-dark-text) !important;
 }
 
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-overview-summary-metric,
+  .sprint-dashboard-health-band,
+  .sprint-dashboard-panel,
+  .sprint-dashboard-trend-card
+) {
+  border-color: var(--github-dark-border) !important;
+  background: var(--github-dark-card) !important;
+  color: var(--github-dark-text) !important;
+  box-shadow: inset 0 1px 0 rgba(240, 246, 252, 0.04) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-dashboard-health-title h4.ant-typography,
+  .sprint-dashboard-health-progress-head .ant-typography,
+  .sprint-dashboard-health-progress-head strong,
+  .sprint-dashboard-health-legend strong,
+  .sprint-dashboard-health-defects strong,
+  .sprint-dashboard-card-head h4.ant-typography,
+  .sprint-dashboard-test-name,
+  .sprint-dashboard-test-name strong,
+  .sprint-dashboard-test-total,
+  .sprint-dashboard-progress-meta strong,
+  .sprint-dashboard-severity-row strong,
+  .sprint-overview-card-value,
+  .sprint-overview-card-subtitle,
+  .sprint-overview-donut-center,
+  .sprint-overview-chart-metrics strong,
+  .sprint-overview-summary-value
+) {
+  color: var(--github-dark-text) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-dashboard-health-caption,
+  .sprint-dashboard-health-legend,
+  .sprint-dashboard-health-defects span,
+  .sprint-dashboard-test-row-head,
+  .sprint-dashboard-progress-meta,
+  .sprint-dashboard-severity-row,
+  .sprint-overview-card-label,
+  .sprint-overview-chart-metrics span,
+  .sprint-overview-summary-label
+) {
+  color: var(--github-dark-muted) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page .sprint-dashboard-health-icon,
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page .sprint-dashboard-test-icon,
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page .sprint-overview-summary-icon {
+  color: var(--github-dark-blue) !important;
+  background: rgba(56, 139, 253, 0.16) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-dashboard-health-progress,
+  .sprint-dashboard-severity-list,
+  .sprint-dashboard-trend-pane + .sprint-dashboard-trend-pane
+) {
+  border-color: var(--github-dark-border-soft) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page .sprint-dashboard-test-table,
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page .sprint-dashboard-test-row {
+  border-color: var(--github-dark-border-soft) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page .sprint-dashboard-test-row-head {
+  background: rgba(13, 17, 23, 0.38) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-dashboard-health-track,
+  .sprint-dashboard-progress-track,
+  .sprint-dashboard-severity-track
+) {
+  background: rgba(139, 148, 158, 0.22) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-overview-chart-host .recharts-cartesian-grid line,
+  .sprint-overview-chart-host .recharts-cartesian-axis-line,
+  .sprint-overview-chart-host .recharts-cartesian-axis-tick-line
+) {
+  stroke: rgba(139, 148, 158, 0.24) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .sprint-overview-chart-host .recharts-cartesian-axis-tick text,
+  .sprint-overview-chart-host .recharts-legend-item-text
+) {
+  fill: var(--github-dark-muted) !important;
+  color: var(--github-dark-muted) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .recharts-default-tooltip,
+  .recharts-tooltip-wrapper .recharts-default-tooltip
+) {
+  border-color: var(--github-dark-border) !important;
+  background: rgba(22, 27, 34, 0.96) !important;
+  color: var(--github-dark-text) !important;
+  box-shadow: 0 12px 28px rgba(1, 4, 9, 0.36) !important;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .sprint-overview-page :is(
+  .recharts-tooltip-label,
+  .recharts-tooltip-item
+) {
+  color: var(--github-dark-text) !important;
+}
+
 :root[data-theme='dark'] .app-shell.app-shell-macos :is(.ant-divider, .ant-card-head, .ant-tabs-nav)::before {
   border-color: var(--github-dark-border-soft) !important;
 }

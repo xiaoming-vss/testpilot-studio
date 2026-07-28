@@ -111,3 +111,59 @@ export type SprintDailyMetricsSnapshot = {
   updatedAt?: string
   updated_at?: string
 }
+export type CreateTestReportGenerateRunPayload = {
+  sprintId: string
+  snapshotDate: string
+  connectionId: string
+  instruction?: string
+}
+
+export type TestReportGenerateRunStatus =
+  | 'pending'
+  | 'claimed'
+  | 'running'
+  | 'waiting_review'
+  | 'success'
+  | 'failed'
+  | 'error'
+  | 'canceled'
+  | (string & {})
+
+export type TestReportGenerateRunSnapshot = {
+  snapshotDate?: string
+  snapshot_date?: string
+  dailyMetrics?: SprintDailyMetricsSnapshot
+  daily_metrics?: SprintDailyMetricsSnapshot
+  [key: string]: unknown
+}
+
+export type TestReportGenerateRun = {
+  runId?: string
+  run_id?: string
+  projectId?: string
+  project_id?: string
+  sprintId?: string
+  sprint_id?: string
+  status?: TestReportGenerateRunStatus
+  connectionId?: string
+  connection_id?: string
+  llmConnectionId?: string
+  llm_connection_id?: string
+  instruction?: string
+  resultYaml?: string
+  result_yaml?: string
+  resultSummaryJson?: unknown
+  result_summary_json?: unknown
+  errorMessage?: string
+  error_message?: string
+  snapshotJson?: TestReportGenerateRunSnapshot
+  snapshot_json?: TestReportGenerateRunSnapshot
+  createdAt?: string
+  created_at?: string
+  updatedAt?: string
+  updated_at?: string
+  startedAt?: string
+  started_at?: string
+  finishedAt?: string
+  finished_at?: string
+}

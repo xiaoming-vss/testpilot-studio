@@ -8,9 +8,44 @@ export type ApiEnvelope<T> = {
   data: T
 }
 
+export type ListResponse<T> = T[] & {
+  total: number
+  items: T[]
+}
+
 export type BlobResponse = {
   blob: Blob
   filename?: string
+}
+
+export function listItems<T>(response: ListResponse<T> | { items: T[] } | T[] | undefined | null): T[] {
+  if (!response) return []
+  if (Array.isArray(response)) return (response as { items?: T[] }).items ?? response
+  return response.items
+}
+
+export function listTotal<T>(response: ListResponse<T> | { total?: number; items: T[] } | T[] | undefined | null): number {
+  if (!response) return 0
+  if (Array.isArray(response)) return typeof (response as { total?: unknown }).total === 'number' ? (response as ListResponse<T>).total : response.length
+  return typeof response.total === 'number' ? response.total : response.items.length
+}
+
+function normalizeResponseData<T>(data: T): T {
+  if (
+    data &&
+    typeof data === 'object' &&
+    !Array.isArray(data) &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    const source = data as { items: unknown[]; total?: unknown }
+    const items = source.items.slice() as unknown[] & { total: number; items: unknown[] }
+    items.items = items
+    items.total = typeof source.total === 'number' ? source.total : source.items.length
+    return items as T
+  }
+
+  return data
 }
 
 export class ApiError extends Error {
@@ -54,7 +89,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     throw new ApiError(payload.message || '请求失败', payload.code, response.status)
   }
 
-  return payload.data
+  return normalizeResponseData(payload.data)
 }
 
 function getFilenameFromContentDisposition(contentDisposition: string | null) {

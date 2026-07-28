@@ -1,11 +1,18 @@
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Tooltip, Tag, Typography } from 'antd'
+import {
+  AppstoreOutlined,
+  ArrowLeftOutlined,
+  CodeOutlined,
+  DesktopOutlined,
+  DownloadOutlined,
+  FileTextOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons'
+import { Alert, Button, Card, DatePicker, Drawer, Empty, Form, Input, Modal, Select, Space, Spin, Tooltip, Tag, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import type { FormInstance } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -18,13 +25,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import dayjs from 'dayjs'
-import { api, type SprintDailyMetricsSnapshot, type SprintDailyMetricsTestStats } from '@/services/api'
-import { SectionHeader } from '@/shared/components/PageFrame/PageFrame'
+import dayjs, { type Dayjs } from 'dayjs'
+import { api, listItems, type SprintDailyMetricsSnapshot, type SprintDailyMetricsTestStats, type TestReportGenerateRun } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { getErrorMessage, statusTag } from '@/utils/format'
 
 const { Text, Title } = Typography
+const { RangePicker } = DatePicker
 
 function numberValue(...values: Array<number | undefined>) {
   return values.find((value) => typeof value === 'number' && Number.isFinite(value)) ?? 0
@@ -96,70 +103,186 @@ function normalizeDailyMetrics(snapshot?: SprintDailyMetricsSnapshot) {
   }
 }
 
-function SummaryMetric({ label, value }: { label: string; value: number | string }) {
+function SummaryMetric({ label, value, icon }: { label: string; value: number | string; icon?: ReactNode }) {
   return (
     <div className="sprint-overview-summary-metric">
-      <span className="sprint-overview-summary-label">{label}</span>
-      <strong className="sprint-overview-summary-value">{value}</strong>
+      {icon ? <span className="sprint-overview-summary-icon">{icon}</span> : null}
+      <span className="sprint-overview-summary-copy">
+        <span className="sprint-overview-summary-label">{label}</span>
+        <strong className="sprint-overview-summary-value">{value}</strong>
+      </span>
     </div>
   )
 }
 
-type TestOverviewStats = {
-  total: number
-  executed: number
-  unexecuted: number
-  success: number
-  failed: number
+function percentValue(value: number, total: number) {
+  if (!total) return 0
+  return Math.round((value / total) * 100)
 }
 
-function TestOverviewChartCard({
-  title,
-  accent,
-  stats,
+function SprintHealthSummary({ metrics }: { metrics: NormalizedDailyMetrics }) {
+  const unexecuted = metrics.functional.unexecuted + metrics.api.unexecuted + metrics.ui.unexecuted
+  const executed = metrics.functional.executed + metrics.api.executed + metrics.ui.executed
+  const success = metrics.functional.success + metrics.api.success + metrics.ui.success
+  const failed = metrics.functional.failed + metrics.api.failed + metrics.ui.failed
+  const executionPercent = percentValue(executed, metrics.totalCases)
+
+  return (
+    <div className="sprint-dashboard-health-band">
+      <div className="sprint-dashboard-health-title">
+        <span className="sprint-dashboard-health-icon">
+          <FileTextOutlined />
+        </span>
+        <div className="sprint-dashboard-health-copy">
+          <div className="sprint-dashboard-health-title-row">
+            <Title level={4}>迭代健康摘要</Title>
+            <Tag color="processing">进行中</Tag>
+          </div>
+          <Text type="secondary" className="sprint-dashboard-health-caption">
+            {metrics.totalCases} 个用例，{metrics.bug.total} 个缺陷
+          </Text>
+        </div>
+      </div>
+      <div className="sprint-dashboard-health-progress">
+        <div className="sprint-dashboard-health-progress-head">
+          <Text strong>执行进度</Text>
+          <strong>{executionPercent}%</strong>
+        </div>
+        <div className="sprint-dashboard-health-track">
+          <span className="sprint-dashboard-health-fill sprint-dashboard-health-fill-executed" style={{ width: `${executionPercent}%` }} />
+          <span className="sprint-dashboard-health-fill sprint-dashboard-health-fill-pending" style={{ width: `${percentValue(unexecuted, metrics.totalCases)}%` }} />
+        </div>
+        <div className="sprint-dashboard-health-legend">
+          <span style={{ '--legend-color': '#faad14' } as CSSProperties}>未执行 <strong>{unexecuted}</strong></span>
+          <span style={{ '--legend-color': '#52c41a' } as CSSProperties}>已执行 <strong>{executed}</strong></span>
+          <span style={{ '--legend-color': '#1677ff' } as CSSProperties}>成功 <strong>{success}</strong></span>
+          <span style={{ '--legend-color': '#ff4d4f' } as CSSProperties}>失败 <strong>{failed}</strong></span>
+        </div>
+      </div>
+      <div className="sprint-dashboard-health-defects">
+        <span>
+          缺陷
+          <strong>{metrics.bug.total}</strong>
+        </span>
+        <span>
+          已解决
+          <strong className="sprint-dashboard-health-green">{metrics.bug.resolved}</strong>
+        </span>
+        <span>
+          未解决
+          <strong className="sprint-dashboard-health-red">{metrics.bug.unresolved}</strong>
+        </span>
+        <span>
+          解决率
+          <strong className="sprint-dashboard-health-green">{percentValue(metrics.bug.resolved, metrics.bug.total)}%</strong>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function MiniProgress({
+  value,
+  total,
+  color,
 }: {
-  title: string
-  accent: string
-  stats: TestOverviewStats
+  value: number
+  total: number
+  color: string
 }) {
-  const chartData = [
-    { name: '已执行', value: stats.executed, fill: '#52c41a' },
-    { name: '未执行', value: stats.unexecuted, fill: '#faad14' },
-    { name: '成功', value: stats.success, fill: '#13c2c2' },
-    { name: '失败', value: stats.failed, fill: '#ff4d4f' },
+  return (
+    <span className="sprint-dashboard-progress">
+      <span className="sprint-dashboard-progress-meta">
+        <strong>{value}</strong>
+        <span>({percentValue(value, total)}%)</span>
+      </span>
+      <span className="sprint-dashboard-progress-track">
+        <span
+          className="sprint-dashboard-progress-fill"
+          style={{ width: `${percentValue(value, total)}%`, '--progress-color': color } as CSSProperties}
+        />
+      </span>
+    </span>
+  )
+}
+
+function TestTypeIcon({ type }: { type: 'functional' | 'api' | 'ui' }) {
+  const icon = {
+    functional: <AppstoreOutlined />,
+    api: <CodeOutlined />,
+    ui: <DesktopOutlined />,
+  }[type]
+
+  return <span className="sprint-dashboard-test-icon">{icon}</span>
+}
+
+function TestExecutionOverviewCard({ metrics }: { metrics: NormalizedDailyMetrics }) {
+  const rows = [
+    { key: 'functional' as const, title: '功能测试', stats: metrics.functional },
+    { key: 'api' as const, title: 'API 测试', stats: metrics.api },
+    { key: 'ui' as const, title: 'UI 测试', stats: metrics.ui },
   ]
 
   return (
-    <Card className="sprint-overview-card sprint-overview-card-rich">
-      <div className="sprint-overview-card-top">
-        <div>
-          <Text className="sprint-overview-card-label">{title}</Text>
-          <Title level={3} className="sprint-overview-card-value">
-            {stats.total}
-          </Title>
-        </div>
-        <Tag className="sprint-overview-accent-tag">{accent}</Tag>
+    <Card className="sprint-overview-card sprint-overview-card-rich sprint-dashboard-panel">
+      <div className="sprint-dashboard-card-head">
+        <Title level={4}>测试执行概览</Title>
       </div>
-      <div className="sprint-overview-bar-summary">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="#edf1f7" horizontal={false} />
-            <XAxis type="number" axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: '#7b8395', fontSize: 12 }} />
-            <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#5a6170', fontSize: 12 }} width={48} />
-            <RechartsTooltip />
-            <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={14}>
-              {chartData.map((item) => (
-                <Cell key={item.name} fill={item.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="sprint-dashboard-test-table">
+        <div className="sprint-dashboard-test-row sprint-dashboard-test-row-head">
+          <span>测试类型</span>
+          <span>总数</span>
+          <span>已执行</span>
+          <span>未执行</span>
+          <span>成功</span>
+          <span>失败</span>
+        </div>
+        {rows.map((row) => (
+          <div className="sprint-dashboard-test-row" key={row.key}>
+            <span className="sprint-dashboard-test-name">
+              <TestTypeIcon type={row.key} />
+              <strong>{row.title}</strong>
+            </span>
+            <strong className="sprint-dashboard-test-total">{row.stats.total}</strong>
+            <MiniProgress value={row.stats.executed} total={row.stats.total} color="#52c41a" />
+            <MiniProgress value={row.stats.unexecuted} total={row.stats.total} color="#faad14" />
+            <MiniProgress value={row.stats.success} total={row.stats.total} color="#13c2c2" />
+            <MiniProgress value={row.stats.failed} total={row.stats.total} color="#ff4d4f" />
+          </div>
+        ))}
       </div>
     </Card>
   )
 }
 
-function BugResolutionChartCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
+function SeverityLine({
+  label,
+  value,
+  total,
+  color,
+}: {
+  label: string
+  value: number
+  total: number
+  color: string
+}) {
+  return (
+    <div className="sprint-dashboard-severity-row">
+      <span>{label}</span>
+      <span className="sprint-dashboard-severity-track">
+        <span
+          className="sprint-dashboard-severity-fill"
+          style={{ width: `${percentValue(value, total)}%`, '--severity-color': color } as CSSProperties}
+        />
+      </span>
+      <strong>
+        {value} ({percentValue(value, total)}%)
+      </strong>
+    </div>
+  )
+}
+
+function BugRiskOverviewCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
   const chartData = [
     { name: '已解决', value: bug.resolved, color: '#52c41a' },
     { name: '未解决', value: bug.unresolved, color: '#ff4d4f' },
@@ -168,77 +291,56 @@ function BugResolutionChartCard({ bug }: { bug: NormalizedDailyMetrics['bug'] })
     { name: '已解决', value: bug.resolved, color: '#52c41a' },
     { name: '未解决', value: bug.unresolved, color: '#ff4d4f' },
   ]
+  const severityData = [
+    { name: '致命', value: bug.fatal, color: '#ff4d4f' },
+    { name: '严重', value: bug.severe, color: '#faad14' },
+    { name: '一般', value: bug.normal, color: '#8b9bb4' },
+    { name: '提示', value: bug.hint, color: '#91a3bd' },
+  ]
 
   return (
-    <Card className="sprint-overview-card sprint-overview-card-rich">
-      <div className="sprint-overview-card-top">
-        <div>
+    <Card className="sprint-overview-card sprint-overview-card-rich sprint-dashboard-panel">
+      <div className="sprint-dashboard-card-head">
+        <Title level={4}>缺陷风险画像</Title>
+      </div>
+      <div className="sprint-dashboard-risk-layout">
+        <div className="sprint-dashboard-risk-summary">
           <Text className="sprint-overview-card-label">Bug 总数</Text>
           <Title level={3} className="sprint-overview-card-value">
             {bug.total}
           </Title>
+          <div className="sprint-overview-donut-layout">
+            <div className="sprint-overview-mini-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartData.length ? chartData : [{ name: '暂无数据', value: 1, color: '#e8edf5' }]} dataKey="value" innerRadius="62%" outerRadius="86%" paddingAngle={4}>
+                    {(chartData.length ? chartData : [{ color: '#e8edf5' }]).map((item) => (
+                      <Cell key={item.color} fill={item.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="sprint-overview-donut-center">{bug.total}</div>
+            </div>
+            <div className="sprint-overview-chart-metrics">
+              {metricData.map((item) => (
+                <span key={item.name} style={{ '--metric-color': item.color } as CSSProperties}>
+                  {item.name}
+                  <strong>
+                    {item.value} ({percentValue(item.value, bug.total)}%)
+                  </strong>
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
-        <Tag className="sprint-overview-accent-tag">Defects</Tag>
-      </div>
-      <div className="sprint-overview-donut-layout">
-        <div className="sprint-overview-mini-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={chartData.length ? chartData : [{ name: '暂无数据', value: 1, color: '#e8edf5' }]} dataKey="value" innerRadius="62%" outerRadius="86%" paddingAngle={4}>
-                {(chartData.length ? chartData : [{ color: '#e8edf5' }]).map((item) => (
-                  <Cell key={item.color} fill={item.color} />
-                ))}
-              </Pie>
-              <RechartsTooltip />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="sprint-overview-donut-center">{bug.total}</div>
-        </div>
-        <div className="sprint-overview-chart-metrics">
-          {metricData.map((item) => (
-            <span key={item.name} style={{ '--metric-color': item.color } as CSSProperties}>
-              {item.name}
-              <strong>{item.value}</strong>
-            </span>
+        <div className="sprint-dashboard-severity-list">
+          <Text className="sprint-overview-card-label">严重程度分布</Text>
+          {severityData.map((item) => (
+            <SeverityLine key={item.name} label={item.name} value={item.value} total={bug.total} color={item.color} />
           ))}
         </div>
-      </div>
-    </Card>
-  )
-}
-
-function BugSeverityBarCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
-  const chartData = [
-    { name: '致命', value: bug.fatal, fill: '#ff4d4f' },
-    { name: '严重', value: bug.severe, fill: '#faad14' },
-    { name: '一般', value: bug.normal, fill: '#8b9bb4' },
-    { name: '提示', value: bug.hint, fill: '#91a3bd' },
-  ]
-
-  return (
-    <Card className="sprint-overview-card sprint-overview-card-rich">
-      <div className="sprint-overview-card-top">
-        <div>
-          <Text className="sprint-overview-card-label">严重程度分布</Text>
-          <Title level={4} className="sprint-overview-card-subtitle">
-            缺陷风险画像
-          </Title>
-        </div>
-      </div>
-      <div className="sprint-overview-severity-chart">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 20, left: 4, bottom: 4 }}>
-            <CartesianGrid stroke="#edf1f7" horizontal={false} />
-            <XAxis type="number" axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: '#7b8395', fontSize: 12 }} />
-            <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#5a6170', fontSize: 12 }} width={42} />
-            <RechartsTooltip />
-            <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={18}>
-              {chartData.map((item) => (
-                <Cell key={item.name} fill={item.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
       </div>
     </Card>
   )
@@ -259,7 +361,7 @@ function TrendLineChart({ data }: { data: NormalizedDailyMetrics[] }) {
   return (
     <div className="sprint-overview-chart-host">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
+        <LineChart data={chartData} syncId="sprint-trend-history" margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
           <CartesianGrid stroke="#edf1f7" vertical={false} />
           <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} />
           <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} allowDecimals={false} />
@@ -287,7 +389,7 @@ function TrendBarChart({ data }: { data: NormalizedDailyMetrics[] }) {
   return (
     <div className="sprint-overview-chart-host">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
+        <LineChart data={chartData} syncId="sprint-trend-history" margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
           <CartesianGrid stroke="#edf1f7" vertical={false} />
           <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} />
           <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} allowDecimals={false} />
@@ -302,10 +404,366 @@ function TrendBarChart({ data }: { data: NormalizedDailyMetrics[] }) {
   )
 }
 
+
+type TestReportGenerateFormValues = {
+  connectionId: string
+  instruction?: string
+}
+
+function getRunStatusMeta(status?: TestReportGenerateRun['status']) {
+  const value = status ?? 'unknown'
+  const meta: Record<string, { label: string; color: string }> = {
+    pending: { label: '待执行', color: 'gold' },
+    claimed: { label: '已领取', color: 'cyan' },
+    running: { label: '执行中', color: 'processing' },
+    waiting_review: { label: '待审核', color: 'gold' },
+    success: { label: '成功', color: 'success' },
+    failed: { label: '失败', color: 'error' },
+    error: { label: '异常', color: 'volcano' },
+    canceled: { label: '已取消', color: 'default' },
+  }
+
+  return { value, ...(meta[value] ?? { label: value, color: 'default' }) }
+}
+
+function isTestReportRunGenerating(run?: TestReportGenerateRun) {
+  return ['pending', 'claimed', 'running', 'waiting_review'].includes(getRunStatusMeta(run?.status).value)
+}
+
+function getRunId(run?: TestReportGenerateRun) {
+  return run?.runId ?? run?.run_id ?? ''
+}
+
+function getRunReportMarkdown(run?: TestReportGenerateRun) {
+  return run?.resultYaml ?? run?.result_yaml ?? ''
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function renderInlineMarkdown(text: string) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean)
+  return parts.map((part, index) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={`${part}-${index}`}>{part.slice(1, -1)}</code>
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>
+    }
+    return <span key={`${part}-${index}`}>{part}</span>
+  })
+}
+
+function parseMarkdownTable(lines: string[]) {
+  if (lines.length < 2 || !/^\s*\|?[\s:-]+\|[\s|:-]*$/.test(lines[1])) return null
+
+  const toCells = (line: string) =>
+    line
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim())
+
+  const headers = toCells(lines[0])
+  const rows = lines.slice(2).map(toCells)
+  return { headers, rows }
+}
+
+function renderMarkdownBlocks(markdown: string) {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  const blocks: ReactNode[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index]
+
+    if (!line.trim()) {
+      index += 1
+      continue
+    }
+
+    if (line.trim().startsWith('```')) {
+      const codeLines: string[] = []
+      index += 1
+      while (index < lines.length && !lines[index].trim().startsWith('```')) {
+        codeLines.push(lines[index])
+        index += 1
+      }
+      index += 1
+      blocks.push(
+        <pre key={`code-${index}`}>
+          <code>{codeLines.join('\n')}</code>
+        </pre>,
+      )
+      continue
+    }
+
+    const heading = /^(#{1,4})\s+(.+)$/.exec(line)
+    if (heading) {
+      const level = heading[1].length
+      const content = renderInlineMarkdown(heading[2])
+      if (level === 1) blocks.push(<h1 key={`heading-${index}`}>{content}</h1>)
+      else if (level === 2) blocks.push(<h2 key={`heading-${index}`}>{content}</h2>)
+      else if (level === 3) blocks.push(<h3 key={`heading-${index}`}>{content}</h3>)
+      else blocks.push(<h4 key={`heading-${index}`}>{content}</h4>)
+      index += 1
+      continue
+    }
+
+    if (line.includes('|') && index + 1 < lines.length && lines[index + 1].includes('|')) {
+      const tableLines: string[] = []
+      while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+        tableLines.push(lines[index])
+        index += 1
+      }
+      const table = parseMarkdownTable(tableLines)
+      if (table) {
+        blocks.push(
+          <div className="sprint-report-markdown-table-wrap" key={`table-${index}`}>
+            <table>
+              <thead>
+                <tr>
+                  {table.headers.map((header, headerIndex) => (
+                    <th key={`${header}-${headerIndex}`}>{renderInlineMarkdown(header)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {table.rows.map((row, rowIndex) => (
+                  <tr key={`row-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={`${cell}-${cellIndex}`}>{renderInlineMarkdown(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>,
+        )
+        continue
+      }
+      blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(tableLines.join(' '))}</p>)
+      continue
+    }
+
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items: string[] = []
+      while (index < lines.length && /^\s*[-*]\s+/.test(lines[index])) {
+        items.push(lines[index].replace(/^\s*[-*]\s+/, ''))
+        index += 1
+      }
+      blocks.push(
+        <ul key={`list-${index}`}>
+          {items.map((item, itemIndex) => (
+            <li key={`${item}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ul>,
+      )
+      continue
+    }
+
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items: string[] = []
+      while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) {
+        items.push(lines[index].replace(/^\s*\d+\.\s+/, ''))
+        index += 1
+      }
+      blocks.push(
+        <ol key={`ordered-list-${index}`}>
+          {items.map((item, itemIndex) => (
+            <li key={`${item}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ol>,
+      )
+      continue
+    }
+
+    if (/^\s*>\s+/.test(line)) {
+      const quotes: string[] = []
+      while (index < lines.length && /^\s*>\s+/.test(lines[index])) {
+        quotes.push(lines[index].replace(/^\s*>\s+/, ''))
+        index += 1
+      }
+      blocks.push(<blockquote key={`quote-${index}`}>{renderInlineMarkdown(quotes.join(' '))}</blockquote>)
+      continue
+    }
+
+    const paragraph: string[] = []
+    while (
+      index < lines.length &&
+      lines[index].trim() &&
+      !/^(#{1,4})\s+/.test(lines[index]) &&
+      !lines[index].trim().startsWith('```') &&
+      !/^\s*[-*]\s+/.test(lines[index]) &&
+      !/^\s*\d+\.\s+/.test(lines[index]) &&
+      !/^\s*>\s+/.test(lines[index])
+    ) {
+      paragraph.push(lines[index])
+      index += 1
+    }
+    blocks.push(<p key={`paragraph-${index}`}>{renderInlineMarkdown(paragraph.join(' '))}</p>)
+  }
+
+  return blocks
+}
+
+function TestReportMarkdownModal({
+  open,
+  run,
+  loading,
+  error,
+  downloading,
+  onClose,
+  onDownloadPdf,
+}: {
+  open: boolean
+  run?: TestReportGenerateRun
+  loading?: boolean
+  error?: unknown
+  downloading?: boolean
+  onClose: () => void
+  onDownloadPdf: (run: TestReportGenerateRun) => void
+}) {
+  const markdown = getRunReportMarkdown(run)
+  const canDownload = Boolean(run && getRunStatusMeta(run.status).value === 'success' && getRunId(run) && markdown)
+
+  return (
+    <Modal
+      title="测试报告"
+      open={open}
+      onCancel={onClose}
+      width={960}
+      footer={
+        <Space>
+          <Button onClick={onClose}>关闭</Button>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            disabled={!canDownload}
+            loading={downloading}
+            onClick={() => {
+              if (run) onDownloadPdf(run)
+            }}
+          >
+            导出 PDF
+          </Button>
+        </Space>
+      }
+      destroyOnHidden={false}
+      className="sprint-report-markdown-modal"
+    >
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} style={{ marginBottom: 16 }} /> : null}
+      {loading ? (
+        <div className="sprint-report-markdown-state">
+          <Spin />
+        </div>
+      ) : markdown ? (
+        <article className="sprint-report-markdown">{renderMarkdownBlocks(markdown)}</article>
+      ) : (
+        <Empty description="暂无可查看的报告内容" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      )}
+    </Modal>
+  )
+}
+
+function TestReportGenerateDrawer({
+  open,
+  form,
+  snapshotDate,
+  loading,
+  error,
+  onClose,
+  onFinish,
+}: {
+  open: boolean
+  form: FormInstance<TestReportGenerateFormValues>
+  snapshotDate: string
+  loading?: boolean
+  error?: unknown
+  onClose: () => void
+  onFinish: (values: TestReportGenerateFormValues) => void
+}) {
+  const navigate = useNavigate()
+  const connectionsQuery = useQuery({
+    queryKey: ['llmConnections', 'testReportGenerate'],
+    queryFn: () => api.getLlmConnections(),
+    enabled: open,
+  })
+  const activeConnections = useMemo(
+    () => listItems(connectionsQuery.data).filter((connection) => connection.status === 'active'),
+    [connectionsQuery.data],
+  )
+
+  function handleGoToConfig() {
+    onClose()
+    navigate('/base-services?tab=llm')
+  }
+
+  return (
+    <Drawer
+      title="生成测试报告"
+      open={open}
+      onClose={onClose}
+      width={520}
+      destroyOnHidden
+      extra={
+        <Space>
+          <Button onClick={onClose}>取消</Button>
+          <Button type="primary" loading={loading} disabled={activeConnections.length === 0} onClick={() => form.submit()}>
+            确认生成
+          </Button>
+        </Space>
+      }
+    >
+      {connectionsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert showIcon type="error" title={getErrorMessage(error)} style={{ marginBottom: 16 }} /> : null}
+      <Form form={form} layout="vertical" requiredMark={false} onFinish={onFinish}>
+        <Form.Item label="快照日期">
+          <Input value={snapshotDate} readOnly />
+        </Form.Item>
+        <Form.Item name="connectionId" label="LLM 连接" rules={[{ required: true, message: '请选择 LLM 连接' }]}>
+          <Select
+            loading={connectionsQuery.isLoading}
+            placeholder="请选择用于生成报告的 LLM 连接"
+            options={activeConnections.map((connection) => ({
+              value: connection.connectionId,
+              label: connection.modelId ? `${connection.name} (${connection.modelId})` : connection.name,
+            }))}
+            notFoundContent={
+              connectionsQuery.isLoading ? <Spin size="small" /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可用的 LLM 连接" />
+            }
+          />
+        </Form.Item>
+        {activeConnections.length === 0 && !connectionsQuery.isLoading && !connectionsQuery.error ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可用的 LLM 连接" className="sprint-report-drawer-empty">
+            <Button type="primary" onClick={handleGoToConfig}>
+              去配置
+            </Button>
+          </Empty>
+        ) : null}
+        <Form.Item name="instruction" label="生成说明">
+          <Input.TextArea maxLength={1000} rows={5} placeholder="可选，补充本次报告生成要求" showCount />
+        </Form.Item>
+      </Form>
+    </Drawer>
+  )
+}
+
 export function SprintDetailPage() {
-  const { sprintId = '' } = useParams()
+  const { projectId: routeProjectId = '', sprintId = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [reportDrawerOpen, setReportDrawerOpen] = useState(false)
+  const [reportModalRunId, setReportModalRunId] = useState('')
+  const [historyDateRange, setHistoryDateRange] = useState<[Dayjs, Dayjs]>(() => [dayjs().subtract(6, 'day'), dayjs()])
+  const [reportForm] = Form.useForm<TestReportGenerateFormValues>()
 
   const sprintQuery = useQuery({
     queryKey: ['sprint', sprintId],
@@ -313,10 +771,11 @@ export function SprintDetailPage() {
     enabled: Boolean(sprintId),
   })
   const metricsRange = useMemo(() => {
-    const endDate = dayjs().format('YYYY-MM-DD')
-    const startDate = dayjs().subtract(13, 'day').format('YYYY-MM-DD')
+    const [start, end] = historyDateRange
+    const startDate = start.format('YYYY-MM-DD')
+    const endDate = end.format('YYYY-MM-DD')
     return { startDate, endDate }
-  }, [])
+  }, [historyDateRange])
   const todayDate = useMemo(() => dayjs().format('YYYY-MM-DD'), [])
   const currentMetricsQuery = useQuery({
     queryKey: ['sprintDailyMetricsByDate', sprintId, todayDate],
@@ -340,7 +799,98 @@ export function SprintDetailPage() {
 
   const sprintName = sprintQuery.data?.name ?? '迭代详情'
   const latestMetrics = normalizeDailyMetrics(currentMetricsQuery.data)
-  const historyMetrics = (historyMetricsQuery.data ?? []).map(normalizeDailyMetrics)
+  const historyMetrics = listItems(historyMetricsQuery.data).map(normalizeDailyMetrics)
+  const projectId = routeProjectId || sprintQuery.data?.projectId || sprintQuery.data?.project_id || ''
+  const reportRunsQuery = useQuery({
+    queryKey: ['testReportGenerateRuns', projectId, sprintId],
+    queryFn: () => api.getTestReportGenerateRuns(projectId, { sprintId }),
+    enabled: Boolean(projectId && sprintId),
+  })
+  const reportRunDetailQuery = useQuery({
+    queryKey: ['testReportGenerateRun', reportModalRunId],
+    queryFn: () => api.getTestReportGenerateRun(reportModalRunId),
+    enabled: Boolean(reportModalRunId),
+  })
+
+  const createReportRunMutation = useMutation({
+    mutationFn: (values: TestReportGenerateFormValues) => {
+      if (!projectId) throw new Error('缺少项目信息，无法生成测试报告')
+      return api.createTestReportGenerateRun(projectId, {
+        sprintId,
+        snapshotDate: todayDate,
+        connectionId: values.connectionId,
+        instruction: values.instruction?.trim() || undefined,
+      })
+    },
+    onSuccess: () => {
+      message.success('报告生成已开始')
+      setReportDrawerOpen(false)
+      reportForm.resetFields()
+      queryClient.invalidateQueries({ queryKey: ['testReportGenerateRuns', projectId, sprintId] })
+    },
+  })
+  const downloadReportPdfMutation = useMutation({
+    mutationFn: (run: TestReportGenerateRun) => {
+      const runId = getRunId(run)
+      if (!runId) throw new Error('缺少报告运行 ID，无法导出 PDF')
+      return api.downloadTestReportGenerateRunPdf(runId)
+    },
+    onSuccess: (response, run) => {
+      const runId = getRunId(run)
+      saveBlob(response.blob, response.filename || `test-report-${runId}.pdf`)
+    },
+  })
+
+  const latestReportRun = listItems(reportRunsQuery.data)[0]
+  const isReportGenerating = createReportRunMutation.isPending || isTestReportRunGenerating(latestReportRun)
+  const canViewLatestReport =
+    Boolean(latestReportRun) && getRunStatusMeta(latestReportRun?.status).value === 'success' && Boolean(getRunId(latestReportRun))
+
+  function closeReportDrawer() {
+    setReportDrawerOpen(false)
+    reportForm.resetFields()
+  }
+
+  function handleOpenReportDrawer() {
+    if (isReportGenerating) {
+      message.warning('测试报告正在生成中，请稍后再试')
+      return
+    }
+    if (currentMetricsQuery.isLoading) {
+      message.warning('统计快照加载中，请稍后再试')
+      return
+    }
+    if (currentMetricsQuery.error || !currentMetricsQuery.data) {
+      message.warning('请先更新数据后再生成测试报告')
+      return
+    }
+    setReportDrawerOpen(true)
+  }
+
+  function handleCreateReportRun(values: TestReportGenerateFormValues) {
+    createReportRunMutation.mutate(values)
+  }
+
+  function handleViewReport(run: TestReportGenerateRun) {
+    const runId = getRunId(run)
+    if (!runId) {
+      message.warning('缺少报告运行 ID，无法查看报告')
+      return
+    }
+    setReportModalRunId(runId)
+  }
+
+  function closeReportModal() {
+    setReportModalRunId('')
+  }
+
+  function handleDownloadReportPdf(run: TestReportGenerateRun) {
+    if (getRunStatusMeta(run.status).value !== 'success' || !getRunReportMarkdown(run)) {
+      message.warning('报告未生成完成，暂不能导出 PDF')
+      return
+    }
+    downloadReportPdfMutation.mutate(run)
+  }
 
   return (
     <div className="workbench-page sprint-overview-page">
@@ -379,7 +929,6 @@ export function SprintDetailPage() {
                 <SummaryMetric label="Bug 总数" value={latestMetrics.bug.total} />
                 <Tooltip title="更新数据">
                   <Button
-                    type="primary"
                     shape="circle"
                     className="action-btn-read sprint-overview-refresh-button"
                     icon={<ReloadOutlined />}
@@ -388,6 +937,26 @@ export function SprintDetailPage() {
                     onClick={() => generateMetricsMutation.mutate()}
                   />
                 </Tooltip>
+                <Tooltip title={canViewLatestReport ? '查看最近一次成功报告' : '暂无可查看的成功报告'}>
+                  <Button
+                    icon={<FileTextOutlined />}
+                    disabled={!canViewLatestReport}
+                    onClick={() => {
+                      if (latestReportRun) handleViewReport(latestReportRun)
+                    }}
+                  >
+                    查看报告
+                  </Button>
+                </Tooltip>
+                <Button
+                  type="primary"
+                  icon={<FileTextOutlined />}
+                  loading={isReportGenerating}
+                  disabled={isReportGenerating}
+                  onClick={handleOpenReportDrawer}
+                >
+                  {isReportGenerating ? '生成报告中' : '生成测试报告'}
+                </Button>
               </div>
             </div>
           </section>
@@ -397,44 +966,20 @@ export function SprintDetailPage() {
             {currentMetricsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(currentMetricsQuery.error)} /> : null}
             {historyMetricsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(historyMetricsQuery.error)} /> : null}
             {generateMetricsMutation.error ? <Alert showIcon type="error" title={getErrorMessage(generateMetricsMutation.error)} /> : null}
+            {reportRunsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(reportRunsQuery.error)} /> : null}
+            {createReportRunMutation.error ? <Alert showIcon type="error" title={getErrorMessage(createReportRunMutation.error)} /> : null}
 
             <section className="workbench-panel sprint-overview-panel sprint-overview-panel-unified">
               <div className="sprint-overview-panel-body">
                 <div className="sprint-overview-layout">
-                  <div className="sprint-overview-section">
-                    <SectionHeader title="测试概览" description="按汇总口径展示当前迭代下三类测试资产的执行情况。" />
-                    <Row gutter={[16, 16]}>
-                      <Col xs={24} sm={12} xl={8}>
-                        <TestOverviewChartCard title="功能测试" accent="Functional" stats={latestMetrics.functional} />
-                      </Col>
-                      <Col xs={24} sm={12} xl={8}>
-                        <TestOverviewChartCard title="API 测试" accent="API" stats={latestMetrics.api} />
-                      </Col>
-                      <Col xs={24} sm={12} xl={8}>
-                        <TestOverviewChartCard title="UI 测试" accent="UI" stats={latestMetrics.ui} />
-                      </Col>
-                    </Row>
+                  <SprintHealthSummary metrics={latestMetrics} />
+
+                  <div className="sprint-dashboard-main-grid">
+                    <TestExecutionOverviewCard metrics={latestMetrics} />
+                    <BugRiskOverviewCard bug={latestMetrics.bug} />
                   </div>
 
-                  <div className="sprint-overview-section">
-                    <SectionHeader title="缺陷概览" description="按汇总口径展示当前迭代下的缺陷严重程度与解决状态。" />
-                    <Row gutter={[16, 16]}>
-                      <Col xs={24} xl={10}>
-                        <BugResolutionChartCard bug={latestMetrics.bug} />
-                      </Col>
-                      <Col xs={24} xl={14}>
-                        <BugSeverityBarCard bug={latestMetrics.bug} />
-                      </Col>
-                    </Row>
-                  </div>
-
-                  <div className="sprint-overview-section">
-                    <div className="sprint-overview-trend-head">
-                      <SectionHeader
-                        title="趋势历史"
-                        description={`${metricsRange.startDate} 至 ${metricsRange.endDate}，读取服务端已归档快照。`}
-                      />
-                    </div>
+                  <div className="sprint-overview-section sprint-dashboard-trend-section">
                     {historyMetricsQuery.isLoading ? (
                       <Card className="sprint-overview-card sprint-overview-card-rich sprint-overview-history-state">
                         <Spin />
@@ -444,8 +989,25 @@ export function SprintDetailPage() {
                         <Empty description="暂无历史快照" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                       </Card>
                     ) : (
-                      <div className="sprint-overview-trend-grid">
-                        <Card className="sprint-overview-card sprint-overview-card-rich sprint-overview-chart-card">
+                      <Card className="sprint-overview-card sprint-overview-card-rich sprint-dashboard-trend-card">
+                        <div className="sprint-dashboard-card-head">
+                        <div>
+                          <Title level={4}>趋势历史</Title>
+                        </div>
+                          <RangePicker
+                            allowClear={false}
+                            className="sprint-dashboard-range-picker"
+                            format="YYYY-MM-DD"
+                            value={historyDateRange}
+                            onChange={(dates) => {
+                              if (dates?.[0] && dates[1]) {
+                                setHistoryDateRange([dates[0], dates[1]])
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="sprint-overview-trend-grid">
+                          <div className="sprint-dashboard-trend-pane">
                           <div className="sprint-overview-chart-card-head">
                             <div>
                               <Text className="sprint-overview-card-label">用例总数趋势</Text>
@@ -456,8 +1018,8 @@ export function SprintDetailPage() {
                             <Tag className="sprint-overview-accent-tag">Cases</Tag>
                           </div>
                           <TrendLineChart data={historyMetrics} />
-                        </Card>
-                        <Card className="sprint-overview-card sprint-overview-card-rich sprint-overview-chart-card">
+                          </div>
+                          <div className="sprint-dashboard-trend-pane">
                           <div className="sprint-overview-chart-card-head">
                             <div>
                               <Text className="sprint-overview-card-label">Bug 解决趋势</Text>
@@ -468,8 +1030,9 @@ export function SprintDetailPage() {
                             <Tag className="sprint-overview-accent-tag">Bugs</Tag>
                           </div>
                           <TrendBarChart data={historyMetrics} />
-                        </Card>
-                      </div>
+                          </div>
+                        </div>
+                      </Card>
                     )}
                   </div>
                 </div>
@@ -485,7 +1048,24 @@ export function SprintDetailPage() {
           </section>
         </div>
       )}
-
+      <TestReportGenerateDrawer
+        open={reportDrawerOpen}
+        form={reportForm}
+        snapshotDate={todayDate}
+        loading={createReportRunMutation.isPending}
+        error={createReportRunMutation.error}
+        onClose={closeReportDrawer}
+        onFinish={handleCreateReportRun}
+      />
+      <TestReportMarkdownModal
+        open={Boolean(reportModalRunId)}
+        run={reportRunDetailQuery.data}
+        loading={reportRunDetailQuery.isLoading}
+        error={reportRunDetailQuery.error ?? downloadReportPdfMutation.error}
+        downloading={downloadReportPdfMutation.isPending}
+        onClose={closeReportModal}
+        onDownloadPdf={handleDownloadReportPdf}
+      />
     </div>
   )
 }

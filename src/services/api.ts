@@ -76,6 +76,7 @@ export type {
   UpdateApiExtractRulePayload,
 } from '@/features/api-automation/types'
 export type {
+  CreateTestReportGenerateRunPayload,
   Project,
   ProjectUpdatePayload,
   Sprint,
@@ -83,6 +84,9 @@ export type {
   SprintDailyMetricsSnapshot,
   SprintDailyMetricsTestStats,
   SprintUpdatePayload,
+  TestReportGenerateRun,
+  TestReportGenerateRunSnapshot,
+  TestReportGenerateRunStatus,
 } from '@/features/projects/types'
 export type {
   Requirement,
@@ -132,8 +136,8 @@ export type {
   UpdateUiTestSuitePayload,
 } from '@/features/ui-automation/types'
 
-export type { ApiEnvelope } from '@/shared/api/request'
-export { ApiError } from '@/shared/api/request'
+export type { ApiEnvelope, ListResponse } from '@/shared/api/request'
+export { ApiError, listItems, listTotal } from '@/shared/api/request'
 
 export const api = {
   ...authApi,

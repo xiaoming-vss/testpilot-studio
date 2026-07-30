@@ -1,11 +1,14 @@
+import { useId } from 'react'
+
 type TestPilotLogoProps = {
   size?: number
   className?: string
   title?: string
 }
 
-export function TestPilotLogo({ size = 28, className, title = 'TestPilot Logo' }: TestPilotLogoProps) {
-  const logoClassName = ['testpilot-logo', className].filter(Boolean).join(' ')
+export function TestPilotLogo({ size = 28, className, title = 'MTX Logo' }: TestPilotLogoProps) {
+  const logoClassName = ['mtx-logo', className].filter(Boolean).join(' ')
+  const plateGradientId = `mtx-logo-plate-${useId().replace(/:/g, '')}`
 
   return (
     <svg
@@ -14,16 +17,20 @@ export function TestPilotLogo({ size = 28, className, title = 'TestPilot Logo' }
       width={size}
       height={size}
       className={logoClassName}
-      viewBox="0 0 48 48"
+      viewBox="0 0 58 58"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect className="testpilot-logo__plate" x="4" y="4" width="40" height="40" rx="14" />
-      <path className="testpilot-logo__glow" d="M9.5 18.2C12.1 10.9 17.8 8 27.7 8H31.5C36.9 8 40 11.1 40 16.5" />
-      <path className="testpilot-logo__mark" d="M15 15.5H33M24 15.5V35" />
-      <path className="testpilot-logo__route" d="M16.2 28.8L21.4 34L32.6 20.2" />
-      <path className="testpilot-logo__wing" d="M29.2 16.2L35.8 12.8L33.5 20.1L31.8 17.6L29.2 16.2Z" />
-      <circle className="testpilot-logo__origin" cx="16.2" cy="28.8" r="2.6" />
+      <defs>
+        <linearGradient id={plateGradientId} x1="29" y1="1" x2="29" y2="57" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffffff" />
+          <stop offset="1" stopColor="#f3f7fc" />
+        </linearGradient>
+      </defs>
+      <rect className="mtx-logo__plate" x="1" y="1" width="56" height="56" rx="14" fill={`url(#${plateGradientId})`} />
+      <path className="mtx-logo__model" d="M15 39V20L25 31L35 20" />
+      <path className="mtx-logo__test" d="M22 20H42M32 20V41" />
+      <path className="mtx-logo__experience" d="M39 26L47 38M47 26L39 38" />
     </svg>
   )
 }

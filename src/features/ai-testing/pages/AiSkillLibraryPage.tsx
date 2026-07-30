@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import '@/features/ai-testing/styles/index.css'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
-import { api, type AiSkillLibraryItem, type UploadAiSkillPayload } from '@/services/api'
+import { api, listItems, type AiSkillLibraryItem, type UploadAiSkillPayload } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { getErrorMessage } from '@/utils/format'
 
@@ -44,7 +44,7 @@ export function AiSkillLibraryPage({ embedded = false }: { embedded?: boolean })
     queryFn: () => api.getAiSkillLibraryItems(activeProjectId!),
     enabled: Boolean(activeProjectId),
   })
-  const skills = skillsQuery.data ?? []
+  const skills = listItems(skillsQuery.data)
 
   const uploadSkillMutation = useMutation({
     mutationFn: (payload: UploadAiSkillPayload) => api.uploadAiSkill(activeProjectId!, payload),

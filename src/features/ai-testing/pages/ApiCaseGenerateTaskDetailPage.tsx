@@ -10,7 +10,7 @@ import { isApiCaseGenerateTaskRunInProgress, isRunnableApiCaseGenerateTaskRun, r
 import '@/features/ai-testing/styles/index.css'
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser'
 import { useAuthStore } from '@/features/auth/store/auth.store'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, normalizeUserName, pickUpdatedAt } from '@/utils/format'
 
@@ -434,7 +434,7 @@ export function ApiCaseGenerateTaskDetailPage() {
     enabled: Boolean(task?.projectId),
   })
   const sprintOptions = useMemo(
-    () => (sprintsQuery.data ?? []).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    () => listItems(sprintsQuery.data).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
     [sprintsQuery.data],
   )
   const requirementsQuery = useQuery({
@@ -444,7 +444,7 @@ export function ApiCaseGenerateTaskDetailPage() {
   })
   const requirementOptions = useMemo(
     () =>
-      (requirementsQuery.data ?? []).map((requirement) => ({
+      listItems(requirementsQuery.data).map((requirement) => ({
         label: requirement.name,
         value: normalizeRequirementId(requirement),
       })),
@@ -460,17 +460,17 @@ export function ApiCaseGenerateTaskDetailPage() {
     enabled: Boolean(task?.requirementId),
   })
   const sprintNameMap = useMemo(
-    () => new Map((sprintsQuery.data ?? []).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
+    () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
   )
   const requirementNameMap = useMemo(
-    () => new Map((requirementsQuery.data ?? []).map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
+    () => new Map(listItems(requirementsQuery.data).map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
     [requirementsQuery.data],
   )
 
   const runRecords = useMemo(
     () =>
-      [...(runsQuery.data ?? [])].sort((left, right) => {
+      [...listItems(runsQuery.data)].sort((left, right) => {
         const leftTime = new Date(left.createdAt || left.startedAt || left.updatedAt || '').getTime()
         const rightTime = new Date(right.createdAt || right.startedAt || right.updatedAt || '').getTime()
         return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
@@ -501,7 +501,7 @@ export function ApiCaseGenerateTaskDetailPage() {
   )
   const apiCollectionOptions = useMemo(
     () =>
-      (apiCollectionsQuery.data ?? []).map((collection) => ({
+      listItems(apiCollectionsQuery.data).map((collection) => ({
         label: collection.name,
         value: collection.collectionId ?? collection.collection_id ?? '',
       })),
@@ -510,7 +510,7 @@ export function ApiCaseGenerateTaskDetailPage() {
   const apiCollectionNameMap = useMemo(
     () =>
       new Map(
-        (apiCollectionsQuery.data ?? []).map((collection) => [
+        listItems(apiCollectionsQuery.data).map((collection) => [
           collection.collectionId ?? collection.collection_id ?? '',
           collection.name,
         ]),
@@ -566,7 +566,7 @@ export function ApiCaseGenerateTaskDetailPage() {
       if (task?.projectId) {
         queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTasks', task.projectId] })
       }
-      navigate('/ai-testing/tasks?tab=api')
+      navigate('/ai-testing?tab=tasks')
     },
   })
 
@@ -753,7 +753,7 @@ export function ApiCaseGenerateTaskDetailPage() {
         <div className="ai-task-detail-layout">
           <Card className="ai-task-detail-summary-card">
             <div className="ai-task-detail-inline-meta">
-              <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-testing/tasks?tab=api')}>
+              <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/ai-testing?tab=tasks')}>
                 返回生成任务
               </Button>
               {detailItems.map((item) => (
@@ -1142,6 +1142,7 @@ export function ApiCaseGenerateTaskDetailPage() {
 
       <LlmConnectionSelectModal
         open={llmSelectOpen}
+        projectId={task?.projectId}
         onClose={() => setLlmSelectOpen(false)}
         onConfirm={handleLlmSelectConfirm}
         loading={runTaskMutation.isPending}

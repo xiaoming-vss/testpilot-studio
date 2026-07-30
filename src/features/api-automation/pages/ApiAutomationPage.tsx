@@ -1,5 +1,6 @@
-import { CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Select, Space, Tooltip, Typography } from 'antd'
+import { CaretRightOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import { Alert, Button, Empty, Form, Pagination, Popconfirm, Select, Space, Table, Tooltip, Typography } from 'antd'
+import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -7,7 +8,7 @@ import { ApiEnvironmentDrawer } from '@/features/api-automation/components/ApiEn
 import { CollectionDrawer, type CollectionFormValues } from '@/features/api-automation/components/CollectionDrawer'
 import { useProjectRequirements } from '@/features/projects/hooks/useProjectRequirements'
 import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRequirementScope'
-import { api, type ApiCollection, type ApiEnvironment, type Requirement } from '@/services/api'
+import { api, listItems, type ApiCollection, type ApiEnvironment, type Requirement } from '@/services/api'
 import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
 import {
   formatTime,
@@ -20,7 +21,7 @@ import {
 import { buildApiCollectionUpdatePayload } from '@/utils/updatePayload'
 import { message } from '@/shared/utils/feedback'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 type ApiAutomationPageScope = {
   projectId?: string
@@ -40,7 +41,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
   const workbenchActiveProjectId = useWorkbenchStore((state) => state.activeProjectId)
   const activeProjectId = scope?.projectId ?? workbenchActiveProjectId
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(18)
+  const [pageSize, setPageSize] = useState(10)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
   const [editingCollection, setEditingCollection] = useState<ApiCollection | null>(null)
@@ -140,7 +141,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     queryFn: () => api.getApiEnvironments(activeProjectId!),
     enabled: Boolean(activeProjectId),
   })
-  const environments = environmentsQuery.data ?? []
+  const environments = listItems(environmentsQuery.data)
   const selectedEnvironment =
     environments.find((environment) => normalizeEnvironmentId(environment) === selectedEnvironmentId) ??
     environments.find((environment) => environment.isDefault) ??
@@ -164,7 +165,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     enabled: Boolean(drawerSprintId),
   })
   const drawerRequirementOptions = useMemo(
-    () => (drawerRequirementsQuery.data ?? []).map((requirement) => ({ label: requirement.name, value: normalizeRequirementId(requirement) })),
+    () => listItems(drawerRequirementsQuery.data).map((requirement) => ({ label: requirement.name, value: normalizeRequirementId(requirement) })),
     [drawerRequirementsQuery.data],
   )
 
@@ -267,8 +268,145 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     })
   }
 
+  function openCollectionDetail(collectionId: string) {
+    if (!collectionId) return
+    navigate(`/api-automation/collections/${collectionId}`)
+  }
+
+  function getCollectionRowContext(collection: ApiCollection) {
+    const collectionId = collection.collectionId ?? collection.collection_id ?? ''
+    const requirementId = collection.requirementId ?? collection.requirement_id
+    const requirementName =
+      scope?.requirementName || (requirementId ? requirementNameMap.get(requirementId) ?? requirementId : '-')
+    const sprintIdForCollection = scope?.sprintId ?? (requirementId ? requirementSprintMap.get(requirementId) : undefined)
+    const sprintName =
+      scope?.sprintName || (sprintIdForCollection ? sprintNameMap.get(sprintIdForCollection) ?? sprintIdForCollection : '-')
+    const collectionDescription = collection.description || '暂无API测试集描述'
+    const collectionScopeText = `${sprintName} / ${requirementName}`
+
+    return { collectionDescription, collectionId, collectionScopeText }
+  }
+
+  const columns: TableProps<ApiCollection>['columns'] = [
+    {
+      title: '测试集名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: '30%',
+      render: (name: ApiCollection['name']) => (
+        <Space size={10} className="functional-suite-list-name">
+          <span className="functional-suite-list-status-dot" />
+          <Tooltip title={name}>
+            <Text className="functional-suite-list-name-text" ellipsis>
+              {name}
+            </Text>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: '所属迭代/需求',
+      key: 'scope',
+      ellipsis: true,
+      render: (_, collection) => {
+        const { collectionScopeText } = getCollectionRowContext(collection)
+        return (
+          <Tooltip title={collectionScopeText}>
+            <Text className="functional-suite-list-scope" ellipsis>
+              {collectionScopeText}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '最近更新',
+      key: 'updatedAt',
+      width: 190,
+      render: (_, collection) => <Text type="secondary">{formatTime(pickUpdatedAt(collection))}</Text>,
+    },
+    {
+      title: '描述',
+      key: 'description',
+      ellipsis: true,
+      render: (_, collection) => {
+        const { collectionDescription } = getCollectionRowContext(collection)
+        return (
+          <Tooltip title={collectionDescription}>
+            <Text className="functional-suite-list-description" type="secondary" ellipsis>
+              {collectionDescription}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 188,
+      align: 'right',
+      render: (_, collection) => {
+        const { collectionId } = getCollectionRowContext(collection)
+        return (
+          <Space
+            size={6}
+            className="functional-suite-list-actions"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <Tooltip title="查看详情">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<EyeOutlined />}
+                aria-label="查看API测试集"
+                onClick={() => openCollectionDetail(collectionId)}
+              />
+            </Tooltip>
+            <Tooltip title={resolvedEnvironmentId ? '运行API测试集' : '请先选择环境'}>
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<CaretRightOutlined />}
+                aria-label="运行API测试集"
+                disabled={!resolvedEnvironmentId}
+                loading={runningCollectionId === collectionId && runCollectionMutation.isPending}
+                onClick={(event) => handleRunCollection(event, collectionId)}
+              />
+            </Tooltip>
+            <Tooltip title="编辑">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-update"
+                icon={<EditOutlined />}
+                aria-label="编辑API测试集"
+                onClick={() => openEditDrawer(collection)}
+              />
+            </Tooltip>
+            <Popconfirm title="确认删除该API测试集？" onConfirm={() => deleteCollectionMutation.mutate(collectionId)}>
+              <Tooltip title="删除">
+                <Button
+                  danger
+                  type="text"
+                  shape="circle"
+                  className="action-btn-delete"
+                  icon={<DeleteOutlined />}
+                  aria-label="删除API测试集"
+                  loading={deleteCollectionMutation.isPending}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        )
+      },
+    },
+  ]
+
   return (
-    <div className="workbench-page api-automation-page">
+    <div className="workbench-page api-automation-page functional-test-page api-test-page">
       <div className="api-automation-content">
         <section className="workbench-panel workbench-board-panel">
           <div className="panel-header api-panel-header">
@@ -339,7 +477,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
               <Button icon={<SettingOutlined />} disabled={!activeProjectId} onClick={() => setEnvironmentDrawerOpen(true)}>
                 环境管理
               </Button>
-              <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!selectedRequirementId} onClick={openCreateDrawer}>
+              <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!activeProjectId || sprints.length === 0} onClick={openCreateDrawer}>
                 新建API测试集
               </Button>
             </Space>
@@ -370,100 +508,23 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
               </div>
             ) : collections.length === 0 ? (
               <div className="sprint-card-loading">
-                <Empty description="当前需求下暂无API测试集" />
+                <Empty description={selectedRequirementId ? '当前需求下暂无API测试集' : '当前范围下暂无API测试集'}>
+                  <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!activeProjectId || sprints.length === 0} onClick={openCreateDrawer}>
+                    新建API测试集
+                  </Button>
+                </Empty>
               </div>
             ) : (
-              <div className="api-collection-grid">
-                {pagedCollections.map((collection) => {
-                  const requirementId = collection.requirementId ?? collection.requirement_id
-                  const requirementName =
-                    scope?.requirementName ||
-                    (requirementId ? requirementNameMap.get(requirementId) ?? requirementId : '-')
-                  const sprintIdForCollection = scope?.sprintId ?? (requirementId ? requirementSprintMap.get(requirementId) : undefined)
-                  const sprintName =
-                    scope?.sprintName || (sprintIdForCollection ? sprintNameMap.get(sprintIdForCollection) ?? sprintIdForCollection : '-')
-                  const collectionId = collection.collectionId ?? collection.collection_id ?? ''
-
-                  return (
-                    <Card
-                      key={collectionId}
-                      hoverable
-                      className="sprint-card api-collection-card"
-                      styles={{ body: { padding: 20 } }}
-                      onClick={() => navigate(`/api-automation/collections/${collectionId}`)}
-                    >
-                      <div className="api-collection-card-top">
-                        <Space size={10}>
-                          <Badge status="processing" />
-                          <Text strong>{collection.name}</Text>
-                        </Space>
-                      </div>
-
-                      <Paragraph className="api-collection-description" type="secondary">
-                        {collection.description || '暂无API测试集描述'}
-                      </Paragraph>
-
-                      <div className="sprint-card-meta api-collection-meta-inline">
-                        <span className="sprint-card-label">所属迭代/需求</span>
-                        <span className="api-collection-inline-value">
-                          {sprintName}/{requirementName}
-                        </span>
-                      </div>
-
-                      <div className="sprint-card-meta">
-                        <span className="sprint-card-label">最近更新</span>
-                        <span className="api-collection-inline-value">{formatTime(pickUpdatedAt(collection))}</span>
-                      </div>
-
-                      <div
-                        className="sprint-card-actions"
-                        onClick={(event) => event.stopPropagation()}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      >
-                        <Tooltip title={resolvedEnvironmentId ? '运行API测试集' : '请先选择环境'}>
-                          <Button
-                            type="text"
-                            shape="circle"
-                            icon={<CaretRightOutlined />}
-                            aria-label="运行API测试集"
-                            disabled={!resolvedEnvironmentId}
-                            loading={runningCollectionId === collectionId && runCollectionMutation.isPending}
-                            onClick={(event) => handleRunCollection(event, collectionId)}
-                          />
-                        </Tooltip>
-                        <Tooltip title="编辑">
-                            <Button
-                              type="text"
-                              shape="circle"
-                              className="action-btn-update"
-                              icon={<EditOutlined />}
-                            aria-label="编辑API测试集"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              openEditDrawer(collection)
-                            }}
-                          />
-                        </Tooltip>
-                        <Popconfirm title="确认删除该API测试集？" onConfirm={() => deleteCollectionMutation.mutate(collectionId)}>
-                          <Tooltip title="删除">
-                            <Button
-                              danger
-                              type="text"
-                              shape="circle"
-                              className="action-btn-delete"
-                              icon={<DeleteOutlined />}
-                              aria-label="删除API测试集"
-                              loading={deleteCollectionMutation.isPending}
-                              onClick={(event) => event.stopPropagation()}
-                              onMouseDown={(event) => event.stopPropagation()}
-                            />
-                          </Tooltip>
-                        </Popconfirm>
-                      </div>
-                    </Card>
-                  )
+              <Table<ApiCollection>
+                className="functional-suite-list-table api-suite-list-table"
+                columns={columns}
+                dataSource={pagedCollections}
+                rowKey={(collection) => getCollectionRowContext(collection).collectionId || collection.name}
+                pagination={false}
+                onRow={(collection) => ({
+                  onClick: () => openCollectionDetail(getCollectionRowContext(collection).collectionId),
                 })}
-              </div>
+              />
             )}
           </div>
           <div className="table-footer">
@@ -473,7 +534,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
               pageSize={pageSize}
               total={collections.length}
               showSizeChanger
-              pageSizeOptions={['18', '24', '30', '36', '48', '60']}
+              pageSizeOptions={['10', '20', '30', '50']}
               onChange={(nextPage, nextPageSize) => {
                 setPage(nextPage)
                 setPageSize(nextPageSize)
@@ -515,4 +576,3 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     </div>
   )
 }
-

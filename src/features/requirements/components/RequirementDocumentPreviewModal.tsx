@@ -30,11 +30,29 @@ function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+async function fetchBlobWithAuth(url: string, token?: string | null) {
+  const response = await fetch(url, {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : undefined,
+  })
+
+  if (!response.ok) {
+    throw new Error(`文档加载失败（${response.status}）`)
+  }
+
+  return response.blob()
+}
+
 function RequirementDocxPreview({
+  requirementId,
   documentUrl,
   previewUrl,
   documentName,
 }: {
+  requirementId?: string
   documentUrl: string
   previewUrl: string
   documentName: string
@@ -43,33 +61,58 @@ function RequirementDocxPreview({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const downloadMutation = useMutation({
+    mutationFn: async () => {
+      if (requirementId) {
+        return api.downloadRequirementDocument(requirementId)
+      }
+
+      const sourceUrl = documentUrl || previewUrl
+      if (!sourceUrl) {
+        throw new Error('暂无可下载文档')
+      }
+
+      return {
+        blob: await fetchBlobWithAuth(sourceUrl, token),
+        filename: documentName,
+      }
+    },
+    onSuccess: (response) => {
+      saveBlob(response.blob, response.filename || documentName || 'requirement-document')
+    },
+    onError: (downloadError) => {
+      message.error(getErrorMessage(downloadError))
+    },
+  })
 
   useEffect(() => {
     let disposed = false
     const container = containerRef.current
 
     async function loadDocument() {
-      if (!previewUrl || !container) return
+      if ((!previewUrl && !requirementId) || !container) return
 
       setLoading(true)
       setError(null)
       container.innerHTML = ''
 
       try {
-        const response = await fetch(previewUrl, {
-          headers: token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : undefined,
-        })
+        const blob = requirementId
+          ? (await api.downloadRequirementDocument(requirementId)).blob
+          : await fetchBlobWithAuth(previewUrl || documentUrl, token)
 
-        if (!response.ok) {
-          throw new Error(`文档加载失败（${response.status}）`)
+        if (blob.size === 0) {
+          throw new Error('文档内容为空，请下载原文件确认是否上传成功')
         }
 
-        const arrayBuffer = await response.arrayBuffer()
+        const arrayBuffer = await blob.arrayBuffer()
         if (disposed) return
+        const signature = new Uint8Array(arrayBuffer.slice(0, 4))
+        const isZipDocument = signature[0] === 0x50 && signature[1] === 0x4b
+
+        if (!isZipDocument) {
+          throw new Error('文档内容不是有效的 DOCX 文件，请下载原文件确认')
+        }
 
         await renderAsync(arrayBuffer, container, undefined, {
           className: 'requirement-docx',
@@ -98,7 +141,7 @@ function RequirementDocxPreview({
         container.innerHTML = ''
       }
     }
-  }, [previewUrl, token])
+  }, [documentUrl, previewUrl, requirementId, token])
 
   return (
     <div className="requirement-document-preview-shell">
@@ -111,9 +154,9 @@ function RequirementDocxPreview({
       {error ? (
         <div className="requirement-document-preview-state error">
           <span>{error}</span>
-          <a href={documentUrl} target="_blank" rel="noreferrer">
+          <Button type="link" loading={downloadMutation.isPending} onClick={() => downloadMutation.mutate()}>
             下载文档：{documentName}
-          </a>
+          </Button>
         </div>
       ) : null}
       <div
@@ -260,8 +303,13 @@ export function RequirementDocumentPreviewContent({
         isWord ? ' docx-mode' : ' text-mode'
       }`}
     >
-      {isWord && documentUrl ? (
-        <RequirementDocxPreview documentUrl={documentUrl} previewUrl={previewUrl} documentName={documentName} />
+      {isWord && (documentUrl || requirementId) ? (
+        <RequirementDocxPreview
+          requirementId={requirementId}
+          documentUrl={documentUrl}
+          previewUrl={previewUrl}
+          documentName={documentName}
+        />
       ) : !isWord && documentUrl ? (
         <RequirementTextPreview previewUrl={previewUrl} />
       ) : (

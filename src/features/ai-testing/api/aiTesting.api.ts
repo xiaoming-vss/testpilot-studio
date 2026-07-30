@@ -1,4 +1,4 @@
-import { request, requestBlob } from '@/shared/api/request'
+import { request, requestBlob, type ListResponse } from '@/shared/api/request'
 import type {
   AiSkillLibraryItem,
   ApiCaseGenerateTask,
@@ -29,7 +29,7 @@ import type { Requirement } from '@/features/requirements/types'
 
 export const aiTestingApi = {
   getAiSkillLibraryItems: (projectId: string) =>
-    request<AiSkillLibraryItem[]>(`/v1/projects/${projectId}/skills`),
+    request<ListResponse<AiSkillLibraryItem>>(`/v1/projects/${projectId}/skills`),
   uploadAiSkill: (projectId: string, { file, publicBaseURL }: UploadAiSkillPayload) => {
     const formData = new FormData()
     formData.append('file', file, file.name)
@@ -49,7 +49,7 @@ export const aiTestingApi = {
   downloadAiSkill: (projectId: string, skillSpaceId: string) =>
     requestBlob(`/v1/projects/${projectId}/skills/${skillSpaceId}/download`),
   getApiCaseGenerateTasks: (projectId: string) =>
-    request<ApiCaseGenerateTask[]>(`/v1/projects/${projectId}/api-case-generate-tasks`),
+    request<ListResponse<ApiCaseGenerateTask>>(`/v1/projects/${projectId}/api-case-generate-tasks`),
   createApiCaseGenerateTask: (projectId: string, body: CreateApiCaseGenerateTaskPayload) =>
     request<ApiCaseGenerateTask>(`/v1/projects/${projectId}/api-case-generate-tasks`, {
       method: 'POST',
@@ -68,7 +68,7 @@ export const aiTestingApi = {
       body: JSON.stringify({ connectionId }),
     }),
   getApiCaseGenerateTaskRuns: (taskId: string) =>
-    request<ApiCaseGenerateTaskRun[]>(`/v1/api-case-generate-tasks/${taskId}/runs`),
+    request<ListResponse<ApiCaseGenerateTaskRun>>(`/v1/api-case-generate-tasks/${taskId}/runs`),
   getApiCaseGenerateTaskRun: (runId: string) =>
     request<ApiCaseGenerateTaskRun>(`/v1/api-case-generate-task-runs/${runId}`),
   reviewApiCaseGenerateTaskRun: (runId: string, body: ReviewApiCaseGenerateTaskRunPayload) =>
@@ -81,7 +81,7 @@ export const aiTestingApi = {
       method: 'DELETE',
     }),
   getFunctionalCaseGenerateTasks: (projectId: string) =>
-    request<FunctionalCaseGenerateTask[]>(`/v1/projects/${projectId}/function-case-generate-tasks`),
+    request<ListResponse<FunctionalCaseGenerateTask>>(`/v1/projects/${projectId}/function-case-generate-tasks`),
   createFunctionalCaseGenerateTask: (projectId: string, body: CreateFunctionalCaseGenerateTaskPayload) =>
     request<FunctionalCaseGenerateTask>(`/v1/projects/${projectId}/function-case-generate-tasks`, {
       method: 'POST',
@@ -100,7 +100,7 @@ export const aiTestingApi = {
       body: JSON.stringify(body),
     }),
   getFunctionalCaseGenerateTaskRuns: (taskId: string) =>
-    request<FunctionalCaseGenerateTaskRun[]>(`/v1/function-case-generate-tasks/${taskId}/runs`),
+    request<ListResponse<FunctionalCaseGenerateTaskRun>>(`/v1/function-case-generate-tasks/${taskId}/runs`),
   getFunctionalCaseGenerateTaskRun: (runId: string) =>
     request<FunctionalCaseGenerateTaskRun>(`/v1/function-case-generate-task-runs/${runId}`),
   updateFunctionalCaseGenerateTaskRunStageOutput: (
@@ -137,7 +137,7 @@ export const aiTestingApi = {
       method: 'DELETE',
     }),
   getRequirementAnalysisTasks: (projectId: string) =>
-    request<RequirementAnalysisTask[]>(`/v1/projects/${projectId}/requirement-analysis-tasks`),
+    request<ListResponse<RequirementAnalysisTask>>(`/v1/projects/${projectId}/requirement-analysis-tasks`),
   createRequirementAnalysisTask: (projectId: string, body: CreateRequirementAnalysisTaskPayload) =>
     request<RequirementAnalysisTask>(`/v1/projects/${projectId}/requirement-analysis-tasks`, {
       method: 'POST',
@@ -160,7 +160,7 @@ export const aiTestingApi = {
       body: JSON.stringify(body),
     }),
   getRequirementAnalysisTaskRuns: (taskId: string) =>
-    request<RequirementAnalysisTaskRun[]>(`/v1/requirement-analysis-tasks/${taskId}/runs`),
+    request<ListResponse<RequirementAnalysisTaskRun>>(`/v1/requirement-analysis-tasks/${taskId}/runs`),
   getRequirementAnalysisRun: (runId: string) =>
     request<RequirementAnalysisTaskRun>(`/v1/requirement-analysis-runs/${runId}`),
   updateRequirementAnalysisRunStageOutput: (

@@ -2,7 +2,7 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-de
 import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { api, type CreateLlmConnectionPayload, type UpdateLlmConnectionPayload, type LlmConnection } from '@/services/api'
+import { api, listItems, type CreateLlmConnectionPayload, type UpdateLlmConnectionPayload, type LlmConnection } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage } from '@/utils/format'
 import { LlmConnectionDetailDrawer } from './LlmConnectionDetailDrawer'
@@ -54,7 +54,7 @@ function buildUpdatePayload(current: LlmConnection, values: LlmConnectionFormVal
   return payload
 }
 
-export function LlmConnectionsPanel() {
+export function LlmConnectionsPanel({ projectId }: { projectId?: string }) {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(18)
@@ -65,19 +65,20 @@ export function LlmConnectionsPanel() {
   const [form] = Form.useForm<LlmConnectionFormValues>()
 
   const connectionsQuery = useQuery({
-    queryKey: ['llmConnections'],
-    queryFn: () => api.getLlmConnections(),
+    queryKey: ['llmConnections', projectId],
+    queryFn: () => api.getLlmConnections(projectId!),
+    enabled: Boolean(projectId),
   })
 
   const detailQuery = useQuery({
-    queryKey: ['llmConnection', detailConnectionId],
-    queryFn: () => api.getLlmConnection(detailConnectionId),
-    enabled: detailOpen && Boolean(detailConnectionId),
+    queryKey: ['llmConnection', projectId, detailConnectionId],
+    queryFn: () => api.getLlmConnection(projectId!, detailConnectionId),
+    enabled: detailOpen && Boolean(projectId) && Boolean(detailConnectionId),
   })
 
   const connections = useMemo(
     () =>
-      [...(connectionsQuery.data ?? [])].sort((left, right) => {
+      [...listItems(connectionsQuery.data)].sort((left, right) => {
         const leftTime = new Date(left.updatedAt || left.createdAt || '').getTime()
         const rightTime = new Date(right.updatedAt || right.createdAt || '').getTime()
         return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
@@ -92,21 +93,22 @@ export function LlmConnectionsPanel() {
 
   const saveMutation = useMutation({
     mutationFn: (values: LlmConnectionFormValues) => {
+      if (!projectId) throw new Error('请先选择项目')
       if (editingConnection) {
         const payload = buildUpdatePayload(editingConnection, values)
         if (Object.keys(payload).length === 0) {
           return Promise.resolve(editingConnection)
         }
-        return api.updateLlmConnection(editingConnection.connectionId, payload)
+        return api.updateLlmConnection(projectId, editingConnection.connectionId, payload)
       }
-      return api.createLlmConnection(buildCreatePayload(values))
+      return api.createLlmConnection(projectId, buildCreatePayload(values))
     },
     onSuccess: (connection) => {
       const isEditing = Boolean(editingConnection)
       const hasChanges = !editingConnection || Object.keys(buildUpdatePayload(editingConnection, form.getFieldsValue())).length > 0
       message.success(isEditing ? (hasChanges ? 'LLM 连接已更新' : '未检测到变更') : 'LLM 连接已创建')
-      queryClient.invalidateQueries({ queryKey: ['llmConnections'] })
-      queryClient.setQueryData(['llmConnection', connection.connectionId], connection)
+      queryClient.invalidateQueries({ queryKey: ['llmConnections', projectId] })
+      queryClient.setQueryData(['llmConnection', projectId, connection.connectionId], connection)
       setDrawerOpen(false)
       setEditingConnection(null)
       form.resetFields()
@@ -117,11 +119,14 @@ export function LlmConnectionsPanel() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (connectionId: string) => api.deleteLlmConnection(connectionId),
+    mutationFn: (connectionId: string) => {
+      if (!projectId) throw new Error('请先选择项目')
+      return api.deleteLlmConnection(projectId, connectionId)
+    },
     onSuccess: (_, connectionId) => {
       message.success('LLM 连接已删除')
-      queryClient.invalidateQueries({ queryKey: ['llmConnections'] })
-      queryClient.removeQueries({ queryKey: ['llmConnection', connectionId], exact: true })
+      queryClient.invalidateQueries({ queryKey: ['llmConnections', projectId] })
+      queryClient.removeQueries({ queryKey: ['llmConnection', projectId, connectionId], exact: true })
       if (detailConnectionId === connectionId) {
         setDetailOpen(false)
         setDetailConnectionId('')
@@ -165,10 +170,14 @@ export function LlmConnectionsPanel() {
         <div className="requirement-panel-head">
           <Text strong>LLM 连接</Text>
         </div>
-        <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateDrawer}>
+        <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!projectId} onClick={openCreateDrawer}>
           新建 LLM 连接
         </Button>
       </div>
+
+      {!projectId ? (
+        <Alert showIcon type="info" title="请先选择项目" className="base-services-integration-alert" />
+      ) : null}
 
       {connectionsQuery.error ? (
         <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} className="base-services-integration-alert" />

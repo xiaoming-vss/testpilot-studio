@@ -1,16 +1,18 @@
-import { AppstoreOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tooltip, Typography } from 'antd'
+import { AppstoreOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons'
+import { Alert, Button, Empty, Form, Pagination, Popconfirm, Space, Table, Tooltip, Typography } from 'antd'
+import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UiTestSuiteDrawer, type UiTestSuiteFormValues } from './UiTestSuiteDrawer'
-import { DEFAULT_UI_TEST_SUITE_RUN_CONFIG } from '../constants/defaultRunConfig'
+import { DEFAULT_UI_TEST_SUITE_RUN_CONFIG, formatUiScreenshotPolicy } from '../constants/defaultRunConfig'
+import { buildUiSuiteRunPayload } from '../utils/runHelpers'
 import { api, type UiTestSuite, type UiTestSuiteRunSummary } from '@/services/api'
 import { formatTime, getErrorMessage, normalizeUiTestSuiteId, pickCreatedAt, pickUpdatedAt } from '@/utils/format'
 import { message } from '@/shared/utils/feedback'
 import { buildUiTestSuiteUpdatePayload } from '@/utils/updatePayload'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 function formatSuiteViewport(suite: UiTestSuite) {
   if (!suite.viewportWidth || !suite.viewportHeight) return '-'
@@ -20,7 +22,7 @@ function formatSuiteViewport(suite: UiTestSuite) {
 function formatSuiteRunConfig(suite: UiTestSuite) {
   return `${suite.headless === undefined ? '未设置模式' : suite.headless ? '无头' : '可视'} / ${formatSuiteViewport(suite)} / ${
     suite.defaultStepTimeoutMs ? `${suite.defaultStepTimeoutMs}ms` : '未设置超时'
-  }`
+  } / ${formatUiScreenshotPolicy(suite.screenshotPolicy)}`
 }
 
 export type UiTestSuiteSectionRef = {
@@ -76,7 +78,7 @@ export const UiTestSuiteSection = forwardRef<
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(18)
+  const [pageSize, setPageSize] = useState(10)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingSuite, setEditingSuite] = useState<UiTestSuite | null>(null)
   const [form] = Form.useForm<UiTestSuiteFormValues>()
@@ -149,6 +151,7 @@ export const UiTestSuiteSection = forwardRef<
         ...(values.viewportWidth !== undefined ? { viewportWidth: values.viewportWidth } : {}),
         ...(values.viewportHeight !== undefined ? { viewportHeight: values.viewportHeight } : {}),
         ...(values.defaultStepTimeoutMs !== undefined ? { defaultStepTimeoutMs: values.defaultStepTimeoutMs } : {}),
+        screenshotPolicy: values.screenshotPolicy ?? DEFAULT_UI_TEST_SUITE_RUN_CONFIG.screenshotPolicy,
       })
     },
     onSuccess: (suite) => {
@@ -173,8 +176,13 @@ export const UiTestSuiteSection = forwardRef<
   })
 
   const runSuiteMutation = useMutation({
-    mutationFn: (suiteId: string) => api.runUiTestSuite(suiteId),
-    onSuccess: (runRecord, suiteId) => {
+    mutationFn: (suite: UiTestSuite) => {
+      const suiteId = normalizeUiTestSuiteId(suite)
+      if (!suiteId) throw new Error('未找到可运行的 UI测试集')
+      return api.runUiTestSuite(suiteId, buildUiSuiteRunPayload(suite))
+    },
+    onSuccess: (runRecord, suite) => {
+      const suiteId = normalizeUiTestSuiteId(suite)
       const suiteRunId = getUiSuiteRunId(runRecord)
       if (!suiteRunId) {
         message.error('未获取到运行记录 ID')
@@ -213,6 +221,7 @@ export const UiTestSuiteSection = forwardRef<
       viewportWidth: suite.viewportWidth ?? DEFAULT_UI_TEST_SUITE_RUN_CONFIG.viewportWidth,
       viewportHeight: suite.viewportHeight ?? DEFAULT_UI_TEST_SUITE_RUN_CONFIG.viewportHeight,
       defaultStepTimeoutMs: suite.defaultStepTimeoutMs ?? DEFAULT_UI_TEST_SUITE_RUN_CONFIG.defaultStepTimeoutMs,
+      screenshotPolicy: suite.screenshotPolicy ?? DEFAULT_UI_TEST_SUITE_RUN_CONFIG.screenshotPolicy,
     })
     setDrawerOpen(true)
   }
@@ -220,6 +229,149 @@ export const UiTestSuiteSection = forwardRef<
   function openSuiteCasePage(suiteId: string) {
     navigate(`/ui-automation/suites/${suiteId}`)
   }
+
+  function getSuiteRowContext(suite: UiTestSuite) {
+    const suiteId = normalizeUiTestSuiteId(suite)
+    const resolvedSuiteSprintName = sprintNameResolver?.(suite) ?? resolvedSprintName
+    const resolvedSuiteRequirementName = requirementNameResolver?.(suite) ?? resolvedRequirementName
+    const suiteDescription = suite.description || '暂无测试集描述'
+    const suiteScopeText = `${resolvedSuiteSprintName} / ${resolvedSuiteRequirementName}`
+    const suiteRunConfig = formatSuiteRunConfig(suite)
+
+    return { suiteDescription, suiteId, suiteRunConfig, suiteScopeText }
+  }
+
+  const columns: TableProps<UiTestSuite>['columns'] = [
+    {
+      title: '测试集名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: '30%',
+      render: (name: UiTestSuite['name']) => (
+        <Space size={10} className="functional-suite-list-name">
+          <span className="functional-suite-list-status-dot" />
+          <Tooltip title={name}>
+            <Text className="functional-suite-list-name-text" ellipsis>
+              {name}
+            </Text>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: '所属迭代/需求',
+      key: 'scope',
+      ellipsis: true,
+      render: (_, suite) => {
+        const { suiteScopeText } = getSuiteRowContext(suite)
+        return (
+          <Tooltip title={suiteScopeText}>
+            <Text className="functional-suite-list-scope" ellipsis>
+              {suiteScopeText}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '最近更新',
+      key: 'updatedAt',
+      width: 190,
+      render: (_, suite) => <Text type="secondary">{formatTime(pickUpdatedAt(suite))}</Text>,
+    },
+    {
+      title: '运行配置',
+      key: 'runConfig',
+      ellipsis: true,
+      render: (_, suite) => {
+        const { suiteRunConfig } = getSuiteRowContext(suite)
+        return (
+          <Tooltip title={suiteRunConfig}>
+            <Text type="secondary" ellipsis>
+              {suiteRunConfig}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '描述',
+      key: 'description',
+      ellipsis: true,
+      render: (_, suite) => {
+        const { suiteDescription } = getSuiteRowContext(suite)
+        return (
+          <Tooltip title={suiteDescription}>
+            <Text className="functional-suite-list-description" type="secondary" ellipsis>
+              {suiteDescription}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 188,
+      align: 'right',
+      render: (_, suite) => {
+        const { suiteId } = getSuiteRowContext(suite)
+        return (
+          <Space
+            size={6}
+            className="functional-suite-list-actions"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <Tooltip title="查看详情">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<EyeOutlined />}
+                aria-label="查看 UI测试集"
+                onClick={() => openSuiteCasePage(suiteId)}
+              />
+            </Tooltip>
+            <Tooltip title="运行测试集">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<PlayCircleOutlined />}
+                aria-label="运行 UI测试集"
+                loading={runSuiteMutation.isPending && runSuiteMutation.variables === suite}
+                onClick={() => runSuiteMutation.mutate(suite)}
+              />
+            </Tooltip>
+            <Tooltip title="编辑">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-update"
+                icon={<EditOutlined />}
+                aria-label="编辑 UI测试集"
+                onClick={() => openEditDrawer(suite)}
+              />
+            </Tooltip>
+            <Popconfirm title="确认删除该 UI测试集？" onConfirm={() => deleteSuiteMutation.mutate(suiteId)}>
+              <Tooltip title="删除">
+                <Button
+                  danger
+                  type="text"
+                  shape="circle"
+                  className="action-btn-delete"
+                  icon={<DeleteOutlined />}
+                  aria-label="删除 UI测试集"
+                  loading={deleteSuiteMutation.isPending}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        )
+      },
+    },
+  ]
 
   useImperativeHandle(
     ref,
@@ -262,92 +414,16 @@ export const UiTestSuiteSection = forwardRef<
             </Empty>
           </div>
         ) : (
-          <div className="api-collection-grid ui-test-suite-grid">
-            {pagedSuites.map((suite) => {
-              const suiteId = normalizeUiTestSuiteId(suite)
-              const resolvedSuiteSprintName = sprintNameResolver?.(suite) ?? resolvedSprintName
-              const resolvedSuiteRequirementName = requirementNameResolver?.(suite) ?? resolvedRequirementName
-
-              return (
-                <Card
-                  key={suiteId}
-                  hoverable
-                  className="sprint-card api-collection-card ui-test-suite-card"
-                  styles={{ body: { padding: 20 } }}
-                  onClick={() => openSuiteCasePage(suiteId)}
-                >
-                  <div className="api-collection-card-top">
-                    <Space size={10}>
-                      <Badge status="processing" />
-                      <Text strong>{suite.name}</Text>
-                    </Space>
-                  </div>
-
-                  <Paragraph className="api-collection-description" type="secondary">
-                    {suite.description || '暂无测试集描述'}
-                  </Paragraph>
-
-                  <div className="sprint-card-meta api-collection-meta-inline">
-                    <span className="sprint-card-label">所属迭代/需求</span>
-                    <span className="api-collection-inline-value">
-                      {resolvedSuiteSprintName}/{resolvedSuiteRequirementName}
-                    </span>
-                  </div>
-
-                  <div className="sprint-card-meta">
-                    <span className="sprint-card-label">最近更新</span>
-                    <span className="api-collection-inline-value">{formatTime(pickUpdatedAt(suite))}</span>
-                  </div>
-
-                  <div className="sprint-card-meta">
-                    <span className="sprint-card-label">运行配置</span>
-                    <span className="api-collection-inline-value">{formatSuiteRunConfig(suite)}</span>
-                  </div>
-
-                  <div
-                    className="sprint-card-actions"
-                    onClick={(event) => event.stopPropagation()}
-                    onMouseDown={(event) => event.stopPropagation()}
-                  >
-                    <Tooltip title="运行测试集">
-                      <Button
-                        type="text"
-                        shape="circle"
-                        className="action-btn-read"
-                        icon={<PlayCircleOutlined />}
-                        aria-label="运行 UI测试集"
-                        loading={runSuiteMutation.isPending && runSuiteMutation.variables === suiteId}
-                        onClick={() => runSuiteMutation.mutate(suiteId)}
-                      />
-                    </Tooltip>
-                    <Tooltip title="编辑">
-                      <Button
-                        type="text"
-                        shape="circle"
-                        className="action-btn-update"
-                        icon={<EditOutlined />}
-                        aria-label="编辑 UI测试集"
-                        onClick={() => openEditDrawer(suite)}
-                      />
-                    </Tooltip>
-                    <Popconfirm title="确认删除该 UI测试集？" onConfirm={() => deleteSuiteMutation.mutate(suiteId)}>
-                      <Tooltip title="删除">
-                        <Button
-                          danger
-                          type="text"
-                          shape="circle"
-                          className="action-btn-delete"
-                          icon={<DeleteOutlined />}
-                          aria-label="删除 UI测试集"
-                          loading={deleteSuiteMutation.isPending}
-                        />
-                      </Tooltip>
-                    </Popconfirm>
-                  </div>
-                </Card>
-              )
+          <Table<UiTestSuite>
+            className="functional-suite-list-table ui-suite-list-table"
+            columns={columns}
+            dataSource={pagedSuites}
+            rowKey={(suite) => getSuiteRowContext(suite).suiteId || suite.name}
+            pagination={false}
+            onRow={(suite) => ({
+              onClick: () => openSuiteCasePage(getSuiteRowContext(suite).suiteId),
             })}
-          </div>
+          />
         )}
       </div>
 
@@ -358,7 +434,7 @@ export const UiTestSuiteSection = forwardRef<
           pageSize={pageSize}
           total={orderedSuites.length}
           showSizeChanger
-          pageSizeOptions={['18', '24', '30', '36', '48', '60']}
+          pageSizeOptions={['10', '20', '30', '50']}
           onChange={(nextPage, nextPageSize) => {
             setPage(nextPage)
             setPageSize(nextPageSize)

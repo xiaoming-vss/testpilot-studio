@@ -14,7 +14,7 @@ import { message } from '@/shared/utils/feedback'
 import '@/features/ai-testing/styles/index.css'
 import { RequirementDocumentPreviewContent } from '@/features/requirements/components/RequirementDocumentPreviewModal'
 import { hasRequirementDocument } from '@/features/requirements/utils/requirementDocument'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickUpdatedAt } from '@/utils/format'
 
 const runResultSectionDefinitions = [
@@ -1343,7 +1343,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     enabled: Boolean(task?.projectId),
   })
   const sprintOptions = useMemo(
-    () => (sprintsQuery.data ?? []).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    () => listItems(sprintsQuery.data).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
     [sprintsQuery.data],
   )
   const requirementsQuery = useQuery({
@@ -1353,24 +1353,24 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   })
   const requirementOptions = useMemo(
     () =>
-      (requirementsQuery.data ?? []).map((requirement) => ({
+      listItems(requirementsQuery.data).map((requirement) => ({
         label: requirement.name,
         value: normalizeRequirementId(requirement),
       })),
     [requirementsQuery.data],
   )
   const sprintNameMap = useMemo(
-    () => new Map((sprintsQuery.data ?? []).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
+    () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
   )
   const requirementNameMap = useMemo(
-    () => new Map((requirementsQuery.data ?? []).map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
+    () => new Map(listItems(requirementsQuery.data).map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
     [requirementsQuery.data],
   )
 
   const runRecords = useMemo(
     () =>
-      [...(runsQuery.data ?? [])].sort((left, right) => {
+      [...listItems(runsQuery.data)].sort((left, right) => {
         const leftTime = new Date(left.createdAt || left.startedAt || left.updatedAt || '').getTime()
         const rightTime = new Date(right.createdAt || right.startedAt || right.updatedAt || '').getTime()
         return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
@@ -2386,6 +2386,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
 
         <LlmConnectionSelectModal
           open={llmSelectOpen}
+          projectId={task?.projectId}
           onClose={() => {
             setLlmSelectOpen(false)
             setCheckpointEnabled(false)

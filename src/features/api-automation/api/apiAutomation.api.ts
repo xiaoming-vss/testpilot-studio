@@ -1,4 +1,4 @@
-import { request } from '@/shared/api/request'
+import { request, type ListResponse } from '@/shared/api/request'
 import type {
   ApiAssertRule,
   ApiCase,
@@ -28,7 +28,7 @@ import type {
 
 export const apiAutomationApi = {
   getApiCollections: (requirementId: string) =>
-    request<ApiCollection[]>(`/v1/requirements/${requirementId}/api-collections`),
+    request<ListResponse<ApiCollection>>(`/v1/requirements/${requirementId}/api-collections`),
   createApiCollection: (requirementId: string, body: CreateApiCollectionPayload) =>
     request<ApiCollection>(`/v1/requirements/${requirementId}/api-collections`, {
       method: 'POST',
@@ -42,7 +42,7 @@ export const apiAutomationApi = {
     }),
   deleteApiCollection: (collectionId: string) =>
     request<Record<string, never>>(`/v1/api-collections/${collectionId}`, { method: 'DELETE' }),
-  getApiEnvironments: (projectId: string) => request<ApiEnvironment[]>(`/v1/projects/${projectId}/api-environments`),
+  getApiEnvironments: (projectId: string) => request<ListResponse<ApiEnvironment>>(`/v1/projects/${projectId}/api-environments`),
   createApiEnvironment: (projectId: string, body: CreateApiEnvironmentPayload) =>
     request<ApiEnvironment>(`/v1/projects/${projectId}/api-environments`, {
       method: 'POST',
@@ -57,7 +57,7 @@ export const apiAutomationApi = {
   deleteApiEnvironment: (environmentId: string) =>
     request<Record<string, never>>(`/v1/api-environments/${environmentId}`, { method: 'DELETE' }),
   getApiEnvironmentVars: (environmentId: string) =>
-    request<ApiEnvironmentVar[]>(`/v1/api-environments/${environmentId}/vars`),
+    request<ListResponse<ApiEnvironmentVar>>(`/v1/api-environments/${environmentId}/vars`),
   createApiEnvironmentVar: (environmentId: string, body: CreateApiEnvironmentVarPayload) =>
     request<ApiEnvironmentVar>(`/v1/api-environments/${environmentId}/vars`, {
       method: 'POST',
@@ -71,7 +71,7 @@ export const apiAutomationApi = {
     }),
   deleteApiEnvironmentVar: (envVarId: string) =>
     request<Record<string, never>>(`/v1/api-environment-vars/${envVarId}`, { method: 'DELETE' }),
-  getApiCases: (collectionId: string) => request<ApiCase[]>(`/v1/api-collections/${collectionId}/cases`),
+  getApiCases: (collectionId: string) => request<ListResponse<ApiCase>>(`/v1/api-collections/${collectionId}/cases`),
   createApiCase: (collectionId: string, body: CreateApiCasePayload) =>
     request<ApiCase>(`/v1/api-collections/${collectionId}/cases`, {
       method: 'POST',
@@ -94,7 +94,7 @@ export const apiAutomationApi = {
     }),
   deleteApiCase: (caseId: string) =>
     request<Record<string, never>>(`/v1/api-cases/${caseId}`, { method: 'DELETE' }),
-  getApiAssertRules: (caseId: string) => request<ApiAssertRule[]>(`/v1/api-cases/${caseId}/assert-rules`),
+  getApiAssertRules: (caseId: string) => request<ListResponse<ApiAssertRule>>(`/v1/api-cases/${caseId}/assert-rules`),
   createApiAssertRule: (caseId: string, body: CreateApiAssertRulePayload) =>
     request<ApiAssertRule>(`/v1/api-cases/${caseId}/assert-rules`, {
       method: 'POST',
@@ -108,7 +108,7 @@ export const apiAutomationApi = {
     }),
   deleteApiAssertRule: (assertRuleId: string) =>
     request<Record<string, never>>(`/v1/api-assert-rules/${assertRuleId}`, { method: 'DELETE' }),
-  getApiExtractRules: (caseId: string) => request<ApiExtractRule[]>(`/v1/api-cases/${caseId}/extract-rules`),
+  getApiExtractRules: (caseId: string) => request<ListResponse<ApiExtractRule>>(`/v1/api-cases/${caseId}/extract-rules`),
   createApiExtractRule: (caseId: string, body: CreateApiExtractRulePayload) =>
     request<ApiExtractRule>(`/v1/api-cases/${caseId}/extract-rules`, {
       method: 'POST',
@@ -135,7 +135,7 @@ export const apiAutomationApi = {
       body: JSON.stringify(body),
     }),
   getApiCollectionRuns: (collectionId: string) =>
-    request<ApiCollectionRunSummary[]>(`/v1/api-collections/${collectionId}/runs`),
+    request<ListResponse<ApiCollectionRunSummary>>(`/v1/api-collections/${collectionId}/runs`),
   getApiCollectionRun: (collectionRunId: string) =>
     request<ApiCollectionRunSummary>(`/v1/api-collection-runs/${collectionRunId}`),
   getApiCollectionRunReport: (collectionRunId: string) =>

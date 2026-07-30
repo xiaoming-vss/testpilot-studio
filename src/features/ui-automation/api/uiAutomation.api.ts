@@ -1,10 +1,11 @@
-import { request } from '@/shared/api/request'
+import { request, type ListResponse } from '@/shared/api/request'
 import type {
   CreateUiTestCasePayload,
   CreateUiTestSuitePayload,
   UiTestCase,
   UiTestCaseDebugRunPayload,
   UiTestCaseRun,
+  RunUiTestSuitePayload,
   UiTestSuiteImportResult,
   UiTestSuite,
   UiTestSuiteRunReport,
@@ -15,7 +16,7 @@ import type {
 
 export const uiAutomationApi = {
   getUiTestSuites: (requirementId: string) =>
-    request<UiTestSuite[]>(`/v1/requirements/${requirementId}/ui-test-suites`),
+    request<ListResponse<UiTestSuite>>(`/v1/requirements/${requirementId}/ui-test-suites`),
   createUiTestSuite: (requirementId: string, body: CreateUiTestSuitePayload) =>
     request<UiTestSuite>(`/v1/requirements/${requirementId}/ui-test-suites`, {
       method: 'POST',
@@ -29,15 +30,16 @@ export const uiAutomationApi = {
     }),
   deleteUiTestSuite: (suiteId: string) =>
     request<Record<string, never>>(`/v1/ui-test-suites/${suiteId}`, { method: 'DELETE' }),
-  runUiTestSuite: (suiteId: string) =>
+  runUiTestSuite: (suiteId: string, body: RunUiTestSuitePayload) =>
     request<UiTestSuiteRunSummary>(`/v1/ui-test-suites/${suiteId}/run`, {
       method: 'POST',
+      body: JSON.stringify(body),
     }),
-  getUiTestSuiteRuns: (suiteId: string) => request<UiTestSuiteRunSummary[]>(`/v1/ui-test-suites/${suiteId}/runs`),
+  getUiTestSuiteRuns: (suiteId: string) => request<ListResponse<UiTestSuiteRunSummary>>(`/v1/ui-test-suites/${suiteId}/runs`),
   getUiTestSuiteRun: (suiteRunId: string) => request<UiTestSuiteRunSummary>(`/v1/ui-test-suite-runs/${suiteRunId}`),
   getUiTestSuiteRunReport: (suiteRunId: string) =>
     request<UiTestSuiteRunReport>(`/v1/ui-test-suite-runs/${suiteRunId}/report`),
-  getUiTestCases: (suiteId: string) => request<UiTestCase[]>(`/v1/ui-test-suites/${suiteId}/cases`),
+  getUiTestCases: (suiteId: string) => request<ListResponse<UiTestCase>>(`/v1/ui-test-suites/${suiteId}/cases`),
   importUiTestCases: (suiteId: string, file: Blob, filename = 'import.yaml') => {
     const formData = new FormData()
     formData.append('file', file, filename)

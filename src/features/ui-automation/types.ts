@@ -1,3 +1,5 @@
+export type UiScreenshotPolicy = 'on_failure' | 'after_each_step' | 'never'
+
 export type UiTestSuite = {
   suiteId?: string
   requirementId?: string
@@ -9,6 +11,7 @@ export type UiTestSuite = {
   viewportWidth?: number
   viewportHeight?: number
   defaultStepTimeoutMs?: number
+  screenshotPolicy?: UiScreenshotPolicy
   createdAt?: string
   created_at?: string
   updatedAt?: string
@@ -35,6 +38,7 @@ export type UiTestCaseDebugRunPayload = {
   viewportWidth?: number
   viewportHeight?: number
   defaultStepTimeoutMs?: number
+  screenshotPolicy?: UiScreenshotPolicy
 }
 
 export type UiTestCaseRunStepResult = {
@@ -129,7 +133,13 @@ export type CreateUiTestSuitePayload = {
   viewportWidth?: number
   viewportHeight?: number
   defaultStepTimeoutMs?: number
+  screenshotPolicy?: UiScreenshotPolicy
 }
+
+export type RunUiTestSuitePayload = Pick<
+  CreateUiTestSuitePayload,
+  'headless' | 'slowMoMs' | 'viewportWidth' | 'viewportHeight' | 'defaultStepTimeoutMs'
+>
 
 export type UpdateUiTestSuitePayload = Partial<CreateUiTestSuitePayload>
 

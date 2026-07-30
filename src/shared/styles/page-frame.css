@@ -420,13 +420,17 @@
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .sprint-overview-refresh-button {
   flex: 0 0 auto;
-  width: 36px;
-  min-width: 36px;
+  width: auto;
+  min-width: 92px;
   height: 36px;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 
 .sprint-overview-summary-metric {
@@ -674,7 +678,7 @@
 .sprint-dashboard-health-defects {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -696,6 +700,10 @@
 
 .sprint-dashboard-health-green {
   color: #52c41a !important;
+}
+
+.sprint-dashboard-health-blue {
+  color: #1677ff !important;
 }
 
 .sprint-dashboard-health-red {

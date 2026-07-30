@@ -1610,3 +1610,271 @@
 .app-shell-macos .testing-page .api-automation-content > .workbench-panel .table-body-scroll {
   padding: 16px 18px !important;
 }
+
+
+/* Functional suite open list: aligned with AI demand-analysis list style. */
+.functional-test-page .functional-suite-list-table.ant-table-wrapper {
+  width: 100%;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table {
+  color: var(--testing-text, #172033);
+  background: transparent;
+  border-spacing: 0 6px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-container {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell {
+  height: 48px;
+  padding: 0 18px;
+  color: rgba(86, 96, 112, 0.68) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 250, 255, 0.66)) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.72) !important;
+  border-bottom: 1px solid rgba(84, 104, 132, 0.12) !important;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 8px 20px rgba(31, 41, 55, 0.045);
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell:first-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.64) !important;
+  border-start-start-radius: 12px !important;
+  border-end-start-radius: 12px !important;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell:last-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.64) !important;
+  border-start-end-radius: 12px !important;
+  border-end-end-radius: 12px !important;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell::before {
+  background: rgba(84, 104, 132, 0.045) !important;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-tbody > tr {
+  cursor: pointer;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-tbody > tr > td {
+  height: 52px;
+  padding: 8px 18px;
+  border-bottom: 1px solid rgba(80, 96, 128, 0.065);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.42);
+  color: rgba(79, 93, 115, 0.76) !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-tbody > tr:hover > td {
+  background: rgba(91, 122, 196, 0.055) !important;
+}
+
+.functional-suite-list-name {
+  width: 100%;
+  min-width: 0;
+}
+
+.functional-suite-list-name .ant-space-item:last-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.functional-suite-list-name .ant-typography {
+  max-width: 100%;
+  color: rgba(72, 86, 150, 0.78) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 20px;
+}
+
+.api-test-page .functional-suite-list-name-text.ant-typography,
+.ui-test-page .functional-suite-list-name-text.ant-typography {
+  max-width: 100%;
+  color: rgba(72, 86, 150, 0.78) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 20px !important;
+  letter-spacing: 0 !important;
+}
+
+.functional-suite-list-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #a8b8e8;
+  box-shadow: 0 0 0 3px rgba(168, 184, 232, 0.12);
+}
+
+.functional-suite-list-scope.ant-typography {
+  max-width: 100%;
+  color: rgba(79, 93, 115, 0.76) !important;
+  font-weight: 400 !important;
+  line-height: 20px;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(2),
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(2) .ant-typography,
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(2) span {
+  color: rgba(79, 93, 115, 0.78) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-tbody .ant-typography-secondary {
+  color: rgba(122, 134, 152, 0.58) !important;
+  font-weight: 400 !important;
+}
+
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(3),
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(3) .ant-typography,
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(4),
+.functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(4) .ant-typography,
+.functional-suite-list-description.ant-typography {
+  color: rgba(79, 93, 115, 0.76) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+.functional-suite-list-actions {
+  justify-content: flex-end;
+}
+
+.functional-suite-list-actions .ant-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  color: rgba(110, 122, 139, 0.52);
+}
+
+.functional-suite-list-actions .ant-btn:hover {
+  color: rgba(72, 86, 150, 0.78);
+  background: rgba(255, 255, 255, 0.62) !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-container {
+  border: 0 !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell {
+  color: rgba(86, 96, 112, 0.7) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 255, 0.7)) !important;
+  border-top-color: rgba(255, 255, 255, 0.78) !important;
+  border-bottom-color: rgba(84, 104, 132, 0.1) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+.app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-tbody > tr > td {
+  color: rgba(79, 93, 115, 0.76) !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+}
+
+.app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-tbody > tr:hover > td {
+  background: rgba(91, 122, 196, 0.055) !important;
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table {
+  color: var(--testing-text, #eef4ff);
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-container {
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell,
+:root[data-theme='dark'] .app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell {
+  color: rgba(203, 213, 225, 0.54) !important;
+  background:
+    linear-gradient(180deg, rgba(30, 36, 50, 0.9), rgba(20, 26, 38, 0.82)) !important;
+  border-top-color: rgba(148, 163, 184, 0.12) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 8px 20px rgba(7, 10, 16, 0.16);
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell:first-child {
+  border-left-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell:last-child {
+  border-right-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-thead > tr > th.ant-table-cell::before {
+  background: rgba(148, 163, 184, 0.1) !important;
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody > tr > td,
+:root[data-theme='dark'] .app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-tbody > tr > td {
+  color: rgba(226, 232, 240, 0.68) !important;
+  background: rgba(22, 27, 34, 0.46) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+  box-shadow: inset 0 -1px 0 rgba(7, 10, 16, 0.18);
+}
+
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody > tr:hover > td,
+:root[data-theme='dark'] .app-shell-macos .functional-test-page .functional-suite-list-table .ant-table-tbody > tr:hover > td {
+  background: rgba(56, 139, 253, 0.12) !important;
+}
+
+:root[data-theme='dark'] .functional-suite-list-name .ant-typography,
+:root[data-theme='dark'] .api-test-page .functional-suite-list-name-text.ant-typography,
+:root[data-theme='dark'] .ui-test-page .functional-suite-list-name-text.ant-typography,
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(2),
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(2) .ant-typography,
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(2) span {
+  color: #eef4ff !important;
+}
+
+:root[data-theme='dark'] .functional-suite-list-scope.ant-typography,
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody .ant-typography-secondary,
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(3),
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(3) .ant-typography,
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(4),
+:root[data-theme='dark'] .functional-test-page .functional-suite-list-table .ant-table-tbody td:nth-child(4) .ant-typography,
+:root[data-theme='dark'] .functional-suite-list-description.ant-typography {
+  color: rgba(203, 213, 225, 0.54) !important;
+}
+
+:root[data-theme='dark'] .functional-suite-list-actions .ant-btn {
+  color: rgba(203, 213, 225, 0.54);
+  background: rgba(22, 27, 34, 0.54);
+}
+
+:root[data-theme='dark'] .functional-suite-list-actions .ant-btn:hover {
+  color: #d6e8ff;
+  background: rgba(56, 139, 253, 0.16) !important;
+}

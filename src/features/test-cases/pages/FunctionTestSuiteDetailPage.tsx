@@ -180,7 +180,8 @@ export function FunctionTestSuiteDetailPage() {
     enabled: Boolean(sprintId),
   })
 
-  const orderedCases = useMemo(() => sortFunctionCases(casesQuery.data ?? []), [casesQuery.data])
+  const caseTotal = casesQuery.data?.total ?? 0
+  const orderedCases = useMemo(() => sortFunctionCases(casesQuery.data?.items ?? []), [casesQuery.data?.items])
   const filteredCases = useMemo(() => {
     const keyword = caseSearch.trim().toLowerCase()
     if (!keyword) return orderedCases
@@ -238,7 +239,7 @@ export function FunctionTestSuiteDetailPage() {
   )
 
   const selectedImportCaseCount = selectedZentaoCaseIds.length
-  const zentaoImportTargetCount = selectedImportCaseCount || orderedCases.length
+  const zentaoImportTargetCount = selectedImportCaseCount || caseTotal
   const allSavedCasesSelected = savedCaseIds.length > 0 && selectedZentaoCaseIds.length === savedCaseIds.length
   const partialSavedCasesSelected = selectedZentaoCaseIds.length > 0 && selectedZentaoCaseIds.length < savedCaseIds.length
 
@@ -571,7 +572,7 @@ export function FunctionTestSuiteDetailPage() {
                   <div className="api-case-sidebar-title-copy">
                     <Title level={5}>功能测试用例</Title>
                     <Text type="secondary" className="api-case-sidebar-count">
-                      {orderedCases.length} 个用例
+                      {caseTotal} 个用例
                     </Text>
                   </div>
                 </div>
@@ -608,7 +609,7 @@ export function FunctionTestSuiteDetailPage() {
                   <div className="sprint-card-loading">
                     <Empty description="功能测试用例加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   </div>
-                ) : sidebarCases.length === 0 ? (
+                ) : (caseSearch ? sidebarCases.length === 0 : caseTotal === 0) ? (
                   <div className="ui-suite-case-empty-list">
                     <Empty description={caseSearch ? '没有匹配的功能测试用例' : '当前测试集还没有功能测试用例'}>
                       <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateCase}>
@@ -701,7 +702,7 @@ export function FunctionTestSuiteDetailPage() {
                       className="functional-case-zentao-import-trigger"
                       icon={<UploadOutlined />}
                       onClick={openZentaoImportModal}
-                      disabled={!suiteId || orderedCases.length === 0}
+                      disabled={!suiteId || caseTotal === 0}
                     >
                       导入禅道
                     </Button>
@@ -726,7 +727,7 @@ export function FunctionTestSuiteDetailPage() {
                     </div>
                     <div className="functional-suite-context-chip">
                       <span>数量</span>
-                      <strong>{orderedCases.length}</strong>
+                      <strong>{caseTotal}</strong>
                     </div>
                   </div>
                 </div>

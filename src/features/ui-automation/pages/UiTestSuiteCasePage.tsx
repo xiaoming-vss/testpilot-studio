@@ -19,6 +19,7 @@ import {
   type UiSuiteRunReportView,
   type UiTestRunView,
 } from '../config/stepConfig'
+import { formatUiScreenshotPolicy } from '../constants/defaultRunConfig'
 import {
   buildUiTestCaseFormValues,
   createDefaultUiTestCaseFormValues,
@@ -39,6 +40,7 @@ import {
 } from '../utils/uiTestCaseEditor'
 import {
   api,
+  listItems,
   type UiTestCase,
   type UiTestCaseRun,
   type UiTestCaseRunStepResult,
@@ -55,6 +57,7 @@ import { buildUiTestCaseUpdatePayload } from '@/utils/updatePayload'
 import { message } from '@/shared/utils/feedback'
 import {
   buildUiSuiteDebugRunPayload,
+  buildUiSuiteRunPayload,
   getExecutionStatusMeta,
   getUiTestCaseRunId,
   getUiTestSuiteRunId,
@@ -433,7 +436,7 @@ export function UiTestSuiteCasePage() {
         throw new Error('未找到可运行的 UI测试集')
       }
 
-      return api.runUiTestSuite(suiteId)
+      return api.runUiTestSuite(suiteId, buildUiSuiteRunPayload(suiteQuery.data))
     },
     onSuccess: (runRecord) => {
       const suiteRunId = getUiTestSuiteRunId(runRecord)
@@ -550,6 +553,7 @@ export function UiTestSuiteCasePage() {
       { label: '慢放延迟', value: formatOptionalMs(suiteQuery.data?.slowMoMs) },
       { label: '视口', value: formatViewportText(suiteQuery.data?.viewportWidth, suiteQuery.data?.viewportHeight) },
       { label: '步骤超时', value: formatOptionalMs(suiteQuery.data?.defaultStepTimeoutMs) },
+      { label: '截图策略', value: formatUiScreenshotPolicy(suiteQuery.data?.screenshotPolicy) },
     ],
     [requirementId, requirementQuery.data?.name, sprintId, sprintQuery.data?.name, suiteQuery.data],
   )
@@ -843,7 +847,7 @@ export function UiTestSuiteCasePage() {
   )
   const suiteRunHistory = useMemo(
     () =>
-      [...(suiteRunHistoryQuery.data ?? [])].sort((left, right) => {
+      [...listItems(suiteRunHistoryQuery.data)].sort((left, right) => {
         const leftTime = new Date(left.startedAt || left.createdAt || left.updatedAt || '').getTime()
         const rightTime = new Date(right.startedAt || right.createdAt || right.updatedAt || '').getTime()
         return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)

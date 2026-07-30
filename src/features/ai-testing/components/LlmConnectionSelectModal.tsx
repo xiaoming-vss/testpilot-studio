@@ -3,7 +3,7 @@ import { Alert, Button, Empty, Modal, Radio, Space, Spin, Switch, Tag, Typograph
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { getErrorMessage } from '@/utils/format'
 
 const { Text } = Typography
@@ -12,6 +12,7 @@ export function LlmConnectionSelectModal({
   open,
   onClose,
   onConfirm,
+  projectId,
   loading,
   showCheckpointOption = false,
   checkpointEnabled = false,
@@ -20,6 +21,7 @@ export function LlmConnectionSelectModal({
   open: boolean
   onClose: () => void
   onConfirm: (connectionId: string) => void
+  projectId?: string
   loading?: boolean
   showCheckpointOption?: boolean
   checkpointEnabled?: boolean
@@ -29,13 +31,13 @@ export function LlmConnectionSelectModal({
   const [selectedId, setSelectedId] = useState<string>('')
 
   const connectionsQuery = useQuery({
-    queryKey: ['llmConnections', 'select'],
-    queryFn: () => api.getLlmConnections(),
-    enabled: open,
+    queryKey: ['llmConnections', projectId, 'select'],
+    queryFn: () => api.getLlmConnections(projectId!),
+    enabled: open && Boolean(projectId),
   })
 
   const activeConnections = useMemo(
-    () => (connectionsQuery.data ?? []).filter((conn) => conn.status === 'active'),
+    () => listItems(connectionsQuery.data).filter((conn) => conn.status === 'active'),
     [connectionsQuery.data],
   )
 
@@ -83,6 +85,8 @@ export function LlmConnectionSelectModal({
         </div>
       ) : connectionsQuery.error ? (
         <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} />
+      ) : !projectId ? (
+        <Alert showIcon type="info" title="请先选择项目" />
       ) : activeConnections.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}

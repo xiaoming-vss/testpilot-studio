@@ -3,7 +3,7 @@ import { Alert, Button, Empty, Modal, Popconfirm, Select, Space, Tag, Typography
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import '@/features/base-services/styles/index.css'
-import { api, type ZentaoBinding, type ZentaoBindingTargetType, type ZentaoConnection, type ZentaoRemoteOption } from '@/services/api'
+import { api, listItems, type ZentaoBinding, type ZentaoBindingTargetType, type ZentaoConnection, type ZentaoRemoteOption } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage } from '@/utils/format'
 
@@ -162,6 +162,7 @@ export function ZentaoBindingSummary({
 export function ZentaoBindingModal({
   open,
   onClose,
+  projectId,
   targetType,
   resourceId,
   parentProjectId,
@@ -171,6 +172,7 @@ export function ZentaoBindingModal({
 }: {
   open: boolean
   onClose: () => void
+  projectId: string
   targetType: ZentaoBindingTargetType
   resourceId: string
   parentProjectId?: string
@@ -187,9 +189,9 @@ export function ZentaoBindingModal({
   const leafResourceLabel = getLeafResourceLabel(depth)
 
   const connectionsQuery = useQuery({
-    queryKey: ['zentaoConnections'],
-    queryFn: () => api.getZentaoConnections(),
-    enabled: open,
+    queryKey: ['zentaoConnections', projectId],
+    queryFn: () => api.getZentaoConnections(projectId),
+    enabled: open && Boolean(projectId),
   })
   const bindingsQuery = useQuery({
     queryKey: bindingConfig.bindingsKey,
@@ -206,41 +208,41 @@ export function ZentaoBindingModal({
     queryFn: () => api.getSprintBindings(parentSprintId!),
     enabled: open && targetType === 'requirement' && Boolean(parentSprintId),
   })
-  const zentaoBindings = useMemo(() => (bindingsQuery.data ?? []).filter((binding) => binding.provider === 'zentao'), [bindingsQuery.data])
+  const zentaoBindings = useMemo(() => listItems(bindingsQuery.data).filter((binding) => binding.provider === 'zentao'), [bindingsQuery.data])
   const currentBinding = zentaoBindings[0]
   const inheritedProjectBinding = useMemo(
-    () => (parentProjectBindingsQuery.data ?? []).find((binding) => binding.provider === 'zentao'),
+    () => listItems(parentProjectBindingsQuery.data).find((binding) => binding.provider === 'zentao'),
     [parentProjectBindingsQuery.data],
   )
   const inheritedSprintBinding = useMemo(
-    () => (parentSprintBindingsQuery.data ?? []).find((binding) => binding.provider === 'zentao'),
+    () => listItems(parentSprintBindingsQuery.data).find((binding) => binding.provider === 'zentao'),
     [parentSprintBindingsQuery.data],
   )
 
   const projectsQuery = useQuery({
-    queryKey: ['zentaoRemoteProjects', connectionId],
-    queryFn: () => api.getZentaoRemoteProjects(connectionId!),
-    enabled: open && Boolean(connectionId),
+    queryKey: ['zentaoRemoteProjects', projectId, connectionId],
+    queryFn: () => api.getZentaoRemoteProjects(projectId, connectionId!),
+    enabled: open && Boolean(projectId) && Boolean(connectionId),
   })
   const executionsQuery = useQuery({
-    queryKey: ['zentaoRemoteExecutions', connectionId, remoteProjectId],
-    queryFn: () => api.getZentaoRemoteExecutions(connectionId!, remoteProjectId!),
-    enabled: open && Boolean(connectionId) && Boolean(remoteProjectId) && depth !== 'project',
+    queryKey: ['zentaoRemoteExecutions', projectId, connectionId, remoteProjectId],
+    queryFn: () => api.getZentaoRemoteExecutions(projectId, connectionId!, remoteProjectId!),
+    enabled: open && Boolean(projectId) && Boolean(connectionId) && Boolean(remoteProjectId) && depth !== 'project',
   })
   const testtasksQuery = useQuery({
-    queryKey: ['zentaoRemoteTestTasks', connectionId, remoteExecutionId],
-    queryFn: () => api.getZentaoRemoteTestTasks(connectionId!, remoteExecutionId!),
-    enabled: open && Boolean(connectionId) && Boolean(remoteExecutionId) && depth === 'testtask',
+    queryKey: ['zentaoRemoteTestTasks', projectId, connectionId, remoteExecutionId],
+    queryFn: () => api.getZentaoRemoteTestTasks(projectId, connectionId!, remoteExecutionId!),
+    enabled: open && Boolean(projectId) && Boolean(connectionId) && Boolean(remoteExecutionId) && depth === 'testtask',
   })
   const storiesQuery = useQuery({
-    queryKey: ['zentaoRemoteStories', connectionId, remoteExecutionId],
-    queryFn: () => api.getZentaoRemoteStories(connectionId!, remoteExecutionId!),
-    enabled: open && Boolean(connectionId) && Boolean(remoteExecutionId) && depth === 'story',
+    queryKey: ['zentaoRemoteStories', projectId, connectionId, remoteExecutionId],
+    queryFn: () => api.getZentaoRemoteStories(projectId, connectionId!, remoteExecutionId!),
+    enabled: open && Boolean(projectId) && Boolean(connectionId) && Boolean(remoteExecutionId) && depth === 'story',
   })
 
   const connectionOptions = useMemo(
     () =>
-      (connectionsQuery.data ?? []).map((connection: ZentaoConnection) => ({
+      listItems(connectionsQuery.data).map((connection: ZentaoConnection) => ({
         label: `${connection.name}${connection.status === 'active' ? '' : `（${connection.status}）`}`,
         value: connection.connectionId,
       })),
@@ -301,7 +303,7 @@ export function ZentaoBindingModal({
       setConnectionId(inheritedConnectionId)
       return
     }
-    const firstActiveConnection = (connectionsQuery.data ?? []).find((connection) => connection.status === 'active')
+    const firstActiveConnection = listItems(connectionsQuery.data).find((connection) => connection.status === 'active')
     if (firstActiveConnection) setConnectionId(firstActiveConnection.connectionId)
   }, [connectionId, connectionsQuery.data, currentBinding, inheritedProjectBinding, inheritedSprintBinding])
 
@@ -432,6 +434,7 @@ export function ZentaoBindingModal({
       </div>
 
       {connectionsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} /> : null}
+      {!projectId ? <Alert showIcon type="info" title="请先选择项目" /> : null}
       {bindingsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(bindingsQuery.error)} /> : null}
       {parentProjectBindingsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(parentProjectBindingsQuery.error)} /> : null}
       {parentSprintBindingsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(parentSprintBindingsQuery.error)} /> : null}

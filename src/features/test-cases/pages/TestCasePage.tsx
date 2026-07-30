@@ -1,5 +1,6 @@
 import { AppstoreOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Drawer, Empty, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Progress, Select, Space, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Progress, Select, Space, Table, Tooltip, Typography } from 'antd'
+import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -7,18 +8,19 @@ import { useProjectRequirements } from '@/features/projects/hooks/useProjectRequ
 import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRequirementScope'
 import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
 import { useTestCasePageStore } from '@/features/test-cases/store/testCasePage.store'
-import { api, type FunctionTestSuite, type Requirement } from '@/services/api'
+import { api, listItems, type FunctionTestSuite, type Requirement } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import {
   formatTime,
   getErrorMessage,
   normalizeFunctionTestSuiteId,
   normalizeRequirementId,
+  normalizeSprintId,
   pickCreatedAt,
   pickUpdatedAt,
 } from '@/utils/format'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 type FunctionalTestSuiteFormValues = {
   sprintId?: string
@@ -69,7 +71,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
   const activeProjectId = scope?.projectId ?? workbenchActiveProjectId
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(18)
+  const [pageSize, setPageSize] = useState(10)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
   const [editingSuite, setEditingSuite] = useState<FunctionTestSuite | null>(null)
@@ -120,6 +122,10 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
 
   const selectedSprintId = scope?.sprintId ?? resolvedSelectedSprintId
   const selectedRequirementId = scope?.requirementId ?? resolvedSelectedRequirementId
+  const drawerSprintOptions = useMemo(
+    () => sprints.map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    [sprints],
+  )
 
   const { allRequirements, allRequirementsQuery, requirementNameMap, requirementSprintMap, sprintNameMap } =
     useProjectRequirements({
@@ -135,7 +141,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
   })
   const drawerRequirementOptions = useMemo(
     () =>
-      (drawerRequirementsQuery.data ?? []).map((requirement) => ({
+      listItems(drawerRequirementsQuery.data).map((requirement) => ({
         label: requirement.name,
         value: normalizeRequirementId(requirement),
       })),
@@ -213,8 +219,6 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
     () => orderedSuites.slice((page - 1) * pageSize, page * pageSize),
     [orderedSuites, page, pageSize],
   )
-  const shouldFillSuiteGrid = pageSize === 18 && pagedSuites.length > 0
-
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(orderedSuites.length / pageSize))
     if (page > maxPage) setPage(maxPage)
@@ -372,8 +376,8 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
       const suiteId = zentaoImportSuite ? normalizeFunctionTestSuiteId(zentaoImportSuite) : ''
       if (!suiteId) throw new Error('未获取到功能测试集 ID')
 
-      const cases = await api.getFunctionTestCases(suiteId)
-      const caseIds = cases.map((item) => item.caseId).filter((value): value is string => Boolean(value))
+      const response = await api.getFunctionTestCases(suiteId)
+      const caseIds = response.items.map((item) => item.caseId).filter((value): value is string => Boolean(value))
       if (caseIds.length === 0) throw new Error('当前测试集还没有可导入的用例')
 
       return api.importFunctionTestCasesToZentao(suiteId, {
@@ -419,8 +423,8 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
           currentSuiteId: suiteId,
         })
 
-        const cases = await api.getFunctionTestCases(suiteId)
-        const caseIds = [...new Set(cases.map((item) => item.caseId).filter((value): value is string => Boolean(value)))]
+        const response = await api.getFunctionTestCases(suiteId)
+        const caseIds = [...new Set(response.items.map((item) => item.caseId).filter((value): value is string => Boolean(value)))]
         if (caseIds.length === 0) {
           skippedSuiteCount += 1
           setRequirementImportProgress({
@@ -477,6 +481,132 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
     nextSearchParams.set('tab', 'functional')
     navigate(`/test-cases/suites/${suiteId}?${nextSearchParams.toString()}`)
   }
+
+  function getSuiteRowContext(suite: FunctionTestSuite) {
+    const suiteId = normalizeFunctionTestSuiteId(suite) ?? ''
+    const requirementId = suite.requirementId ?? suite.requirement_id
+    const suiteRequirementName = scope?.requirementName || (requirementId ? requirementNameMap.get(requirementId) ?? requirementId : '-')
+    const sprintIdForSuite = scope?.sprintId ?? (requirementId ? requirementSprintMap.get(requirementId) : undefined)
+    const suiteSprintName = scope?.sprintName || (sprintIdForSuite ? sprintNameMap.get(sprintIdForSuite) ?? sprintIdForSuite : '-')
+    const suiteDescription = suite.description || '暂无功能测试集描述'
+    const suiteScopeText = `${suiteSprintName} / ${suiteRequirementName}`
+
+    return { suiteDescription, suiteId, suiteScopeText }
+  }
+
+  const columns: TableProps<FunctionTestSuite>['columns'] = [
+    {
+      title: '测试集名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: '30%',
+      render: (name: FunctionTestSuite['name']) => (
+        <Space size={10} className="functional-suite-list-name">
+          <span className="functional-suite-list-status-dot" />
+          <Tooltip title={name}>
+            <Text ellipsis>{name}</Text>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: '所属迭代/需求',
+      key: 'scope',
+      ellipsis: true,
+      render: (_, suite) => {
+        const { suiteScopeText } = getSuiteRowContext(suite)
+        return (
+          <Tooltip title={suiteScopeText}>
+            <Text className="functional-suite-list-scope" ellipsis>
+              {suiteScopeText}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '最近更新',
+      key: 'updatedAt',
+      width: 190,
+      render: (_, suite) => <Text type="secondary">{formatTime(pickUpdatedAt(suite))}</Text>,
+    },
+    {
+      title: '描述',
+      key: 'description',
+      ellipsis: true,
+      render: (_, suite) => {
+        const { suiteDescription } = getSuiteRowContext(suite)
+        return (
+          <Tooltip title={suiteDescription}>
+            <Text type="secondary" ellipsis>
+              {suiteDescription}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 188,
+      align: 'right',
+      render: (_, suite) => {
+        const { suiteId } = getSuiteRowContext(suite)
+        return (
+          <Space
+            size={6}
+            className="functional-suite-list-actions"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <Tooltip title="查看详情">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<EyeOutlined />}
+                aria-label="查看功能测试集"
+                onClick={() => handleOpenSuite(suite)}
+              />
+            </Tooltip>
+            <Tooltip title="导入禅道">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-update"
+                icon={<UploadOutlined />}
+                aria-label="导入禅道"
+                onClick={() => openZentaoImportModal(suite)}
+              />
+            </Tooltip>
+            <Tooltip title="编辑">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-update"
+                icon={<EditOutlined />}
+                aria-label="编辑功能测试集"
+                onClick={() => openEditDrawer(suite)}
+              />
+            </Tooltip>
+            <Popconfirm title="确认删除该功能测试集？" onConfirm={() => deleteSuiteMutation.mutate(suiteId)}>
+              <Tooltip title="删除">
+                <Button
+                  danger
+                  type="text"
+                  shape="circle"
+                  className="action-btn-delete"
+                  icon={<DeleteOutlined />}
+                  aria-label="删除功能测试集"
+                  loading={deleteSuiteMutation.isPending && deleteSuiteMutation.variables === suiteId}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        )
+      },
+    },
+  ]
 
   return (
     <div className="workbench-page api-automation-page functional-test-page">
@@ -538,7 +668,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
                 type="primary"
                 className="action-btn-create"
                 icon={<PlusOutlined />}
-                disabled={!selectedRequirementId}
+                disabled={!activeProjectId || sprints.length === 0}
                 onClick={openCreateDrawer}
               >
                 新建测试集
@@ -576,121 +706,22 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
                       </Space>
                     }
                   >
-                    <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateDrawer}>
+                    <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!activeProjectId || sprints.length === 0} onClick={openCreateDrawer}>
                       新建测试集
                     </Button>
                   </Empty>
                 </div>
               ) : (
-                <div className={`api-collection-grid functional-suite-grid${shouldFillSuiteGrid ? ' functional-suite-grid-fill-page' : ''}`}>
-                  {pagedSuites.map((suite) => {
-                    const suiteId = normalizeFunctionTestSuiteId(suite)
-                    const requirementId = suite.requirementId ?? suite.requirement_id
-                    const suiteRequirementName =
-                      scope?.requirementName || (requirementId ? requirementNameMap.get(requirementId) ?? requirementId : '-')
-                    const sprintIdForSuite = scope?.sprintId ?? (requirementId ? requirementSprintMap.get(requirementId) : undefined)
-                    const suiteSprintName =
-                      scope?.sprintName || (sprintIdForSuite ? sprintNameMap.get(sprintIdForSuite) ?? sprintIdForSuite : '-')
-                    const suiteDescription = suite.description || '暂无功能测试集描述'
-                    const suiteScopeText = `${suiteSprintName}/${suiteRequirementName}`
-
-                    return (
-                      <Card
-
-                        key={suiteId}
-                        hoverable
-                        className="sprint-card api-collection-card functional-suite-card"
-                        styles={{ body: { padding: 20 } }}
-                        onClick={() => handleOpenSuite(suite)}
-                      >
-                        <div className="api-collection-card-top functional-suite-card-top">
-                          <Space size={10}>
-                            <Badge status="processing" />
-                            <Tooltip title={suite.name}>
-                              <Text strong className="functional-suite-card-title">
-                                {suite.name}
-                              </Text>
-                            </Tooltip>
-                          </Space>
-                          <Space size={6} wrap className="functional-suite-card-tags">
-                            <Tag color="blue">功能测试集</Tag>
-                          </Space>
-                        </div>
-
-
-                        <div className="sprint-card-meta api-collection-meta-inline">
-                          <span className="sprint-card-label">所属迭代/需求</span>
-                          <Tooltip title={suiteScopeText}>
-                            <span className="api-collection-inline-value">{suiteScopeText}</span>
-                          </Tooltip>
-                        </div>
-
-                        <div className="sprint-card-meta">
-                          <span className="sprint-card-label">最近更新</span>
-                          <span className="api-collection-inline-value">{formatTime(pickUpdatedAt(suite))}</span>
-                        </div>
-
-                        <Paragraph
-                          className="api-collection-description functional-suite-card-description"
-                          type="secondary"
-                          ellipsis={{ rows: 2, tooltip: suiteDescription }}
-                        >
-                          {suiteDescription}
-                        </Paragraph>
-
-                        <div
-                          className="sprint-card-actions functional-suite-card-actions"
-                          onClick={(event) => event.stopPropagation()}
-                          onMouseDown={(event) => event.stopPropagation()}
-                        >
-                          <Tooltip title="查看详情">
-                            <Button
-                              type="text"
-                              shape="circle"
-                              className="action-btn-read"
-                              icon={<EyeOutlined />}
-                              aria-label="查看功能测试集"
-                              onClick={() => handleOpenSuite(suite)}
-                            />
-                          </Tooltip>
-                          <Tooltip title="导入禅道">
-                            <Button
-                              type="text"
-                              shape="circle"
-                              className="action-btn-update"
-                              icon={<UploadOutlined />}
-                              aria-label="导入禅道"
-                              onClick={() => openZentaoImportModal(suite)}
-                            />
-                          </Tooltip>
-                          <Tooltip title="编辑">
-                            <Button
-                              type="text"
-                              shape="circle"
-                              className="action-btn-update"
-                              icon={<EditOutlined />}
-                              aria-label="编辑功能测试集"
-                              onClick={() => openEditDrawer(suite)}
-                            />
-                          </Tooltip>
-                          <Popconfirm title="确认删除该功能测试集？" onConfirm={() => deleteSuiteMutation.mutate(suiteId)}>
-                            <Tooltip title="删除">
-                              <Button
-                                danger
-                                type="text"
-                                shape="circle"
-                                className="action-btn-delete"
-                                icon={<DeleteOutlined />}
-                                aria-label="删除功能测试集"
-                                loading={deleteSuiteMutation.isPending && deleteSuiteMutation.variables === suiteId}
-                              />
-                            </Tooltip>
-                          </Popconfirm>
-                        </div>
-                      </Card>
-                    )
+                <Table<FunctionTestSuite>
+                  className="functional-suite-list-table"
+                  columns={columns}
+                  dataSource={pagedSuites}
+                  rowKey={(suite) => normalizeFunctionTestSuiteId(suite) ?? suite.name}
+                  pagination={false}
+                  onRow={(suite) => ({
+                    onClick: () => handleOpenSuite(suite),
                   })}
-                </div>
+                />
               )}
             </div>
           )}
@@ -702,7 +733,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
               pageSize={pageSize}
               total={orderedSuites.length}
               showSizeChanger
-              pageSizeOptions={['18', '24', '30', '36', '48', '60']}
+              pageSizeOptions={['10', '20', '30', '50']}
               onChange={(nextPage, nextPageSize) => {
                 setPage(nextPage)
                 setPageSize(nextPageSize)
@@ -730,7 +761,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
               <Form.Item name="sprintId" label="所属迭代" rules={[{ required: true, message: '请选择所属迭代' }]}>
                 <Select
                   placeholder="请选择迭代"
-                  options={sprintFilterOptions}
+                  options={drawerSprintOptions}
                   onChange={(value) => {
                     setDrawerSprintId(value)
                     form.setFieldValue('requirementId', undefined)
@@ -827,9 +858,5 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
     </div>
   )
 }
-
-
-
-
 
 

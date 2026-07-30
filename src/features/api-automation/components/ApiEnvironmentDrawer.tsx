@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   api,
+  listItems,
   type ApiEnvironment,
   type ApiEnvironmentVar,
   type CreateApiEnvironmentPayload,
@@ -69,7 +70,7 @@ export function ApiEnvironmentDrawer({
     queryFn: () => api.getApiEnvironments(projectId!),
     enabled: open && Boolean(projectId),
   })
-  const environments = environmentsQuery.data ?? []
+  const environments = listItems(environmentsQuery.data)
   const selectedEnvironment =
     environments.find((environment) => normalizeEnvironmentId(environment) === currentEnvironmentId) ??
     environments.find((environment) => environment.isDefault) ??

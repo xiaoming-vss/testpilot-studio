@@ -20,10 +20,12 @@ import {
   Segmented,
   Select,
   Space,
+  Table,
   Tag,
   Tooltip,
   Typography,
 } from 'antd'
+import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -40,7 +42,7 @@ import {
 } from '@/features/requirements/utils/requirementDocument'
 import { SprintDrawer } from '@/features/projects/components/SprintDrawer'
 import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
-import { api, type Project, type Requirement, type Sprint } from '@/services/api'
+import { api, listItems, type Project, type Requirement, type Sprint } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import {
   formatTime,
@@ -144,7 +146,7 @@ export function ProjectsPage() {
     queryFn: () => api.getSprints(activeProjectId!),
     enabled: Boolean(activeProjectId),
   })
-  const sprints = sprintsQuery.data ?? []
+  const sprints = listItems(sprintsQuery.data)
   const sprintOptions = sprints.map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) }))
   const sprintIds = sprintOptions.map((option) => option.value).join(',')
 
@@ -167,7 +169,7 @@ export function ProjectsPage() {
     },
     enabled: Boolean(activeProjectId) && !sprintsQuery.isLoading,
   })
-  const requirements = requirementsQuery.data ?? []
+  const requirements = listItems(requirementsQuery.data)
   const filteredRequirements = !selectedRequirementSprintId
     ? requirements
     : requirements.filter((requirement) => requirement.sprintIdForCreate === selectedRequirementSprintId)
@@ -374,9 +376,143 @@ export function ProjectsPage() {
     setZentaoBindingTarget(target)
   }
 
-  function renderProjectTime(value?: string) {
-    return <span className="project-time-text">{formatTime(value)}</span>
-  }
+  const requirementColumns: TableProps<RequirementPoolItem>['columns'] = [
+    {
+      title: '需求名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: '28%',
+      ellipsis: true,
+      render: (name: RequirementPoolItem['name']) => (
+        <Space size={10} className="project-requirement-list-name">
+          <span className="project-requirement-list-status-dot" />
+          <Tooltip title={name}>
+            <Text ellipsis>{name}</Text>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: '所属迭代',
+      dataIndex: 'sprintName',
+      key: 'sprintName',
+      width: 150,
+      render: (sprintName: RequirementPoolItem['sprintName']) => (
+        <Tag className="project-requirement-list-tag" color="blue">
+          {sprintName}
+        </Tag>
+      ),
+    },
+    {
+      title: '文档类型',
+      key: 'documentType',
+      width: 130,
+      render: (_, requirement) => (
+        <Tag color={normalizeRequirementDocumentType(requirement.documentType) === 'word' ? 'purple' : requirement.documentType === 'text' ? 'blue' : 'cyan'}>
+          {getRequirementDocumentTypeLabel(requirement.documentType)}
+        </Tag>
+      ),
+    },
+    {
+      title: '绑定信息',
+      key: 'bindingInfo',
+      width: '24%',
+      ellipsis: true,
+      render: (_, requirement) => (
+        <div className="project-requirement-list-binding-info">
+          <ZentaoBindingSummary targetType="requirement" resourceId={normalizeRequirementId(requirement)} />
+        </div>
+      ),
+    },
+    {
+      title: '文档摘要',
+      key: 'documentSummary',
+      width: 150,
+      render: (_, requirement) =>
+        hasRequirementDocument(requirement) ? (
+          <Button
+            type="link"
+            className="project-requirement-document-link"
+            title={getRequirementDocumentSummary(requirement)}
+            onClick={(event) => {
+              event.stopPropagation()
+              setPreviewRequirement(requirement)
+            }}
+          >
+            查看文档
+          </Button>
+        ) : (
+          <Tooltip title={getRequirementDocumentSummary(requirement)}>
+            <Text type="secondary" ellipsis>
+              {getRequirementDocumentSummary(requirement)}
+            </Text>
+          </Tooltip>
+        ),
+    },
+    {
+      title: '创建时间',
+      key: 'createdAt',
+      width: 180,
+      render: (_, requirement) => <Text type="secondary">{formatTime(pickCreatedAt(requirement))}</Text>,
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 148,
+      align: 'right',
+      render: (_, requirement) => (
+        <Space
+          size={6}
+          className="project-requirement-list-actions"
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <Tooltip title="编辑需求">
+            <Button
+              type="text"
+              shape="circle"
+              className="action-btn-update"
+              icon={<EditOutlined />}
+              aria-label="编辑需求"
+              onClick={() => openRequirementDrawer(requirement)}
+            />
+          </Tooltip>
+          <Tooltip title="禅道绑定">
+            <Button
+              type="text"
+              shape="circle"
+              className="action-btn-read"
+              icon={<LinkOutlined />}
+              aria-label="绑定禅道需求 Story"
+              onClick={() =>
+                openZentaoBinding({
+                  targetType: 'requirement',
+                  resourceId: normalizeRequirementId(requirement),
+                  parentProjectId: activeProjectId,
+                  parentSprintId: requirement.sprintIdForCreate,
+                  depth: 'story',
+                  title: `绑定禅道需求 Story · ${requirement.name}`,
+                })
+              }
+            />
+          </Tooltip>
+          <Popconfirm title="确认删除该需求？" onConfirm={() => deleteRequirementMutation.mutate(normalizeRequirementId(requirement))}>
+            <Tooltip title="删除需求">
+              <Button
+                danger
+                type="text"
+                shape="circle"
+                className="action-btn-delete"
+                icon={<DeleteOutlined />}
+                aria-label="删除需求"
+                loading={deleteRequirementMutation.isPending && deleteRequirementMutation.variables === normalizeRequirementId(requirement)}
+              />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
 
   return (
     <div className="workbench-page project-overview-page">
@@ -633,116 +769,13 @@ export function ProjectsPage() {
                       <Empty description="暂无需求" />
                     ) : null}
                     {!sprintsQuery.isLoading && !requirementsQuery.isLoading && visibleRequirements.length > 0 ? (
-                      <div className="sprint-card-grid sprint-card-grid-workbench requirement-card-grid-workbench">
-                        {visibleRequirements.map((requirement) => (
-                          <Card
-                            key={normalizeRequirementId(requirement)}
-                            className="sprint-card"
-                            styles={{ body: { padding: 20 } }}
-                          >
-                            <div className="sprint-card-head">
-                              <div className="sprint-card-title-wrap">
-                                <Space size={10}>
-                                  <FileTextOutlined className="requirement-icon" />
-                                  <div className="sprint-card-title" title={requirement.name}>
-                                    {requirement.name}
-                                  </div>
-                                </Space>
-                              </div>
-                            </div>
-                            <div className="sprint-card-meta">
-                              <span className="sprint-card-label">所属迭代</span>
-                              <span className="requirement-sprint" title={requirement.sprintName}>
-                                {requirement.sprintName}
-                              </span>
-                            </div>
-                            <div className="sprint-card-meta">
-                              <span className="sprint-card-label">创建时间</span>
-                              {renderProjectTime(pickCreatedAt(requirement))}
-                            </div>
-                            <div className="sprint-card-meta">
-                              <span className="sprint-card-label">文档类型</span>
-                              <span className="requirement-document-type">
-                                <Tag color={normalizeRequirementDocumentType(requirement.documentType) === 'word' ? 'purple' : requirement.documentType === 'text' ? 'blue' : 'cyan'}>
-                                  {getRequirementDocumentTypeLabel(requirement.documentType)}
-                                </Tag>
-                              </span>
-                            </div>
-                            <div className="sprint-card-meta requirement-document-summary-row">
-                              <span className="sprint-card-label">文档摘要</span>
-                              {hasRequirementDocument(requirement) ? (
-                                <button
-                                  type="button"
-                                  className="requirement-document-summary requirement-document-link requirement-document-link-plain"
-                                  title={getRequirementDocumentSummary(requirement)}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setPreviewRequirement(requirement)
-                                  }}
-                                >
-                                  查看文档
-                                </button>
-                              ) : (
-                                <span className="requirement-document-summary" title={getRequirementDocumentSummary(requirement)}>
-                                  {getRequirementDocumentSummary(requirement)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="sprint-card-binding-line">
-                              <ZentaoBindingSummary targetType="requirement" resourceId={normalizeRequirementId(requirement)} />
-                            </div>
-                            <div className="sprint-card-actions">
-                                <Tooltip title="编辑需求">
-                                  <Button
-                                    type="text"
-                                    shape="circle"
-                                    className="action-btn-update"
-                                    icon={<EditOutlined />}
-                                    aria-label="编辑需求"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      openRequirementDrawer(requirement)
-                                    }}
-                                  />
-                                </Tooltip>
-                                <Tooltip title="禅道绑定">
-                                  <Button
-                                    type="text"
-                                    shape="circle"
-                                    className="action-btn-read"
-                                    icon={<LinkOutlined />}
-                                    aria-label="绑定禅道需求 Story"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      openZentaoBinding({
-                                        targetType: 'requirement',
-                                        resourceId: normalizeRequirementId(requirement),
-                                        parentProjectId: activeProjectId,
-                                        parentSprintId: requirement.sprintIdForCreate,
-                                        depth: 'story',
-                                        title: `绑定禅道需求 Story · ${requirement.name}`,
-                                      })
-                                    }}
-                                  />
-                                </Tooltip>
-                                <Popconfirm title="确认删除该需求？" onConfirm={() => deleteRequirementMutation.mutate(normalizeRequirementId(requirement))}>
-                                  <Tooltip title="删除需求">
-                                    <Button
-                                      danger
-                                      type="text"
-                                      shape="circle"
-                                      className="action-btn-delete"
-                                      icon={<DeleteOutlined />}
-                                      aria-label="删除需求"
-                                      loading={deleteRequirementMutation.isPending}
-                                      onClick={(event) => event.stopPropagation()}
-                                    />
-                                  </Tooltip>
-                                </Popconfirm>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
+                      <Table<RequirementPoolItem>
+                        className="project-requirement-list-table"
+                        columns={requirementColumns}
+                        dataSource={visibleRequirements}
+                        rowKey={(requirement) => normalizeRequirementId(requirement)}
+                        pagination={false}
+                      />
                     ) : null}
                   </div>
                   <div className="table-footer">
@@ -752,7 +785,7 @@ export function ProjectsPage() {
                       pageSize={requirementPageSize}
                       total={filteredRequirements.length}
                       showSizeChanger
-                      pageSizeOptions={['10', '20', '50']}
+                      pageSizeOptions={['10', '20', '30', '50']}
                       onChange={(page, pageSize) => {
                         setRequirementView({
                           projectId: activeProjectId,
@@ -816,6 +849,7 @@ export function ProjectsPage() {
         <ZentaoBindingModal
           open
           onClose={() => setZentaoBindingTarget(null)}
+          projectId={zentaoBindingTarget.parentProjectId ?? (zentaoBindingTarget.targetType === 'project' ? zentaoBindingTarget.resourceId : activeProjectId ?? '')}
           targetType={zentaoBindingTarget.targetType}
           resourceId={zentaoBindingTarget.resourceId}
           parentProjectId={zentaoBindingTarget.parentProjectId}

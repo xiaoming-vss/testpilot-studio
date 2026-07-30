@@ -1,4 +1,16 @@
-import { ArrowLeftOutlined, CodeOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, PlusOutlined, SearchOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined,
+  CodeOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  DownOutlined,
+  EditOutlined,
+  InfoCircleOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  SendOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import { Alert, Button, Card, Dropdown, Empty, Form, Input, InputNumber, Modal, Popconfirm, Popover, Segmented, Select, Space, Switch, Tabs, Tag, Tooltip, Typography, Upload } from 'antd'
 import type { InputRef } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -52,6 +64,7 @@ import {
 import { buildCollectionRunReportHtml, getExecutionStatusMeta, sanitizeFileName } from '../utils/collectionRunReport'
 import {
   api,
+  listItems,
   type ApiAssertComparator,
   type ApiAssertRule,
   type ApiAssertSource,
@@ -1436,7 +1449,7 @@ export function ApiCollectionDetailPage() {
   const cases = casesQuery.data ?? EMPTY_API_CASES
   const collectionRunHistory = useMemo(
     () =>
-      [...(collectionRunHistoryQuery.data ?? [])].sort((left, right) => {
+      [...listItems(collectionRunHistoryQuery.data)].sort((left, right) => {
         const leftTime = new Date(left.startedAt || left.createdAt || left.updatedAt || '').getTime()
         const rightTime = new Date(right.startedAt || right.createdAt || right.updatedAt || '').getTime()
         return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
@@ -1840,6 +1853,13 @@ export function ApiCollectionDetailPage() {
                           </Form.Item>
 
                           <div className="api-case-request-shell">
+                            <div className="api-case-request-caption">
+                              <span>请求地址</span>
+                              <span className="api-case-request-env-hint">当前环境</span>
+                              <Tooltip title="路径不是 http:// 或 https:// 开头时，会自动拼接当前环境 Base URL。">
+                                <InfoCircleOutlined className="api-case-request-info" />
+                              </Tooltip>
+                            </div>
                             <div className="api-case-request-bar">
                               <Form.Item name="method" className="api-case-method-item" rules={[{ required: true, message: '请选择请求方式' }]}>
                                 <Select options={methodOptions} classNames={{ popup: { root: 'api-method-dropdown' } }} />
@@ -1904,12 +1924,15 @@ export function ApiCollectionDetailPage() {
                                     <DownOutlined className="api-case-base-url-arrow" />
                                   </button>
                                 </Popover>
-                              <Form.Item name="path" className="api-case-path-item" rules={[{ required: true, message: '请输入接口路径' }]}>
-                                <Input ref={pathInputRef} placeholder="/v1/example" maxLength={1024} />
-                              </Form.Item>
+                                <span className="api-case-url-divider" aria-hidden="true" />
+                                <Form.Item name="path" className="api-case-path-item" rules={[{ required: true, message: '请输入接口路径' }]}>
+                                  <Input ref={pathInputRef} placeholder="/v1/example" maxLength={1024} />
+                                </Form.Item>
                               </div>
                               <div className="api-case-request-actions">
                                 <Button
+                                  type="primary"
+                                  className="api-case-send-button"
                                   loading={runApiCaseMutation.isPending || isApiCaseRunInProgress}
                                   disabled={!isSelectedCaseReady || isApiCaseRunInProgress}
                                   onClick={handleSendRequest}
@@ -1917,12 +1940,11 @@ export function ApiCollectionDetailPage() {
                                 >
                                   发送
                                 </Button>
-                        <Button
-                          type="primary"
-                          className="action-btn-save"
-                          loading={createCaseMutation.isPending || updateCaseMutation.isPending}
-                          disabled={!isSelectedCaseReady}
-                          onClick={() => caseForm.submit()}
+                                <Button
+                                  className="api-case-save-button"
+                                  loading={createCaseMutation.isPending || updateCaseMutation.isPending}
+                                  disabled={!isSelectedCaseReady}
+                                  onClick={() => caseForm.submit()}
                                 >
                                   保存
                                 </Button>

@@ -4,23 +4,21 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons'
 import {
   Alert,
-  Badge,
   Button,
-  Card,
   Empty,
   Form,
   Pagination,
   Popconfirm,
   Space,
+  Table,
   Tag,
   Tooltip,
   Typography,
 } from 'antd'
-import type { BadgeProps } from 'antd'
+import type { TableProps } from 'antd'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -33,14 +31,14 @@ import {
   type RequirementAnalysisRunFormValues,
 } from '../components/RequirementAnalysisRunModal'
 import type { RequirementAnalysisTask, RequirementAnalysisTaskRun } from '../types'
-import { isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
+import { getApiCaseGenerateTaskRunStatusMeta, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import type { Requirement } from '@/features/requirements/types'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickCreatedAt } from '@/utils/format'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 type RequirementPoolItem = Requirement & {
   sprintName: string
@@ -72,20 +70,14 @@ function getLatestRun(runs?: RequirementAnalysisTaskRun[]) {
   return [...(runs ?? [])].sort((left, right) => getRunSortTime(right) - getRunSortTime(left))[0]
 }
 
-function taskStatusBadgeProps(status?: RequirementAnalysisTaskRun['status']): Pick<BadgeProps, 'status' | 'color'> {
-  const normalizedStatus = String(status ?? 'unknown').toLowerCase()
-
-  if (normalizedStatus === 'pending' || normalizedStatus === 'waiting_review') return { color: 'gold' }
-  if (normalizedStatus === 'claimed') return { color: 'cyan' }
-  if (normalizedStatus === 'running') return { status: 'processing' }
-  if (normalizedStatus === 'success') return { status: 'success' }
-  if (normalizedStatus === 'error') return { color: 'volcano' }
-  if (normalizedStatus === 'failed') return { status: 'error' }
-  return { status: 'default' }
-}
-
 function normalizeTaskInstruction(instruction?: string) {
   return instruction?.trim() ?? ''
+}
+
+function renderLatestRunStatus(status?: RequirementAnalysisTaskRun['status']) {
+  if (!status) return <Tag>未运行</Tag>
+  const meta = getApiCaseGenerateTaskRunStatusMeta(status)
+  return <Tag color={meta.color}>{meta.label}</Tag>
 }
 
 export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: boolean }) {
@@ -97,7 +89,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
   const [drawerSprintId, setDrawerSprintId] = useState<string | undefined>(undefined)
   const [runTask, setRunTask] = useState<RequirementAnalysisTask | null>(null)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(18)
+  const [pageSize, setPageSize] = useState(10)
   const [form] = Form.useForm<RequirementAnalysisTaskFormValues>()
 
   const tasksQuery = useQuery({
@@ -113,7 +105,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
   })
 
   const sprintOptions = useMemo(
-    () => (sprintsQuery.data ?? []).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    () => listItems(sprintsQuery.data).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
     [sprintsQuery.data],
   )
 
@@ -138,14 +130,23 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
   })
 
   const sortedTasks = useMemo(
-    () => [...(tasksQuery.data ?? [])].sort((left, right) => getTaskTime(right) - getTaskTime(left)),
+    () => [...listItems(tasksQuery.data)].sort((left, right) => getTaskTime(right) - getTaskTime(left)),
     [tasksQuery.data],
   )
+
+  const sprintNameMap = useMemo(
+    () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
+    [sprintsQuery.data],
+  )
+  const requirementMap = useMemo(
+    () => new Map(listItems(requirementsQuery.data).map((requirement) => [normalizeRequirementId(requirement), requirement])),
+    [requirementsQuery.data],
+  )
+
   const pagedTasks = useMemo(
     () => sortedTasks.slice((page - 1) * pageSize, page * pageSize),
     [page, pageSize, sortedTasks],
   )
-  const shouldFillTaskGrid = pageSize === 18 && pagedTasks.length > 0
 
   const taskRunQueries = useQueries({
     queries: pagedTasks.map((task) => {
@@ -171,18 +172,9 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
     return new Map(entries)
   }, [pagedTasks, taskRunQueries])
 
-  const sprintNameMap = useMemo(
-    () => new Map((sprintsQuery.data ?? []).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
-    [sprintsQuery.data],
-  )
-  const requirementMap = useMemo(
-    () => new Map((requirementsQuery.data ?? []).map((requirement) => [normalizeRequirementId(requirement), requirement])),
-    [requirementsQuery.data],
-  )
-
   const requirementOptions = useMemo(
     () =>
-      (requirementsQuery.data ?? [])
+      listItems(requirementsQuery.data)
         .filter((requirement) => !drawerSprintId || requirement.sprintIdForCreate === drawerSprintId)
         .map((requirement) => ({
           label: `${requirement.name}${drawerSprintId ? '' : `（${requirement.sprintName}）`}`,
@@ -299,7 +291,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
     setRunTask(task)
   }
 
-  function renderTaskCard(task: RequirementAnalysisTask) {
+  function getTaskRowContext(task: RequirementAnalysisTask) {
     const taskId = getTaskId(task)
     const runState = latestRunMap.get(taskId)
     const latestRun = runState?.latestRun
@@ -309,106 +301,152 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
     const runnableTask = !runState?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
     const detailPath = `/ai-testing/requirement-analysis-tasks/${taskId}`
 
-    return (
-      <Card
-        key={taskId}
-        hoverable
-        className="sprint-card api-collection-card ai-task-card"
-        styles={{ body: { padding: 20 } }}
-        onClick={() => navigate(detailPath)}
-      >
-        <div className="api-collection-card-top ai-task-card-top">
-          <Space size={10}>
-            <Badge {...taskStatusBadgeProps(latestRun?.status)} />
-            <Tooltip title={task.name || '未命名任务'}>
-              <Text strong className="ai-task-card-title">
-                {task.name || '未命名任务'}
-              </Text>
-            </Tooltip>
-          </Space>
-          <Space size={6} wrap className="ai-task-card-tags">
-            <Tag color="cyan">需求分析</Tag>
-          </Space>
-        </div>
-
-        <div className="sprint-card-meta api-collection-meta-inline">
-          <span className="sprint-card-label">所属迭代/需求</span>
-          <span className="api-collection-inline-value">
-            {sprintName}/{requirementName}
-          </span>
-        </div>
-
-        <div className="sprint-card-meta">
-          <span className="sprint-card-label">创建时间</span>
-          <span className="api-collection-inline-value">{formatTime(pickCreatedAt(task))}</span>
-        </div>
-
-        <Paragraph
-          className="api-collection-description ai-task-card-description"
-          type="secondary"
-          ellipsis={{ rows: 2 }}
-          title={task.instruction || '暂无补充指令'}
-        >
-          {task.instruction || '暂无补充指令'}
-        </Paragraph>
-
-        <div
-          className="sprint-card-actions ai-task-card-actions"
-          onClick={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <Tooltip title="查看详情">
-            <Button
-              type="text"
-              shape="circle"
-              className="action-btn-read"
-              icon={<EyeOutlined />}
-              aria-label="查看详情"
-              onClick={() => navigate(detailPath)}
-            />
-          </Tooltip>
-          <Tooltip title={runState?.isLoading ? '运行记录加载中' : '运行任务'}>
-            <span>
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-run"
-                icon={<CaretRightOutlined />}
-                aria-label="运行任务"
-                disabled={!runnableTask}
-                onClick={() => handleRunTask(task)}
-              />
-            </span>
-          </Tooltip>
-          <Tooltip title="编辑任务">
-            <span>
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-update"
-                icon={<EditOutlined />}
-                aria-label="编辑任务"
-                onClick={() => openEditDrawer(task)}
-              />
-            </span>
-          </Tooltip>
-          <Popconfirm title="确认删除该任务？" onConfirm={() => deleteTaskMutation.mutate(taskId)}>
-            <Tooltip title="删除任务">
-              <Button
-                danger
-                type="text"
-                shape="circle"
-                className="action-btn-delete"
-                icon={<DeleteOutlined />}
-                aria-label="删除任务"
-                loading={deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId}
-              />
-            </Tooltip>
-          </Popconfirm>
-        </div>
-      </Card>
-    )
+    return { detailPath, latestRun, requirementName, runState, runnableTask, sprintName, taskId }
   }
+
+  const columns: TableProps<RequirementAnalysisTask>['columns'] = [
+    {
+      title: '任务名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: '25%',
+      render: (name: RequirementAnalysisTask['name']) => (
+        <Space size={10} className="ai-task-list-name">
+          <span className="ai-task-list-status-dot" />
+          <Tooltip title={name || '未命名任务'}>
+            <Text ellipsis>
+              {name || '未命名任务'}
+            </Text>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: '类型/状态',
+      key: 'status',
+      width: 180,
+      render: (_, task) => {
+        const { latestRun } = getTaskRowContext(task)
+        return (
+          <Space size={6} className="ai-task-list-tags">
+            <Tag color="cyan">需求分析</Tag>
+            {renderLatestRunStatus(latestRun?.status)}
+          </Space>
+        )
+      },
+    },
+    {
+      title: '所属迭代/需求',
+      key: 'scope',
+      ellipsis: true,
+      render: (_, task) => {
+        const { requirementName, sprintName } = getTaskRowContext(task)
+        return (
+          <Tooltip title={`${sprintName} / ${requirementName}`}>
+            <Text className="ai-task-list-scope" ellipsis>
+              {sprintName} / {requirementName}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 160,
+      render: (_, task) => <Text type="secondary">{formatTime(pickCreatedAt(task))}</Text>,
+    },
+    {
+      title: '最近运行',
+      key: 'latestRun',
+      width: 160,
+      render: (_, task) => {
+        const { latestRun, runState } = getTaskRowContext(task)
+        if (runState?.isLoading) return <Text type="secondary">加载中...</Text>
+        return <Text type="secondary">{formatTime(latestRun?.startedAt || latestRun?.createdAt || latestRun?.updatedAt)}</Text>
+      },
+    },
+    {
+      title: '补充指令',
+      dataIndex: 'instruction',
+      key: 'instruction',
+      ellipsis: true,
+      render: (instruction: RequirementAnalysisTask['instruction']) => (
+        <Tooltip title={instruction || '暂无补充指令'}>
+          <Text type="secondary" ellipsis>
+            {instruction || '暂无补充指令'}
+          </Text>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 178,
+      align: 'right',
+      render: (_, task) => {
+        const { detailPath, runState, runnableTask, taskId } = getTaskRowContext(task)
+        return (
+          <Space
+            size={6}
+            className="ai-task-list-actions"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <Tooltip title={runState?.isLoading ? '运行记录加载中' : '运行任务'}>
+              <span>
+                <Button
+                  type="text"
+                  shape="circle"
+                  className="action-btn-run"
+                  icon={<CaretRightOutlined />}
+                  aria-label="运行任务"
+                  disabled={!runnableTask}
+                  onClick={() => handleRunTask(task)}
+                />
+              </span>
+            </Tooltip>
+            <Tooltip title="查看详情">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<EyeOutlined />}
+                aria-label="查看详情"
+                onClick={() => navigate(detailPath)}
+              />
+            </Tooltip>
+            <Tooltip title="编辑任务">
+              <span>
+                <Button
+                  type="text"
+                  shape="circle"
+                  className="action-btn-update"
+                  icon={<EditOutlined />}
+                  aria-label="编辑任务"
+                  onClick={() => openEditDrawer(task)}
+                />
+              </span>
+            </Tooltip>
+            <Popconfirm title="确认删除该任务？" onConfirm={() => deleteTaskMutation.mutate(taskId)}>
+              <Tooltip title="删除任务">
+                <Button
+                  danger
+                  type="text"
+                  shape="circle"
+                  className="action-btn-delete"
+                  icon={<DeleteOutlined />}
+                  aria-label="删除任务"
+                  loading={deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        )
+      },
+    },
+  ]
 
   const content = (
     <>
@@ -416,10 +454,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
         <section className="workbench-panel workbench-board-panel ai-testing-task-panel">
           <div className="panel-header ai-task-panel-header">
             <Text strong>需求分析任务</Text>
-            <Space wrap size={8}>
-              <Button icon={<ReloadOutlined />} onClick={() => tasksQuery.refetch()} disabled={!activeProjectId}>
-                刷新
-              </Button>
+            <Space wrap size={8} className="ai-task-panel-tools">
               <Button
                 type="primary"
                 className="action-btn-create"
@@ -453,9 +488,16 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
                 </Empty>
               </div>
             ) : (
-              <div className={`ai-task-card-grid${shouldFillTaskGrid ? ' ai-task-grid-fill-page' : ''}`}>
-                {pagedTasks.map((task) => renderTaskCard(task))}
-              </div>
+              <Table<RequirementAnalysisTask>
+                className="ai-task-list-table"
+                columns={columns}
+                dataSource={pagedTasks}
+                rowKey={(task) => getTaskId(task)}
+                pagination={false}
+                onRow={(task) => ({
+                  onClick: () => navigate(`/ai-testing/requirement-analysis-tasks/${getTaskId(task)}`),
+                })}
+              />
             )}
           </div>
 
@@ -466,7 +508,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
               pageSize={pageSize}
               total={sortedTasks.length}
               showSizeChanger
-              pageSizeOptions={['18', '24', '30', '36', '48', '60']}
+              pageSizeOptions={['10', '20', '30', '50']}
               onChange={(nextPage, nextPageSize) => {
                 setPage(nextPage)
                 setPageSize(nextPageSize)
@@ -500,6 +542,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
 
       <RequirementAnalysisRunModal
         open={Boolean(runTask)}
+        projectId={activeProjectId}
         loading={runTaskMutation.isPending}
         onClose={() => setRunTask(null)}
         onConfirm={(values) => {

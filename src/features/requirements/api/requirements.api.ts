@@ -1,4 +1,4 @@
-import { request, requestBlob } from '@/shared/api/request'
+import { request, requestBlob, type ListResponse } from '@/shared/api/request'
 import type {
   Requirement,
   RequirementCreatePayload,
@@ -40,7 +40,7 @@ function buildRequirementMultipartBody(body: RequirementDocumentUploadPayload) {
 }
 
 export const requirementsApi = {
-  getRequirements: (sprintId: string) => request<Requirement[]>(`/v1/sprints/${sprintId}/requirements`),
+  getRequirements: (sprintId: string) => request<ListResponse<Requirement>>(`/v1/sprints/${sprintId}/requirements`),
   createRequirement: (sprintId: string, body: RequirementCreatePayload) => {
     if (body.file) {
       return request<Requirement>(`/v1/sprints/${sprintId}/requirements/upload`, {

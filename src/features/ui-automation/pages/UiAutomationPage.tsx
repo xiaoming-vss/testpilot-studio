@@ -7,7 +7,7 @@ import { useSprintRequirementScope } from '@/features/projects/hooks/useSprintRe
 import { UiTestSuiteSection, type UiTestSuiteSectionRef } from '@/features/ui-automation/components/UiTestSuiteSection'
 import { useWorkbenchStore } from '@/features/projects/store/workbench.store'
 import type { Requirement } from '@/services/api'
-import { getErrorMessage, normalizeRequirementId } from '@/utils/format'
+import { getErrorMessage, normalizeRequirementId, normalizeSprintId } from '@/utils/format'
 
 const { Text } = Typography
 
@@ -60,6 +60,10 @@ export function UiAutomationPage({ scope }: { scope?: UiAutomationPageScope }) {
       })),
     ]
   }, [allRequirements, requirementFilterOptions, selectedSprintId])
+  const drawerSprintOptions = useMemo(
+    () => sprints.map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    [sprints],
+  )
   const visibleRequirementIds = useMemo(() => {
     if (selectedRequirementId) return [selectedRequirementId]
     const targetRequirements: Requirement[] = selectedSprintId
@@ -68,7 +72,7 @@ export function UiAutomationPage({ scope }: { scope?: UiAutomationPageScope }) {
     return targetRequirements.map(normalizeRequirementId)
   }, [allRequirements, selectedRequirementId, selectedSprintId])
   return (
-    <div className="workbench-page api-automation-page">
+    <div className="workbench-page api-automation-page functional-test-page ui-test-page">
       <div className="api-automation-content">
         <section className="workbench-panel workbench-board-panel">
           <div className="panel-header api-panel-header">
@@ -112,7 +116,7 @@ export function UiAutomationPage({ scope }: { scope?: UiAutomationPageScope }) {
                 type="primary"
                 className="action-btn-create"
                 icon={<PlusOutlined />}
-                disabled={!selectedRequirementId}
+                disabled={!activeProjectId || sprints.length === 0}
                 onClick={() => uiTestSuiteSectionRef.current?.openCreateDrawer()}
               >
                 新建测试集
@@ -138,7 +142,7 @@ export function UiAutomationPage({ scope }: { scope?: UiAutomationPageScope }) {
               requirementId={selectedRequirementId}
               requirementIds={selectedRequirementId ? undefined : visibleRequirementIds}
               selectedSprintId={selectedSprintId}
-              sprintOptions={isRequirementLocked ? undefined : sprintFilterOptions}
+              sprintOptions={isRequirementLocked ? undefined : drawerSprintOptions}
               requirementOptions={isRequirementLocked ? undefined : displayRequirementFilterOptions}
               sprintName={scope?.sprintName}
               requirementName={scope?.requirementName}

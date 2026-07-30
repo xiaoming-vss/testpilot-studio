@@ -2697,29 +2697,53 @@
 
 .ai-task-kind-modal .ant-modal-content {
   overflow: hidden;
-  border-radius: 0;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 22px 54px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
 }
 
 .ai-task-kind-modal .ant-modal-header {
   margin-bottom: 0;
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--ai-border);
+  padding: 28px 34px 0;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .ai-task-kind-modal .ant-modal-title {
   color: var(--ai-text);
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 800;
+}
+
+.ai-task-kind-modal-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-task-kind-modal-title > span:first-child {
+  color: var(--ai-text);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 750;
+}
+
+.ai-task-kind-modal-title .ant-typography {
+  color: rgba(23, 32, 51, 0.52) !important;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .ai-task-kind-modal .ant-modal-body {
-  padding: 0 12px 0 48px;
+  padding: 24px 34px 28px;
 }
 
 .ai-task-kind-modal .ant-modal-footer {
   margin-top: 0;
-  padding: 0 24px 24px;
+  padding: 0 34px 30px;
+  border-top: 0;
+  background: transparent;
 }
 
 .ai-task-kind-modal .ant-modal-footer .ant-space {
@@ -2728,74 +2752,82 @@
 }
 
 .ai-task-kind-list {
-  height: 560px;
-  padding: 24px 12px 24px 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.52) transparent;
-}
-
-.ai-task-kind-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.ai-task-kind-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.ai-task-kind-list::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.52);
-  border-radius: 999px;
+  gap: 14px;
 }
 
 .ai-task-kind-row {
+  position: relative;
   min-width: 0;
-  min-height: 142px;
+  min-height: 92px;
   display: flex;
   align-items: center;
-  gap: 34px;
-  padding: 26px 32px;
-  border: 1px solid var(--ai-border);
-  border-radius: 2px;
-  background: var(--ai-card);
+  gap: 18px;
+  padding: 16px 26px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
   color: var(--ai-text);
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(15, 23, 42, 0.035);
   transition:
+    background-color 0.18s ease,
     border-color 0.18s ease,
-    box-shadow 0.18s ease;
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
 .ai-task-kind-row.selected {
-  border-color: #456dff;
+  border-color: rgba(10, 132, 255, 0.52);
+  background:
+    linear-gradient(180deg, rgba(240, 247, 255, 0.96), rgba(247, 251, 255, 0.92)),
+    rgba(255, 255, 255, 0.94);
   box-shadow:
-    0 0 0 1px rgba(69, 109, 255, 0.18),
-    0 3px 12px rgba(69, 109, 255, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 8px 20px rgba(10, 132, 255, 0.08);
 }
 
 .ai-task-kind-row:hover:not(:disabled) {
-  border-color: #456dff;
+  border-color: rgba(10, 132, 255, 0.34);
+  background: rgba(255, 255, 255, 0.96);
+  transform: translateY(-1px);
 }
 
 .ai-task-kind-row:disabled {
-  opacity: 0.46;
+  color: rgba(23, 32, 51, 0.34);
+  border-color: rgba(15, 23, 42, 0.045);
+  background: rgba(248, 250, 252, 0.58);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .ai-task-kind-icon {
-  flex: 0 0 82px;
+  flex: 0 0 54px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 82px;
-  height: 82px;
-  color: var(--ai-text);
-  font-size: 42px;
+  width: 54px;
+  height: 54px;
+  color: #0a66d9;
+  border-radius: 12px;
+  background: rgba(10, 132, 255, 0.08);
+  font-size: 28px;
   line-height: 1;
+}
+
+.ai-task-kind-row:not(.selected):not(:disabled) .ai-task-kind-icon {
+  color: rgba(23, 32, 51, 0.78);
+  background: rgba(15, 23, 42, 0.045);
+}
+
+.ai-task-kind-row:disabled .ai-task-kind-icon {
+  color: rgba(23, 32, 51, 0.3);
+  background: rgba(15, 23, 42, 0.04);
 }
 
 .ai-task-kind-copy {
@@ -2803,20 +2835,116 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 14px;
+  gap: 7px;
 }
 
 .ai-task-kind-title {
   color: var(--ai-text);
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 28px;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 24px;
 }
 
 .ai-task-kind-description {
   color: var(--ai-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ai-task-kind-row:disabled .ai-task-kind-title,
+.ai-task-kind-row:disabled .ai-task-kind-description {
+  color: rgba(23, 32, 51, 0.34);
+}
+
+.ai-task-kind-check,
+.ai-task-kind-arrow {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-task-kind-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: #fff;
+  background: #1677ff;
+  box-shadow: 0 8px 16px rgba(22, 119, 255, 0.22);
   font-size: 14px;
-  line-height: 22px;
+}
+
+.ai-task-kind-arrow {
+  width: 28px;
+  height: 28px;
+  color: rgba(23, 32, 51, 0.42);
+  font-size: 14px;
+}
+
+.ai-task-kind-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: rgba(23, 32, 51, 0.44);
+  background: rgba(15, 23, 42, 0.055);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+:root[data-theme='dark'] .ai-task-kind-modal .ant-modal-content {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(22, 27, 38, 0.98);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='dark'] .ai-task-kind-modal .ant-modal-header,
+:root[data-theme='dark'] .ai-task-kind-modal .ant-modal-footer {
+  background: transparent;
+}
+
+:root[data-theme='dark'] .ai-task-kind-modal-title .ant-typography {
+  color: rgba(230, 237, 247, 0.56) !important;
+}
+
+:root[data-theme='dark'] .ai-task-kind-row {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(30, 36, 50, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='dark'] .ai-task-kind-row.selected {
+  border-color: rgba(88, 166, 255, 0.56);
+  background: rgba(56, 139, 253, 0.14);
+}
+
+:root[data-theme='dark'] .ai-task-kind-row:hover:not(:disabled) {
+  border-color: rgba(88, 166, 255, 0.4);
+  background: rgba(33, 38, 45, 0.92);
+}
+
+:root[data-theme='dark'] .ai-task-kind-row:not(.selected):not(:disabled) .ai-task-kind-icon {
+  color: rgba(230, 237, 247, 0.82);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+:root[data-theme='dark'] .ai-task-kind-row:disabled {
+  border-color: rgba(148, 163, 184, 0.08);
+  background: rgba(22, 27, 38, 0.58);
+}
+
+:root[data-theme='dark'] .ai-task-kind-row:disabled .ai-task-kind-icon,
+:root[data-theme='dark'] .ai-task-kind-row:disabled .ai-task-kind-title,
+:root[data-theme='dark'] .ai-task-kind-row:disabled .ai-task-kind-description {
+  color: rgba(230, 237, 247, 0.32);
+}
+
+:root[data-theme='dark'] .ai-task-kind-badge {
+  color: rgba(230, 237, 247, 0.5);
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .ai-testing-page .json-editor-wrap.foldable .json-editor-codemirror .cm-foldGutter {
@@ -3378,26 +3506,42 @@
   }
 
   .ai-task-kind-modal .ant-modal-body {
-    padding-inline: 18px;
+    padding: 20px 18px 22px;
+  }
+
+  .ai-task-kind-modal .ant-modal-header {
+    padding: 22px 18px 0;
+  }
+
+  .ai-task-kind-modal .ant-modal-footer {
+    padding: 0 18px 22px;
   }
 
   .ai-task-kind-list {
-    height: min(520px, calc(100vh - 300px));
-    gap: 14px;
-    padding-right: 6px;
+    gap: 12px;
   }
 
   .ai-task-kind-row {
-    min-height: 126px;
-    gap: 18px;
-    padding: 20px 18px;
+    min-height: 86px;
+    gap: 12px;
+    padding: 14px;
   }
 
   .ai-task-kind-icon {
-    flex-basis: 56px;
-    width: 56px;
-    height: 56px;
-    font-size: 32px;
+    flex-basis: 46px;
+    width: 46px;
+    height: 46px;
+    font-size: 24px;
+  }
+
+  .ai-task-kind-title {
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  .ai-task-kind-description {
+    font-size: 12px;
+    line-height: 18px;
   }
 
   .ai-testing-coming-card .ant-card-body {
@@ -4161,6 +4305,318 @@
     0 10px 24px rgba(31, 41, 55, 0.045) !important;
 }
 
+
+/* Requirement analysis task list view */
+.ai-task-panel-title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ai-task-panel-title .ant-typography:first-child {
+  flex: 0 0 auto;
+}
+
+.ai-task-panel-title .ant-typography-secondary {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ai-task-panel-tools {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.ai-task-list-search.ant-input-search {
+  width: 220px;
+}
+
+.ai-testing-page .ai-task-list-table.ant-table-wrapper {
+  width: 100%;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table {
+  color: var(--ai-text);
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-container {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table {
+  color: var(--ai-text);
+  background: transparent;
+  border-spacing: 0 6px;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell {
+  height: 48px;
+  padding: 0 18px;
+  color: rgba(86, 96, 112, 0.68) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 250, 255, 0.66)) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.72) !important;
+  border-bottom: 1px solid rgba(84, 104, 132, 0.12) !important;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 8px 20px rgba(31, 41, 55, 0.045);
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell:first-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.64) !important;
+  border-start-start-radius: 12px !important;
+  border-end-start-radius: 12px !important;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell:last-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.64) !important;
+  border-start-end-radius: 12px !important;
+  border-end-end-radius: 12px !important;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell::before {
+  background: rgba(84, 104, 132, 0.045) !important;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-tbody > tr {
+  cursor: pointer;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-tbody > tr > td {
+  height: 52px;
+  padding: 8px 18px;
+  border-bottom: 1px solid rgba(80, 96, 128, 0.065);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.42);
+  color: rgba(79, 93, 115, 0.76) !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-tbody > tr:hover > td {
+  background: rgba(91, 122, 196, 0.055) !important;
+}
+
+.ai-task-list-name {
+  width: 100%;
+  min-width: 0;
+}
+
+.ai-task-list-name .ant-space-item:last-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ai-task-list-name .ant-typography {
+  max-width: 100%;
+  color: rgba(72, 86, 150, 0.78) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 20px;
+}
+
+.ai-task-list-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #9fc7ad;
+  box-shadow: 0 0 0 3px rgba(159, 199, 173, 0.12);
+}
+
+.ai-task-list-tags {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.ai-task-list-tags .ant-tag {
+  margin-inline-end: 0;
+  border-color: rgba(126, 148, 224, 0.14) !important;
+  background: rgba(126, 148, 224, 0.075) !important;
+  color: rgba(72, 86, 150, 0.78) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 18px;
+}
+
+.ai-task-list-scope.ant-typography {
+  max-width: 100%;
+  color: rgba(79, 93, 115, 0.76) !important;
+  font-weight: 400 !important;
+  line-height: 20px;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(3),
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(3) .ant-typography,
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(3) span:not(.ant-tag) {
+  color: rgba(79, 93, 115, 0.78) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-tbody .ant-typography-secondary {
+  color: rgba(122, 134, 152, 0.58) !important;
+  font-weight: 400 !important;
+}
+
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(4),
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(5),
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(6),
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(4) .ant-typography,
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(5) .ant-typography,
+.ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(6) .ant-typography {
+  color: rgba(122, 134, 152, 0.58) !important;
+  font-weight: 400 !important;
+}
+
+.ai-task-list-actions {
+  justify-content: flex-end;
+}
+
+.ai-task-list-actions .ant-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  color: rgba(110, 122, 139, 0.52);
+}
+
+.ai-task-list-actions .ant-btn:hover {
+  color: rgba(72, 86, 150, 0.78);
+  background: rgba(255, 255, 255, 0.62) !important;
+}
+
+.app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-container {
+  border: 0 !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell {
+  color: rgba(86, 96, 112, 0.7) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 255, 0.7)) !important;
+  border-top-color: rgba(255, 255, 255, 0.78) !important;
+  border-bottom-color: rgba(84, 104, 132, 0.1) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+.app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-tbody > tr > td {
+  color: rgba(79, 93, 115, 0.76) !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+}
+
+.app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-tbody > tr:hover > td {
+  background: rgba(91, 122, 196, 0.055) !important;
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table {
+  color: var(--ai-text);
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-container {
+  background: transparent !important;
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell,
+:root[data-theme='dark'] .app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell {
+  color: var(--ai-text-muted) !important;
+  background:
+    linear-gradient(180deg, rgba(30, 36, 50, 0.9), rgba(20, 26, 38, 0.82)) !important;
+  border-top-color: rgba(148, 163, 184, 0.12) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 8px 20px rgba(7, 10, 16, 0.16);
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell:first-child {
+  border-left-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell:last-child {
+  border-right-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-thead > tr > th.ant-table-cell::before {
+  background: rgba(148, 163, 184, 0.1) !important;
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody > tr > td,
+:root[data-theme='dark'] .app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-tbody > tr > td {
+  color: var(--ai-text-secondary) !important;
+  background: rgba(22, 27, 34, 0.46) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+  box-shadow: inset 0 -1px 0 rgba(7, 10, 16, 0.18);
+}
+
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody > tr:hover > td,
+:root[data-theme='dark'] .app-shell-macos .ai-testing-page .ai-task-list-table .ant-table-tbody > tr:hover > td {
+  background: rgba(56, 139, 253, 0.12) !important;
+}
+
+:root[data-theme='dark'] .ai-task-list-name .ant-typography,
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(3),
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(3) .ant-typography,
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(3) span:not(.ant-tag) {
+  color: var(--ai-text) !important;
+}
+
+:root[data-theme='dark'] .ai-task-list-scope.ant-typography,
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody .ant-typography-secondary,
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(4),
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(5),
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(6),
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(4) .ant-typography,
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(5) .ant-typography,
+:root[data-theme='dark'] .ai-testing-page .ai-task-list-table .ant-table-tbody td:nth-child(6) .ant-typography {
+  color: var(--ai-text-muted) !important;
+}
+
+:root[data-theme='dark'] .ai-task-list-tags .ant-tag {
+  border-color: rgba(125, 178, 255, 0.24) !important;
+  background: rgba(125, 178, 255, 0.12) !important;
+  color: var(--ai-blue) !important;
+}
+
+:root[data-theme='dark'] .ai-task-list-actions .ant-btn {
+  color: var(--ai-text-muted);
+  background: rgba(22, 27, 34, 0.54);
+}
+
+:root[data-theme='dark'] .ai-task-list-actions .ant-btn:hover {
+  color: var(--ai-hover-text);
+  background: rgba(56, 139, 253, 0.16) !important;
+}
+@media (max-width: 980px) {
+  .ai-task-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ai-task-panel-tools,
+  .ai-task-list-search.ant-input-search {
+    width: 100%;
+  }
+}
+
 /* AI testing card content: macOS simple frosted white refinement */
 .app-shell-macos .ai-testing-page .ai-testing-card-scroll {
   background: rgba(255, 255, 255, 0.18) !important;
@@ -4228,8 +4684,8 @@
 }
 
 .app-shell-macos .ai-testing-page .ai-task-card .ant-badge-status-success {
-  background: #4fb65f;
-  box-shadow: 0 0 0 3px rgba(79, 182, 95, 0.12);
+  background: #9fc7ad;
+  box-shadow: 0 0 0 3px rgba(159, 199, 173, 0.12);
 }
 
 .app-shell-macos .ai-testing-page .ai-task-card-tags .ant-tag,

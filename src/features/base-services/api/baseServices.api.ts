@@ -1,4 +1,4 @@
-import { request } from '@/shared/api/request'
+import { request, type ListResponse } from '@/shared/api/request'
 import type {
   CreateLlmConnectionPayload,
   CreateZentaoBindingPayload,
@@ -12,62 +12,74 @@ import type {
   ZentaoRemoteOption,
 } from '../types'
 
+function integrationPath(projectId: string, provider: 'llm' | 'zentao') {
+  return `/v1/projects/${encodeURIComponent(projectId)}/integrations/${provider}/connections`
+}
+
+function integrationConnectionPath(projectId: string, provider: 'llm' | 'zentao', connectionId: string) {
+  return `${integrationPath(projectId, provider)}/${encodeURIComponent(connectionId)}`
+}
+
 export const baseServicesApi = {
-  getLlmConnections: () => request<LlmConnection[]>('/v1/integrations/llm/connections'),
-  getLlmConnection: (connectionId: string) =>
-    request<LlmConnection>(`/v1/integrations/llm/connections/${connectionId}`),
-  createLlmConnection: (body: CreateLlmConnectionPayload) =>
-    request<LlmConnection>('/v1/integrations/llm/connections', {
+  getLlmConnections: (projectId: string) => request<ListResponse<LlmConnection>>(integrationPath(projectId, 'llm')),
+  getLlmConnection: (projectId: string, connectionId: string) =>
+    request<LlmConnection>(integrationConnectionPath(projectId, 'llm', connectionId)),
+  createLlmConnection: (projectId: string, body: CreateLlmConnectionPayload) =>
+    request<LlmConnection>(integrationPath(projectId, 'llm'), {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  updateLlmConnection: (connectionId: string, body: UpdateLlmConnectionPayload) =>
-    request<LlmConnection>(`/v1/integrations/llm/connections/${connectionId}`, {
+  updateLlmConnection: (projectId: string, connectionId: string, body: UpdateLlmConnectionPayload) =>
+    request<LlmConnection>(integrationConnectionPath(projectId, 'llm', connectionId), {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  deleteLlmConnection: (connectionId: string) =>
-    request<Record<string, never>>(`/v1/integrations/llm/connections/${connectionId}`, {
+  deleteLlmConnection: (projectId: string, connectionId: string) =>
+    request<Record<string, never>>(integrationConnectionPath(projectId, 'llm', connectionId), {
       method: 'DELETE',
     }),
-  getZentaoConnections: () => request<ZentaoConnection[]>('/v1/integrations/zentao/connections'),
-  getZentaoConnection: (connectionId: string) =>
-    request<ZentaoConnection>(`/v1/integrations/zentao/connections/${connectionId}`),
-  createZentaoConnection: (body: CreateZentaoConnectionPayload) =>
-    request<ZentaoConnection>('/v1/integrations/zentao/connections', {
+  getZentaoConnections: (projectId: string) => request<ListResponse<ZentaoConnection>>(integrationPath(projectId, 'zentao')),
+  getZentaoConnection: (projectId: string, connectionId: string) =>
+    request<ZentaoConnection>(integrationConnectionPath(projectId, 'zentao', connectionId)),
+  createZentaoConnection: (projectId: string, body: CreateZentaoConnectionPayload) =>
+    request<ZentaoConnection>(integrationPath(projectId, 'zentao'), {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  updateZentaoConnection: (connectionId: string, body: UpdateZentaoConnectionPayload) =>
-    request<ZentaoConnection>(`/v1/integrations/zentao/connections/${connectionId}`, {
+  updateZentaoConnection: (projectId: string, connectionId: string, body: UpdateZentaoConnectionPayload) =>
+    request<ZentaoConnection>(integrationConnectionPath(projectId, 'zentao', connectionId), {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  reauthZentaoConnection: (connectionId: string) =>
-    request<ZentaoConnection>(`/v1/integrations/zentao/connections/${connectionId}/reauth`, {
+  reauthZentaoConnection: (projectId: string, connectionId: string) =>
+    request<ZentaoConnection>(`${integrationConnectionPath(projectId, 'zentao', connectionId)}/reauth`, {
       method: 'POST',
     }),
-  deleteZentaoConnection: (connectionId: string) =>
-    request<Record<string, never>>(`/v1/integrations/zentao/connections/${connectionId}`, {
+  deleteZentaoConnection: (projectId: string, connectionId: string) =>
+    request<Record<string, never>>(integrationConnectionPath(projectId, 'zentao', connectionId), {
       method: 'DELETE',
     }),
-  getZentaoRemoteProjects: (connectionId: string, page = 1, pageSize = 100) =>
+  getZentaoRemoteProjects: (projectId: string, connectionId: string, page = 1, pageSize = 100) =>
     request<ZentaoRemoteListResponse<ZentaoRemoteOption>>(
-      `/v1/integrations/zentao/connections/${connectionId}/projects?page=${page}&pageSize=${pageSize}`,
+      `${integrationConnectionPath(projectId, 'zentao', connectionId)}/projects?page=${page}&pageSize=${pageSize}`,
     ),
-  getZentaoRemoteExecutions: (connectionId: string, remoteProjectId: string, page = 1, pageSize = 100) =>
+  getZentaoRemoteExecutions: (projectId: string, connectionId: string, remoteProjectId: string, page = 1, pageSize = 100) =>
     request<ZentaoRemoteListResponse<ZentaoRemoteOption>>(
-      `/v1/integrations/zentao/connections/${connectionId}/projects/${encodeURIComponent(remoteProjectId)}/executions?page=${page}&pageSize=${pageSize}`,
+      `${integrationConnectionPath(projectId, 'zentao', connectionId)}/projects/${encodeURIComponent(remoteProjectId)}/executions?page=${page}&pageSize=${pageSize}`,
     ),
-  getZentaoRemoteTestTasks: (connectionId: string, remoteExecutionId: string, page = 1, pageSize = 100) =>
+  getZentaoRemoteTestTasks: (projectId: string, connectionId: string, remoteExecutionId: string, page = 1, pageSize = 100) =>
     request<ZentaoRemoteListResponse<ZentaoRemoteOption>>(
-      `/v1/integrations/zentao/connections/${connectionId}/executions/${encodeURIComponent(remoteExecutionId)}/testtasks?page=${page}&pageSize=${pageSize}`,
+      `${integrationConnectionPath(projectId, 'zentao', connectionId)}/executions/${encodeURIComponent(remoteExecutionId)}/testtasks?page=${page}&pageSize=${pageSize}`,
     ),
-  getZentaoRemoteStories: (connectionId: string, remoteExecutionId: string, page = 1, pageSize = 100) =>
+  getZentaoRemoteStories: (projectId: string, connectionId: string, remoteExecutionId: string, page = 1, pageSize = 100) =>
     request<ZentaoRemoteListResponse<ZentaoRemoteOption>>(
-      `/v1/integrations/zentao/connections/${connectionId}/executions/${encodeURIComponent(remoteExecutionId)}/stories?page=${page}&pageSize=${pageSize}`,
+      `${integrationConnectionPath(projectId, 'zentao', connectionId)}/executions/${encodeURIComponent(remoteExecutionId)}/stories?page=${page}&pageSize=${pageSize}`,
     ),
-  getProjectBindings: (projectId: string) => request<ZentaoBinding[]>(`/v1/projects/${projectId}/bindings`),
+  getZentaoRemoteCases: (projectId: string, connectionId: string, remoteExecutionId: string, page = 1, pageSize = 100) =>
+    request<ZentaoRemoteListResponse<ZentaoRemoteOption>>(
+      `${integrationConnectionPath(projectId, 'zentao', connectionId)}/executions/${encodeURIComponent(remoteExecutionId)}/cases?page=${page}&pageSize=${pageSize}`,
+    ),
+  getProjectBindings: (projectId: string) => request<ListResponse<ZentaoBinding>>(`/v1/projects/${projectId}/bindings`),
   createProjectBinding: (projectId: string, body: CreateZentaoBindingPayload) =>
     request<ZentaoBinding>(`/v1/projects/${projectId}/bindings`, {
       method: 'POST',
@@ -77,7 +89,7 @@ export const baseServicesApi = {
     request<Record<string, never>>(`/v1/projects/${projectId}/bindings/${bindingId}`, {
       method: 'DELETE',
     }),
-  getSprintBindings: (sprintId: string) => request<ZentaoBinding[]>(`/v1/sprints/${sprintId}/bindings`),
+  getSprintBindings: (sprintId: string) => request<ListResponse<ZentaoBinding>>(`/v1/sprints/${sprintId}/bindings`),
   createSprintBinding: (sprintId: string, body: CreateZentaoBindingPayload) =>
     request<ZentaoBinding>(`/v1/sprints/${sprintId}/bindings`, {
       method: 'POST',
@@ -88,7 +100,7 @@ export const baseServicesApi = {
       method: 'DELETE',
     }),
   getRequirementBindings: (requirementId: string) =>
-    request<ZentaoBinding[]>(`/v1/requirements/${requirementId}/bindings`),
+    request<ListResponse<ZentaoBinding>>(`/v1/requirements/${requirementId}/bindings`),
   createRequirementBinding: (requirementId: string, body: CreateZentaoBindingPayload) =>
     request<ZentaoBinding>(`/v1/requirements/${requirementId}/bindings`, {
       method: 'POST',

@@ -1,4 +1,4 @@
-import { request } from '@/shared/api/request'
+import { request, type ListResponse } from '@/shared/api/request'
 import type {
   CreateFunctionTestCasePayload,
   CreateFunctionTestSuitePayload,
@@ -13,7 +13,7 @@ import type {
 
 export const functionTestingApi = {
   getFunctionTestSuites: (requirementId: string) =>
-    request<FunctionTestSuite[]>(`/v1/requirements/${requirementId}/function-test-suites`),
+    request<ListResponse<FunctionTestSuite>>(`/v1/requirements/${requirementId}/function-test-suites`),
   createFunctionTestSuite: (requirementId: string, body: CreateFunctionTestSuitePayload) =>
     request<FunctionTestSuite>(`/v1/requirements/${requirementId}/function-test-suites`, {
       method: 'POST',
@@ -28,7 +28,7 @@ export const functionTestingApi = {
   deleteFunctionTestSuite: (suiteId: string) =>
     request<Record<string, never>>(`/v1/function-test-suites/${suiteId}`, { method: 'DELETE' }),
   getFunctionTestCases: (suiteId: string) =>
-    request<FunctionTestCase[]>(`/v1/function-test-suites/${suiteId}/cases`),
+    request<ListResponse<FunctionTestCase>>(`/v1/function-test-suites/${suiteId}/cases`),
   importFunctionTestCases: (suiteId: string, file: Blob, filename = 'import.json') => {
     const formData = new FormData()
     formData.append('file', file, filename)

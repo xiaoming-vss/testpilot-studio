@@ -465,20 +465,52 @@
 
 .api-case-request-shell {
   margin-bottom: 18px;
-  padding: 0;
+  padding: 12px 14px;
   display: flex;
-  align-items: stretch;
-  border: 1px solid #d7ddea;
-  border-radius: 10px;
-  background: #f8fafc;
-  box-shadow: none;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(215, 225, 239, 0.92);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 30px rgba(15, 23, 42, 0.04);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+}
+
+.api-case-request-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tp-text);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
+}
+
+.api-case-request-env-hint {
+  padding: 2px 8px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.06);
+  color: #2563eb;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.api-case-request-info {
+  color: var(--tp-text-muted);
+  font-size: 13px;
 }
 
 .api-case-request-bar {
   display: flex;
-  gap: 0;
-  align-items: stretch;
+  gap: 10px;
+  align-items: center;
   width: 100%;
+  min-height: 48px;
 }
 
 .api-case-request-bar .ant-form-item {
@@ -487,18 +519,24 @@
 
 .api-case-request-actions {
   flex: 0 0 auto;
-  padding: 4px 8px 4px 10px;
+  padding-left: 2px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-left: 1px solid var(--tp-border-soft);
+  gap: 10px;
 }
 
 .api-case-url-group {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 0;
+  height: 48px;
+  padding: 5px;
+  border: 1px solid rgba(215, 225, 239, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .api-case-base-url-trigger {
@@ -508,21 +546,21 @@
   max-width: min(420px, 45%);
   height: 38px;
   align-self: center;
-  padding: 0 12px 0 14px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--tp-border-soft) 85%, #7cc3a3 15%);
-  border-right: 1px solid color-mix(in srgb, var(--tp-border-soft) 85%, #7cc3a3 15%);
+  border: 1px solid rgba(214, 223, 236, 0.9);
   border-radius: 9px;
-  background: linear-gradient(180deg, rgba(124, 195, 163, 0.12) 0%, rgba(124, 195, 163, 0.06) 100%);
+  background: rgba(248, 251, 255, 0.9);
   color: var(--tp-text);
   cursor: pointer;
 }
 
 .api-case-base-url-trigger:hover,
 .api-case-base-url-trigger.open {
-  background: linear-gradient(180deg, rgba(124, 195, 163, 0.18) 0%, rgba(124, 195, 163, 0.1) 100%);
+  border-color: rgba(37, 99, 235, 0.26);
+  background: rgba(239, 246, 255, 0.92);
 }
 
 .api-case-base-url-trigger:disabled {
@@ -545,6 +583,14 @@
 .api-case-base-url-arrow {
   color: var(--tp-text-muted);
   font-size: 12px;
+}
+
+.api-case-url-divider {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 24px;
+  margin: 0 4px 0 8px;
+  background: rgba(203, 213, 225, 0.88);
 }
 
 .api-case-environment-popover-overlay .ant-popover-inner {
@@ -674,7 +720,21 @@
 }
 
 .api-case-request-actions .ant-btn {
-  min-width: 88px;
+  min-width: 92px;
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.api-case-send-button.ant-btn-primary {
+  background: linear-gradient(180deg, #2688ff 0%, #1677ff 100%);
+  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.18);
+}
+
+.api-case-save-button.ant-btn {
+  border-color: rgba(37, 99, 235, 0.16);
+  background: rgba(255, 255, 255, 0.84);
+  color: #2563eb;
 }
 
 .api-case-method-item,
@@ -683,10 +743,9 @@
 }
 
 .api-case-method-item {
-  flex: 0 0 120px;
-  width: 120px;
-  min-width: 120px;
-  margin-right: 8px;
+  flex: 0 0 112px;
+  width: 112px;
+  min-width: 112px;
 }
 
 .api-case-method-item .ant-form-item-control,
@@ -702,27 +761,27 @@
 .api-case-method-item .ant-form-item-control,
 .api-case-method-item .ant-form-item-control-input,
 .api-case-method-item .ant-form-item-control-input-content {
-  min-width: 120px;
+  min-width: 112px;
 }
 
 .api-case-method-item .ant-select {
   width: 100%;
-  min-width: 120px;
-  height: 50px;
+  min-width: 112px;
+  height: 48px;
 }
 
 .api-case-method-item .ant-select-selector {
-  height: 50px !important;
-  border: 0 !important;
-  border-radius: 10px !important;
-  background: #fff !important;
+  height: 48px !important;
+  border: 1px solid rgba(37, 99, 235, 0.12) !important;
+  border-radius: 12px !important;
+  background: rgba(239, 246, 255, 0.86) !important;
   box-shadow: none !important;
-  padding-inline: 12px 26px !important;
+  padding-inline: 13px 28px !important;
 }
 
 .api-case-method-item .ant-select-single .ant-select-selector .ant-select-selection-item,
 .api-case-method-item .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
-  line-height: 48px !important;
+  line-height: 46px !important;
   font-size: 14px !important;
   font-weight: 700;
 }
@@ -737,12 +796,12 @@
 }
 
 .api-case-path-item .ant-input {
-  height: 50px;
+  height: 38px;
   border: 0 !important;
-  border-radius: 0 10px 10px 0 !important;
-  background: transparent;
+  border-radius: 8px !important;
+  background: transparent !important;
   box-shadow: none !important;
-  padding: 0 14px !important;
+  padding: 0 12px !important;
   font-size: 14px;
   line-height: 22px;
 }
@@ -772,7 +831,7 @@
 .api-case-method-item .ant-select-focused .ant-select-selector,
 .api-case-path-item .ant-input:focus,
 .api-case-path-item .ant-input-focused {
-  box-shadow: none !important;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.08) !important;
 }
 
 .api-case-request-shell:focus-within {
@@ -2507,24 +2566,51 @@
     border-top: 1px solid var(--tp-border-soft);
   }
 
+  .api-case-request-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .api-case-method-item {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .api-case-method-item .ant-form-item-control,
+  .api-case-method-item .ant-form-item-control-input,
+  .api-case-method-item .ant-form-item-control-input-content,
+  .api-case-method-item .ant-select {
+    min-width: 0;
+  }
+
   .api-case-run-environment-select {
     width: 100%;
   }
 
   .api-case-url-group {
     flex-direction: column;
+    height: auto;
+    align-items: stretch;
+    padding: 8px;
+    gap: 8px;
   }
 
   .api-case-base-url-trigger {
     width: 100%;
     max-width: none;
     min-width: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--tp-border-soft);
+    justify-content: space-between;
+  }
+
+  .api-case-url-divider {
+    display: none;
   }
 
   .api-case-path-item .ant-input {
-    border-radius: 0 0 10px 10px !important;
+    height: 40px;
+    border-radius: 9px !important;
+    background: rgba(248, 250, 252, 0.9) !important;
   }
 
   .api-case-run-result-head,
@@ -2867,6 +2953,17 @@
   background: var(--tp-bg-elevated);
 }
 
+:root[data-theme='dark'] .api-case-url-group {
+  border-color: var(--tp-border);
+  background: rgba(22, 27, 34, 0.72);
+}
+
+:root[data-theme='dark'] .api-case-request-env-hint {
+  border-color: rgba(56, 139, 253, 0.24);
+  background: rgba(56, 139, 253, 0.12);
+  color: #79c0ff;
+}
+
 :root[data-theme='dark'] .api-environment-drawer .ant-drawer-mask {
   background: rgba(6, 10, 18, 0.72) !important;
   backdrop-filter: blur(2px);
@@ -3108,13 +3205,14 @@
 
 :root[data-theme='dark'] .api-case-base-url-trigger {
   color: var(--tp-text);
-  background: linear-gradient(180deg, rgba(124, 195, 163, 0.16) 0%, rgba(124, 195, 163, 0.08) 100%);
-  border-color: rgba(124, 195, 163, 0.28);
+  background: rgba(13, 17, 23, 0.72);
+  border-color: var(--tp-border);
 }
 
 :root[data-theme='dark'] .api-case-base-url-trigger:hover,
 :root[data-theme='dark'] .api-case-base-url-trigger.open {
-  background: linear-gradient(180deg, rgba(124, 195, 163, 0.22) 0%, rgba(124, 195, 163, 0.12) 100%);
+  background: rgba(30, 41, 59, 0.82);
+  border-color: rgba(56, 139, 253, 0.32);
 }
 
 :root[data-theme='dark'] .api-case-base-url-arrow,
@@ -3542,9 +3640,13 @@
 .app-shell-macos .api-collection-detail-page .json-editor-shell {
   border-color: var(--detail-glass-border) !important;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.62) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 12px 32px rgba(31, 41, 55, 0.05);
   overflow: hidden;
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-request-shell:focus-within,
@@ -3554,36 +3656,36 @@
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-selector {
-  height: 46px !important;
+  height: 48px !important;
   border-radius: 12px !important;
-  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(10, 132, 255, 0.12) !important;
+  background: rgba(240, 247, 255, 0.82) !important;
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select {
-  height: 46px;
+  height: 48px;
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-single .ant-select-selector .ant-select-selection-item,
 .app-shell-macos .api-collection-detail-page .api-case-method-item .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
-  line-height: 44px !important;
+  line-height: 46px !important;
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-path-item .ant-input {
-  height: 46px;
-  border-radius: 0 12px 12px 0 !important;
+  height: 38px;
+  border-radius: 8px !important;
   background: transparent !important;
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-base-url-trigger {
-  height: 36px;
+  height: 38px;
   border-color: var(--detail-glass-border-strong);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.68);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-request-actions {
-  border-left-color: var(--detail-glass-border);
-  background: rgba(255, 255, 255, 0.36);
+  background: transparent;
 }
 
 .app-shell-macos .api-collection-detail-page .api-case-editor-tabs .ant-tabs-nav {

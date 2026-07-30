@@ -94,6 +94,7 @@ function normalizeDailyMetrics(snapshot?: SprintDailyMetricsSnapshot) {
     bug: {
       total: numberValue(snapshot?.bugTotal, snapshot?.bug_total, bugStats?.total),
       resolved: numberValue(snapshot?.bugResolved, snapshot?.bug_resolved, bugStats?.resolved),
+      closed: numberValue(snapshot?.bugClosed, snapshot?.bug_closed, bugStats?.closed),
       unresolved: numberValue(snapshot?.bugUnresolved, snapshot?.bug_unresolved, bugStats?.unresolved),
       fatal: numberValue(snapshot?.bugFatal, snapshot?.bug_fatal, bugStats?.fatal),
       severe: numberValue(snapshot?.bugSevere, snapshot?.bug_severe, bugStats?.serious, bugStats?.severe),
@@ -167,6 +168,10 @@ function SprintHealthSummary({ metrics }: { metrics: NormalizedDailyMetrics }) {
         <span>
           已解决
           <strong className="sprint-dashboard-health-green">{metrics.bug.resolved}</strong>
+        </span>
+        <span>
+          已关闭
+          <strong className="sprint-dashboard-health-blue">{metrics.bug.closed}</strong>
         </span>
         <span>
           未解决
@@ -285,10 +290,12 @@ function SeverityLine({
 function BugRiskOverviewCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
   const chartData = [
     { name: '已解决', value: bug.resolved, color: '#52c41a' },
+    { name: '已关闭', value: bug.closed, color: '#1677ff' },
     { name: '未解决', value: bug.unresolved, color: '#ff4d4f' },
   ].filter((item) => item.value > 0)
   const metricData = [
     { name: '已解决', value: bug.resolved, color: '#52c41a' },
+    { name: '已关闭', value: bug.closed, color: '#1677ff' },
     { name: '未解决', value: bug.unresolved, color: '#ff4d4f' },
   ]
   const severityData = [
@@ -383,6 +390,7 @@ function TrendBarChart({ data }: { data: NormalizedDailyMetrics[] }) {
     date: dayjs(item.snapshotDate).isValid() ? dayjs(item.snapshotDate).format('MM-DD') : item.snapshotDate,
     total: item.bug.total,
     resolved: item.bug.resolved,
+    closed: item.bug.closed,
     unresolved: item.bug.unresolved,
   }))
 
@@ -397,6 +405,7 @@ function TrendBarChart({ data }: { data: NormalizedDailyMetrics[] }) {
           <Legend verticalAlign="bottom" height={32} iconType="circle" />
           <Line name="Bug 总数" type="monotone" dataKey="total" stroke="#1677ff" strokeWidth={2.4} dot={{ r: 3 }} activeDot={{ r: 5 }} />
           <Line name="已解决" type="monotone" dataKey="resolved" stroke="#52c41a" strokeWidth={2.2} dot={{ r: 3 }} />
+          <Line name="已关闭" type="monotone" dataKey="closed" stroke="#13c2c2" strokeWidth={2.2} dot={{ r: 3 }} />
           <Line name="未解决" type="monotone" dataKey="unresolved" stroke="#ff4d4f" strokeWidth={2.2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
@@ -675,6 +684,7 @@ function TestReportMarkdownModal({
 
 function TestReportGenerateDrawer({
   open,
+  projectId,
   form,
   snapshotDate,
   loading,
@@ -683,6 +693,7 @@ function TestReportGenerateDrawer({
   onFinish,
 }: {
   open: boolean
+  projectId?: string
   form: FormInstance<TestReportGenerateFormValues>
   snapshotDate: string
   loading?: boolean
@@ -692,9 +703,9 @@ function TestReportGenerateDrawer({
 }) {
   const navigate = useNavigate()
   const connectionsQuery = useQuery({
-    queryKey: ['llmConnections', 'testReportGenerate'],
-    queryFn: () => api.getLlmConnections(),
-    enabled: open,
+    queryKey: ['llmConnections', projectId, 'testReportGenerate'],
+    queryFn: () => api.getLlmConnections(projectId!),
+    enabled: open && Boolean(projectId),
   })
   const activeConnections = useMemo(
     () => listItems(connectionsQuery.data).filter((connection) => connection.status === 'active'),
@@ -723,6 +734,7 @@ function TestReportGenerateDrawer({
       }
     >
       {connectionsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} style={{ marginBottom: 16 }} /> : null}
+      {!projectId ? <Alert showIcon type="info" title="缺少项目信息，无法加载 LLM 连接" style={{ marginBottom: 16 }} /> : null}
       {error ? <Alert showIcon type="error" title={getErrorMessage(error)} style={{ marginBottom: 16 }} /> : null}
       <Form form={form} layout="vertical" requiredMark={false} onFinish={onFinish}>
         <Form.Item label="快照日期">
@@ -927,16 +939,14 @@ export function SprintDetailPage() {
               <div className="sprint-overview-hero-summary">
                 <SummaryMetric label="总用例数" value={latestMetrics.totalCases} />
                 <SummaryMetric label="Bug 总数" value={latestMetrics.bug.total} />
-                <Tooltip title="更新数据">
-                  <Button
-                    shape="circle"
-                    className="action-btn-read sprint-overview-refresh-button"
-                    icon={<ReloadOutlined />}
-                    loading={generateMetricsMutation.isPending}
-                    aria-label="更新数据"
-                    onClick={() => generateMetricsMutation.mutate()}
-                  />
-                </Tooltip>
+                <Button
+                  className="action-btn-read sprint-overview-refresh-button"
+                  icon={<ReloadOutlined />}
+                  loading={generateMetricsMutation.isPending}
+                  onClick={() => generateMetricsMutation.mutate()}
+                >
+                  更新数据
+                </Button>
                 <Tooltip title={canViewLatestReport ? '查看最近一次成功报告' : '暂无可查看的成功报告'}>
                   <Button
                     icon={<FileTextOutlined />}
@@ -1050,6 +1060,7 @@ export function SprintDetailPage() {
       )}
       <TestReportGenerateDrawer
         open={reportDrawerOpen}
+        projectId={projectId}
         form={reportForm}
         snapshotDate={todayDate}
         loading={createReportRunMutation.isPending}

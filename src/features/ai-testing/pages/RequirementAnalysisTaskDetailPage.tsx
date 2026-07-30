@@ -30,7 +30,7 @@ import '@/features/ai-testing/styles/index.css'
 import { RequirementDocumentPreviewContent } from '@/features/requirements/components/RequirementDocumentPreviewModal'
 import type { Requirement } from '@/features/requirements/types'
 import { hasRequirementDocument } from '@/features/requirements/utils/requirementDocument'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickUpdatedAt } from '@/utils/format'
@@ -192,12 +192,12 @@ export function RequirementAnalysisTaskDetailPage() {
   })
 
   const sprintOptions = useMemo(
-    () => (sprintsQuery.data ?? []).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    () => listItems(sprintsQuery.data).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
     [sprintsQuery.data],
   )
   const requirementOptions = useMemo(
     () =>
-      (requirementsQuery.data ?? [])
+      listItems(requirementsQuery.data)
         .filter((requirement) => !drawerSprintId || requirement.sprintIdForCreate === drawerSprintId)
         .map((requirement) => ({
           label: `${requirement.name}${drawerSprintId ? '' : `（${requirement.sprintName}）`}`,
@@ -206,17 +206,17 @@ export function RequirementAnalysisTaskDetailPage() {
     [drawerSprintId, requirementsQuery.data],
   )
   const sprintNameMap = useMemo(
-    () => new Map((sprintsQuery.data ?? []).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
+    () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
   )
   const requirementMap = useMemo(
-    () => new Map((requirementsQuery.data ?? []).map((requirement) => [normalizeRequirementId(requirement), requirement])),
+    () => new Map(listItems(requirementsQuery.data).map((requirement) => [normalizeRequirementId(requirement), requirement])),
     [requirementsQuery.data],
   )
   const boundRequirement = boundRequirementQuery.data ?? (task?.requirementId ? requirementMap.get(task.requirementId) : undefined)
 
   const runRecords = useMemo(
-    () => [...(runsQuery.data ?? [])].sort((left, right) => getRunSortTime(right) - getRunSortTime(left)),
+    () => [...listItems(runsQuery.data)].sort((left, right) => getRunSortTime(right) - getRunSortTime(left)),
     [runsQuery.data],
   )
   const latestRunRecord = runRecords[0]
@@ -891,6 +891,7 @@ export function RequirementAnalysisTaskDetailPage() {
 
       <RequirementAnalysisRunModal
         open={runModalOpen}
+        projectId={task?.projectId}
         loading={runTaskMutation.isPending}
         onClose={() => setRunModalOpen(false)}
         onConfirm={(values) => runTaskMutation.mutate(values)}

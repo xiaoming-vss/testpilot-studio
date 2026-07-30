@@ -2,6 +2,7 @@ export type IntegrationConnectionStatus = 'active' | 'auth_failed' | 'disabled' 
 
 export type ZentaoConnection = {
   connectionId: string
+  projectId?: string
   provider: 'zentao' | string
   name: string
   baseUrl: string
@@ -69,6 +70,7 @@ export type CreateZentaoBindingPayload = {
 
 export type LlmConnection = {
   connectionId: string
+  projectId?: string
   provider: 'llm' | string
   name: string
   baseUrl: string

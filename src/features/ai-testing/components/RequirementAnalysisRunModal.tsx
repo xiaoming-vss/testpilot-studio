@@ -3,7 +3,7 @@ import { Alert, Button, Empty, Form, Input, Modal, Radio, Space, Spin, Switch, T
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { getErrorMessage } from '@/utils/format'
 
 const { Text } = Typography
@@ -18,11 +18,13 @@ export function RequirementAnalysisRunModal({
   open,
   onClose,
   onConfirm,
+  projectId,
   loading,
 }: {
   open: boolean
   onClose: () => void
   onConfirm: (values: RequirementAnalysisRunFormValues) => void
+  projectId?: string
   loading?: boolean
 }) {
   const navigate = useNavigate()
@@ -30,13 +32,13 @@ export function RequirementAnalysisRunModal({
   const [selectedId, setSelectedId] = useState('')
 
   const connectionsQuery = useQuery({
-    queryKey: ['llmConnections', 'requirementAnalysisRun'],
-    queryFn: () => api.getLlmConnections(),
-    enabled: open,
+    queryKey: ['llmConnections', projectId, 'requirementAnalysisRun'],
+    queryFn: () => api.getLlmConnections(projectId!),
+    enabled: open && Boolean(projectId),
   })
 
   const activeConnections = useMemo(
-    () => (connectionsQuery.data ?? []).filter((conn) => conn.status === 'active'),
+    () => listItems(connectionsQuery.data).filter((conn) => conn.status === 'active'),
     [connectionsQuery.data],
   )
 
@@ -77,6 +79,8 @@ export function RequirementAnalysisRunModal({
         </div>
       ) : connectionsQuery.error ? (
         <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} />
+      ) : !projectId ? (
+        <Alert showIcon type="info" title="请先选择项目" />
       ) : activeConnections.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}

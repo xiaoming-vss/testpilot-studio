@@ -1,7 +1,8 @@
 import { Alert, Button, Drawer, Form, Input, InputNumber, Select } from 'antd'
 import type { FormInstance } from 'antd'
 import { getErrorMessage } from '@/utils/format'
-import { DEFAULT_UI_TEST_SUITE_RUN_CONFIG } from '../constants/defaultRunConfig'
+import { DEFAULT_UI_TEST_SUITE_RUN_CONFIG, UI_SCREENSHOT_POLICY_OPTIONS } from '../constants/defaultRunConfig'
+import type { UiScreenshotPolicy } from '../types'
 
 export type UiTestSuiteFormValues = {
   sprintId?: string
@@ -13,6 +14,7 @@ export type UiTestSuiteFormValues = {
   viewportWidth?: number
   viewportHeight?: number
   defaultStepTimeoutMs?: number
+  screenshotPolicy?: UiScreenshotPolicy
 }
 
 export function UiTestSuiteDrawer({
@@ -117,6 +119,10 @@ export function UiTestSuiteDrawer({
                 ]}
               >
                 <InputNumber min={1} style={{ width: '100%' }} placeholder="例如：5000" />
+              </Form.Item>
+
+              <Form.Item name="screenshotPolicy" label="步骤截图策略">
+                <Select placeholder="请选择截图策略" options={UI_SCREENSHOT_POLICY_OPTIONS} />
               </Form.Item>
 
               <Form.Item

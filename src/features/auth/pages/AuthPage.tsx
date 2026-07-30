@@ -1,5 +1,4 @@
-import { UserOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd'
+import { Alert, Button, Form, Input, Typography } from 'antd'
 import { useMutation } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
@@ -8,7 +7,7 @@ import { message } from '@/shared/utils/feedback'
 import { getErrorMessage } from '@/utils/format'
 import { useAuthStore } from '../store/auth.store'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const navigate = useNavigate()
@@ -40,63 +39,79 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
   return (
     <div className="auth-page">
-      <main className="auth-main" aria-label={isLogin ? '登录 TestPilot Studio' : '注册 TestPilot Studio'}>
-        <Card className="auth-card">
-          <div className="auth-brand-icon" aria-hidden="true">
-            <TestPilotLogo size={48} />
-          </div>
-          <Space orientation="vertical" size={8} className="auth-title">
-            <Title level={1}>TestPilot Studio</Title>
-            <Text>{isLogin ? '欢迎回来，请登录您的账号' : '创建账号，开始使用测试平台'}</Text>
-          </Space>
+      <main className="auth-main" aria-label={isLogin ? '登录 MTX' : '注册 MTX'}>
+        <section className="auth-shell">
+          <aside className="auth-brand-panel" aria-label="MTX">
+            <TestPilotLogo size={58} title="MTX Logo" />
+            <div className="auth-brand-copy">
+              <strong className="auth-brand-name">MTX</strong>
+              <span className="auth-brand-subtitle">Model Testing Experience</span>
+              <p>让模型贯穿测试设计与执行</p>
+            </div>
+            <div className="auth-capability-list" aria-hidden="true">
+              <span><i className="auth-dot auth-dot-blue" />项目总览</span>
+              <span><i className="auth-dot auth-dot-teal" />AI 测试</span>
+              <span><i className="auth-dot" />基础服务</span>
+            </div>
+          </aside>
 
-          {mutation.error ? <Alert showIcon type="error" title={getErrorMessage(mutation.error)} /> : null}
+          <section className="auth-form-panel">
+            <div className="auth-title">
+              <h1>{isLogin ? '欢迎回来' : '创建账号'}</h1>
+              <Text>{isLogin ? '登录后继续你的测试设计工作' : '创建账号，开始你的模型测试体验'}</Text>
+            </div>
 
-          <Form form={form} layout="vertical" onFinish={(values) => mutation.mutate(values)} requiredMark={false} className="auth-form">
-            <Form.Item name="name" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
-              <Input prefix={<UserOutlined />} placeholder="请输入用户名" autoComplete="username" />
-            </Form.Item>
+            {mutation.error ? <Alert showIcon type="error" title={getErrorMessage(mutation.error)} /> : null}
 
-            <Form.Item
-              name="password"
-              label={
-                <span className="auth-password-label">
-                  <span>密码</span>
-                  {isLogin ? (
-                    <Button
-                      type="link"
-                      className="auth-forgot"
-                      onClick={() => message.info('暂未开放')}
-                    >
-                      忘记密码？
-                    </Button>
-                  ) : null}
-                </span>
-              }
-              rules={[{ required: true, message: '请输入密码' }]}
-            >
-              <Input.Password placeholder="请输入密码" autoComplete={isLogin ? 'current-password' : 'new-password'} />
-            </Form.Item>
-
-            {!isLogin ? (
-              <Form.Item name="email" label="邮箱">
-                <Input placeholder="请输入邮箱" autoComplete="email" />
+            <Form form={form} layout="vertical" onFinish={(values) => mutation.mutate(values)} requiredMark={false} className="auth-form">
+              <Form.Item name="name" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+                <Input placeholder="请输入用户名" autoComplete="username" />
               </Form.Item>
-            ) : null}
 
-            <Button type="primary" htmlType="submit" block loading={mutation.isPending} className="auth-submit">
-              {isLogin ? '登录' : '注册'}
-            </Button>
-          </Form>
+              <Form.Item
+                name="password"
+                label={
+                  <span className="auth-password-label">
+                    <span>密码</span>
+                    {isLogin ? (
+                      <Button type="link" className="auth-forgot" onClick={() => message.info('暂未开放')}>
+                        忘记密码？
+                      </Button>
+                    ) : null}
+                  </span>
+                }
+                rules={[{ required: true, message: '请输入密码' }]}
+              >
+                <Input.Password placeholder="请输入密码" autoComplete={isLogin ? 'current-password' : 'new-password'} />
+              </Form.Item>
 
-          <div className="auth-switch">
-            <Text type="secondary">{isLogin ? '还没有账号？' : '已有账号？'}</Text>
-            <Button type="link" onClick={() => navigate(isLogin ? '/register' : '/login')}>
-              {isLogin ? '立即注册' : '返回登录'}
-            </Button>
-          </div>
-        </Card>
-        <footer className="auth-footer">© 2024 TestPilot Studio. 版权所有</footer>
+              {!isLogin ? (
+                <Form.Item name="email" label="邮箱">
+                  <Input placeholder="请输入邮箱" autoComplete="email" />
+                </Form.Item>
+              ) : null}
+
+              {isLogin ? (
+                <label className="auth-remember">
+                  <input type="checkbox" />
+                  <span>保持登录</span>
+                </label>
+              ) : null}
+
+              <Button type="primary" htmlType="submit" block loading={mutation.isPending} className="auth-submit">
+                {isLogin ? '登录' : '注册'}
+              </Button>
+            </Form>
+
+            <div className="auth-switch">
+              <Text type="secondary">{isLogin ? '还没有账号？' : '已有账号？'}</Text>
+              <Button type="link" onClick={() => navigate(isLogin ? '/register' : '/login')}>
+                {isLogin ? '立即注册' : '返回登录'}
+              </Button>
+            </div>
+          </section>
+        </section>
+        <footer className="auth-footer">© 2024 MTX. 版权所有</footer>
       </main>
     </div>
   )

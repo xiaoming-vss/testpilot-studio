@@ -65,6 +65,7 @@ export type SprintDailyMetricsBugStats = {
   suggestion?: number
   hint?: number
   resolved?: number
+  closed?: number
   unresolved?: number
 }
 
@@ -96,6 +97,8 @@ export type SprintDailyMetricsSnapshot = {
   bug_total?: number
   bugResolved?: number
   bug_resolved?: number
+  bugClosed?: number
+  bug_closed?: number
   bugUnresolved?: number
   bug_unresolved?: number
   bugFatal?: number

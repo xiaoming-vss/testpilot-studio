@@ -2,7 +2,7 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined
 import { Alert, Badge, Button, Card, Empty, Form, Pagination, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { api, type CreateZentaoConnectionPayload, type UpdateZentaoConnectionPayload, type ZentaoConnection } from '@/services/api'
+import { api, listItems, type CreateZentaoConnectionPayload, type UpdateZentaoConnectionPayload, type ZentaoConnection } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage } from '@/utils/format'
 import { ZentaoConnectionDetailDrawer } from './ZentaoConnectionDetailDrawer'
@@ -54,7 +54,7 @@ function buildUpdatePayload(current: ZentaoConnection, values: ZentaoConnectionF
   return payload
 }
 
-export function ZentaoConnectionsPanel() {
+export function ZentaoConnectionsPanel({ projectId }: { projectId?: string }) {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(18)
@@ -65,19 +65,20 @@ export function ZentaoConnectionsPanel() {
   const [form] = Form.useForm<ZentaoConnectionFormValues>()
 
   const connectionsQuery = useQuery({
-    queryKey: ['zentaoConnections'],
-    queryFn: () => api.getZentaoConnections(),
+    queryKey: ['zentaoConnections', projectId],
+    queryFn: () => api.getZentaoConnections(projectId!),
+    enabled: Boolean(projectId),
   })
 
   const detailQuery = useQuery({
-    queryKey: ['zentaoConnection', detailConnectionId],
-    queryFn: () => api.getZentaoConnection(detailConnectionId),
-    enabled: detailOpen && Boolean(detailConnectionId),
+    queryKey: ['zentaoConnection', projectId, detailConnectionId],
+    queryFn: () => api.getZentaoConnection(projectId!, detailConnectionId),
+    enabled: detailOpen && Boolean(projectId) && Boolean(detailConnectionId),
   })
 
   const connections = useMemo(
     () =>
-      [...(connectionsQuery.data ?? [])].sort((left, right) => {
+      [...listItems(connectionsQuery.data)].sort((left, right) => {
         const leftTime = new Date(left.updatedAt || left.createdAt || '').getTime()
         const rightTime = new Date(right.updatedAt || right.createdAt || '').getTime()
         return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime)
@@ -92,21 +93,22 @@ export function ZentaoConnectionsPanel() {
 
   const saveMutation = useMutation({
     mutationFn: (values: ZentaoConnectionFormValues) => {
+      if (!projectId) throw new Error('请先选择项目')
       if (editingConnection) {
         const payload = buildUpdatePayload(editingConnection, values)
         if (Object.keys(payload).length === 0) {
           return Promise.resolve(editingConnection)
         }
-        return api.updateZentaoConnection(editingConnection.connectionId, payload)
+        return api.updateZentaoConnection(projectId, editingConnection.connectionId, payload)
       }
-      return api.createZentaoConnection(buildCreatePayload(values))
+      return api.createZentaoConnection(projectId, buildCreatePayload(values))
     },
     onSuccess: (connection) => {
       const isEditing = Boolean(editingConnection)
       const hasChanges = !editingConnection || Object.keys(buildUpdatePayload(editingConnection, form.getFieldsValue())).length > 0
       message.success(isEditing ? (hasChanges ? '禅道连接已更新' : '未检测到变更') : '禅道连接已创建')
-      queryClient.invalidateQueries({ queryKey: ['zentaoConnections'] })
-      queryClient.setQueryData(['zentaoConnection', connection.connectionId], connection)
+      queryClient.invalidateQueries({ queryKey: ['zentaoConnections', projectId] })
+      queryClient.setQueryData(['zentaoConnection', projectId, connection.connectionId], connection)
       setDrawerOpen(false)
       setEditingConnection(null)
       form.resetFields()
@@ -117,11 +119,14 @@ export function ZentaoConnectionsPanel() {
   })
 
   const reauthMutation = useMutation({
-    mutationFn: (connectionId: string) => api.reauthZentaoConnection(connectionId),
+    mutationFn: (connectionId: string) => {
+      if (!projectId) throw new Error('请先选择项目')
+      return api.reauthZentaoConnection(projectId, connectionId)
+    },
     onSuccess: (connection) => {
       message.success('重新鉴权成功')
-      queryClient.invalidateQueries({ queryKey: ['zentaoConnections'] })
-      queryClient.setQueryData(['zentaoConnection', connection.connectionId], connection)
+      queryClient.invalidateQueries({ queryKey: ['zentaoConnections', projectId] })
+      queryClient.setQueryData(['zentaoConnection', projectId, connection.connectionId], connection)
     },
     onError: (error) => {
       message.error(getErrorMessage(error))
@@ -129,11 +134,14 @@ export function ZentaoConnectionsPanel() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (connectionId: string) => api.deleteZentaoConnection(connectionId),
+    mutationFn: (connectionId: string) => {
+      if (!projectId) throw new Error('请先选择项目')
+      return api.deleteZentaoConnection(projectId, connectionId)
+    },
     onSuccess: (_, connectionId) => {
       message.success('禅道连接已删除')
-      queryClient.invalidateQueries({ queryKey: ['zentaoConnections'] })
-      queryClient.removeQueries({ queryKey: ['zentaoConnection', connectionId], exact: true })
+      queryClient.invalidateQueries({ queryKey: ['zentaoConnections', projectId] })
+      queryClient.removeQueries({ queryKey: ['zentaoConnection', projectId, connectionId], exact: true })
       if (detailConnectionId === connectionId) {
         setDetailOpen(false)
         setDetailConnectionId('')
@@ -177,10 +185,14 @@ export function ZentaoConnectionsPanel() {
         <div className="requirement-panel-head">
           <Text strong>禅道连接</Text>
         </div>
-        <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} onClick={openCreateDrawer}>
+        <Button type="primary" className="action-btn-create" icon={<PlusOutlined />} disabled={!projectId} onClick={openCreateDrawer}>
           新建禅道连接
         </Button>
       </div>
+
+      {!projectId ? (
+        <Alert showIcon type="info" title="请先选择项目" className="base-services-integration-alert" />
+      ) : null}
 
       {connectionsQuery.error ? (
         <Alert showIcon type="error" title={getErrorMessage(connectionsQuery.error)} className="base-services-integration-alert" />

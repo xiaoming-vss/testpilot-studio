@@ -2,46 +2,46 @@ import {
   ApiOutlined,
   BugOutlined,
   CaretRightOutlined,
+  CheckOutlined,
   DeleteOutlined,
   EditOutlined,
   ExperimentOutlined,
   EyeOutlined,
   PlusOutlined,
+  RightOutlined,
 } from '@ant-design/icons'
 import {
   Alert,
-  Badge,
   Button,
-  Card,
   Empty,
   Form,
   Modal,
   Pagination,
   Popconfirm,
   Space,
+  Table,
   Tag,
   Tooltip,
   Typography,
 } from 'antd'
-import type { BadgeProps } from 'antd'
+import type { TableProps } from 'antd'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
-import { AiTaskQuickLinks } from '../components/AiTaskQuickLinks'
 import { FunctionalCaseGenerateTaskDrawer, type FunctionalCaseGenerateTaskFormValues } from '../components/FunctionalCaseGenerateTaskDrawer'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
 import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun, FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun } from '../types'
-import { isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
+import { getApiCaseGenerateTaskRunStatusMeta, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { hasRequirementDocument } from '@/features/requirements/utils/requirementDocument'
-import { api } from '@/services/api'
+import { api, listItems } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickCreatedAt } from '@/utils/format'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 type AiTaskKind = 'api' | 'functional' | 'ui'
 
@@ -116,8 +116,11 @@ function getLatestRun<T extends ApiCaseGenerateTaskRun | FunctionalCaseGenerateT
   return [...(runs ?? [])].sort((left, right) => getRunSortTime(right) - getRunSortTime(left))[0]
 }
 
-function sourceTypeTag(sourceType: ApiCaseGenerateTask['sourceType']) {
-  return <Tag color={sourceType === 'swagger' ? 'gold' : 'blue'}>{sourceType}</Tag>
+function sourceTypeLabel(item: UnifiedAiTask) {
+  if (item.kind === 'api') {
+    return item.task.sourceType === 'swagger' ? 'Swagger导入' : 'OpenAPI导入'
+  }
+  return '需求分析'
 }
 
 function taskKindTag(kind: AiTaskKind) {
@@ -126,12 +129,10 @@ function taskKindTag(kind: AiTaskKind) {
   return <Tag>UI测试</Tag>
 }
 
-function taskStatusBadge(status?: ApiCaseGenerateTaskRun['status']): NonNullable<BadgeProps['status']> {
-  const normalizedStatus = status ?? 'unknown'
-  if (['pending', 'claimed', 'running'].includes(normalizedStatus)) return 'processing'
-  if (normalizedStatus === 'success') return 'success'
-  if (['failed', 'error'].includes(normalizedStatus)) return 'error'
-  return 'default'
+function renderLatestRunStatus(status?: ApiCaseGenerateTaskRun['status']) {
+  if (!status) return <Tag>未运行</Tag>
+  const meta = getApiCaseGenerateTaskRunStatusMeta(status)
+  return <Tag color={meta.color}>{meta.label}</Tag>
 }
 
 export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean }) {
@@ -150,7 +151,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   const [functionalLlmSelectTaskId, setFunctionalLlmSelectTaskId] = useState<string | null>(null)
   const [functionalCheckpointEnabled, setFunctionalCheckpointEnabled] = useState(false)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(18)
+  const [pageSize, setPageSize] = useState(10)
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
   const [functionalForm] = Form.useForm<FunctionalCaseGenerateTaskFormValues>()
 
@@ -170,7 +171,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     enabled: Boolean(activeProjectId),
   })
   const sprintOptions = useMemo(
-    () => (sprintsQuery.data ?? []).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
+    () => listItems(sprintsQuery.data).map((sprint) => ({ label: sprint.name, value: normalizeSprintId(sprint) })),
     [sprintsQuery.data],
   )
   const requirementOptionsQuery = useQuery({
@@ -194,7 +195,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   })
   const requirementOptions = useMemo(
     () =>
-      (requirementOptionsQuery.data ?? []).map((requirement) => ({
+      listItems(requirementOptionsQuery.data).map((requirement) => ({
         label: requirement.name,
         value: normalizeRequirementId(requirement),
       })),
@@ -202,30 +203,30 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   )
   const functionalRequirementOptions = useMemo(
     () =>
-      (functionalRequirementOptionsQuery.data ?? []).map((requirement) => ({
+      listItems(functionalRequirementOptionsQuery.data).map((requirement) => ({
         label: requirement.name,
         value: normalizeRequirementId(requirement),
       })),
     [functionalRequirementOptionsQuery.data],
   )
   const sprintNameMap = useMemo(
-    () => new Map((sprintsQuery.data ?? []).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
+    () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
   )
   const requirementNameMap = useMemo(
-    () => new Map((allRequirementsQuery.data ?? []).map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
+    () => new Map(listItems(allRequirementsQuery.data).map((requirement) => [normalizeRequirementId(requirement), requirement.name])),
     [allRequirementsQuery.data],
   )
   const requirementMap = useMemo(
-    () => new Map((allRequirementsQuery.data ?? []).map((requirement) => [normalizeRequirementId(requirement), requirement])),
+    () => new Map(listItems(allRequirementsQuery.data).map((requirement) => [normalizeRequirementId(requirement), requirement])),
     [allRequirementsQuery.data],
   )
 
   const unifiedTasks = useMemo<UnifiedAiTask[]>(
     () =>
       [
-        ...(tasksQuery.data ?? []).map((task) => ({ kind: 'api' as const, task })),
-        ...(functionalTasksQuery.data ?? []).map((task) => ({ kind: 'functional' as const, task })),
+        ...listItems(tasksQuery.data).map((task) => ({ kind: 'api' as const, task })),
+        ...listItems(functionalTasksQuery.data).map((task) => ({ kind: 'functional' as const, task })),
       ].sort((left, right) => getUnifiedTaskTime(right) - getUnifiedTaskTime(left)),
     [functionalTasksQuery.data, tasksQuery.data],
   )
@@ -233,7 +234,6 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     () => unifiedTasks.slice((page - 1) * pageSize, page * pageSize),
     [page, pageSize, unifiedTasks],
   )
-  const shouldFillTaskGrid = pageSize === 18 && pagedTasks.length > 0
   const pagedApiTasks = useMemo(
     () => pagedTasks.filter((item): item is Extract<UnifiedAiTask, { kind: 'api' }> => item.kind === 'api').map((item) => item.task),
     [pagedTasks],
@@ -536,74 +536,113 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     })
   }
 
-  function renderTaskCard(item: UnifiedAiTask) {
+  function getUnifiedTaskContext(item: UnifiedAiTask) {
     if (item.kind === 'api') {
       const task = item.task
       const taskId = getTaskId(task)
       const runState = latestApiRunMap.get(taskId)
       const latestRun = runState?.latestRun
       const runnableTask = !runState?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
+      const detailPath = `/ai-testing/tasks/${taskId}`
+      const sprintName = sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'
+      const requirementName = requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'
 
-      return (
-        <Card
-          key={getUnifiedTaskKey(item)}
-          hoverable
-          className="sprint-card api-collection-card ai-task-card"
-          styles={{ body: { padding: 20 } }}
-          onClick={() => navigate(`/ai-testing/tasks/${taskId}`)}
-        >
-          <div className="api-collection-card-top ai-task-card-top">
-            <Space size={10}>
-              <Badge status={taskStatusBadge(latestRun?.status)} />
-              <Tooltip title={task.name || '未命名任务'}>
-                <Text strong className="ai-task-card-title">
-                  {task.name || '未命名任务'}
-                </Text>
-              </Tooltip>
-            </Space>
-            <Space size={6} wrap className="ai-task-card-tags">
-              {taskKindTag('api')}
-              {sourceTypeTag(task.sourceType)}
-            </Space>
-          </div>
+      return { detailPath, latestRun, requirementName, runState, runnableTask, source: sourceTypeLabel(item), sprintName, taskId }
+    }
 
-          <div className="sprint-card-meta api-collection-meta-inline">
-            <span className="sprint-card-label">所属迭代/需求</span>
-            <span className="api-collection-inline-value">
-              {sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'}/
-              {requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'}
-            </span>
-          </div>
+    const task = item.task
+    const taskId = getFunctionalTaskId(task)
+    const runState = latestFunctionalRunMap.get(taskId)
+    const latestRun = runState?.latestRun
+    const runnableTask = !runState?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
+    const detailPath = `/ai-testing/function-tasks/${taskId}`
+    const sprintName = sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'
+    const requirementName = requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'
 
-          <div className="sprint-card-meta">
-            <span className="sprint-card-label">创建时间</span>
-            <span className="api-collection-inline-value">{formatTime(pickCreatedAt(task))}</span>
-          </div>
+    return { detailPath, latestRun, requirementName, runState, runnableTask, source: sourceTypeLabel(item), sprintName, taskId }
+  }
 
-          <Paragraph
-            className="api-collection-description ai-task-card-description"
-            type="secondary"
-            ellipsis={{ rows: 2 }}
-            title={task.instruction || '暂无生成指令'}
-          >
-            {task.instruction || '暂无生成指令'}
-          </Paragraph>
-
-          <div
-            className="sprint-card-actions ai-task-card-actions"
+  const columns: TableProps<UnifiedAiTask>['columns'] = [
+    {
+      title: '任务名称',
+      key: 'name',
+      width: '25%',
+      render: (_, item) => (
+        <Space size={10} className="ai-task-list-name">
+          <span className="ai-task-list-status-dot" />
+          <Tooltip title={item.task.name || '未命名任务'}>
+            <Text ellipsis>{item.task.name || '未命名任务'}</Text>
+          </Tooltip>
+        </Space>
+      ),
+    },
+    {
+      title: '任务类型/状态',
+      key: 'status',
+      width: 190,
+      render: (_, item) => {
+        const { latestRun } = getUnifiedTaskContext(item)
+        return (
+          <Space size={6} className="ai-task-list-tags">
+            {taskKindTag(item.kind)}
+            {renderLatestRunStatus(latestRun?.status)}
+          </Space>
+        )
+      },
+    },
+    {
+      title: '所属迭代/需求',
+      key: 'scope',
+      ellipsis: true,
+      render: (_, item) => {
+        const { requirementName, sprintName } = getUnifiedTaskContext(item)
+        return (
+          <Tooltip title={`${sprintName} / ${requirementName}`}>
+            <Text className="ai-task-list-scope" ellipsis>
+              {sprintName} / {requirementName}
+            </Text>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '来源',
+      key: 'source',
+      width: 140,
+      render: (_, item) => <Text type="secondary">{getUnifiedTaskContext(item).source}</Text>,
+    },
+    {
+      title: '创建时间',
+      key: 'createdAt',
+      width: 160,
+      render: (_, item) => <Text type="secondary">{formatTime(pickCreatedAt(item.task))}</Text>,
+    },
+    {
+      title: '最近运行',
+      key: 'latestRun',
+      width: 180,
+      render: (_, item) => {
+        const { latestRun, runState } = getUnifiedTaskContext(item)
+        if (runState?.isLoading) return <Text type="secondary">加载中...</Text>
+        const time = formatTime(latestRun?.startedAt || latestRun?.createdAt || latestRun?.updatedAt)
+        return <Text type="secondary">{time}</Text>
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 178,
+      align: 'right',
+      render: (_, item) => {
+        const { detailPath, runState, runnableTask, taskId } = getUnifiedTaskContext(item)
+        const isApiTask = item.kind === 'api'
+        return (
+          <Space
+            size={6}
+            className="ai-task-list-actions"
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Tooltip title="查看详情">
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-read"
-                icon={<EyeOutlined />}
-                aria-label="查看详情"
-                onClick={() => navigate(`/ai-testing/tasks/${taskId}`)}
-              />
-            </Tooltip>
             <Tooltip title={runState?.isLoading ? '运行记录加载中' : '运行任务'}>
               <span>
                 <Button
@@ -613,9 +652,25 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                   icon={<CaretRightOutlined />}
                   aria-label="运行任务"
                   disabled={!runnableTask}
-                  onClick={() => handleRunTask(task)}
+                  onClick={() => {
+                    if (isApiTask) {
+                      handleRunTask(item.task)
+                      return
+                    }
+                    handleRunFunctionalTask(item.task)
+                  }}
                 />
               </span>
+            </Tooltip>
+            <Tooltip title="查看详情">
+              <Button
+                type="text"
+                shape="circle"
+                className="action-btn-read"
+                icon={<EyeOutlined />}
+                aria-label="查看详情"
+                onClick={() => navigate(detailPath)}
+              />
             </Tooltip>
             <Tooltip title="编辑任务">
               <span>
@@ -625,11 +680,26 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                   className="action-btn-update"
                   icon={<EditOutlined />}
                   aria-label="编辑任务"
-                  onClick={() => openEditDrawer(task)}
+                  onClick={() => {
+                    if (isApiTask) {
+                      openEditDrawer(item.task)
+                      return
+                    }
+                    openEditFunctionalDrawer(item.task)
+                  }}
                 />
               </span>
             </Tooltip>
-            <Popconfirm title="确认删除该任务？" onConfirm={() => deleteTaskMutation.mutate(taskId)}>
+            <Popconfirm
+              title="确认删除该任务？"
+              onConfirm={() => {
+                if (isApiTask) {
+                  deleteTaskMutation.mutate(taskId)
+                  return
+                }
+                deleteFunctionalTaskMutation.mutate(taskId)
+              }}
+            >
               <Tooltip title="删除任务">
                 <Button
                   danger
@@ -638,132 +708,19 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                   className="action-btn-delete"
                   icon={<DeleteOutlined />}
                   aria-label="删除任务"
-                  loading={deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId}
+                  loading={
+                    isApiTask
+                      ? deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId
+                      : deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId
+                  }
                 />
               </Tooltip>
             </Popconfirm>
-          </div>
-        </Card>
-      )
-    }
-
-    const task = item.task
-    const taskId = getFunctionalTaskId(task)
-    const runState = latestFunctionalRunMap.get(taskId)
-    const latestRun = runState?.latestRun
-    const runnableTask = !runState?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
-
-    return (
-      <Card
-        key={getUnifiedTaskKey(item)}
-        hoverable
-        className="sprint-card api-collection-card ai-task-card ai-functional-task-card"
-        styles={{ body: { padding: 20 } }}
-        onClick={() => navigate(`/ai-testing/function-tasks/${taskId}`)}
-      >
-        <div className="api-collection-card-top ai-task-card-top">
-          <Space size={10}>
-            <Badge status={taskStatusBadge(latestRun?.status)} />
-            <Tooltip title={task.name || '未命名任务'}>
-              <Text strong className="ai-task-card-title">
-                {task.name || '未命名任务'}
-              </Text>
-            </Tooltip>
           </Space>
-          <Space size={6} wrap className="ai-task-card-tags">
-            {taskKindTag('functional')}
-          </Space>
-        </div>
-
-        <div className="sprint-card-meta api-collection-meta-inline">
-          <span className="sprint-card-label">所属迭代/需求</span>
-          <span className="api-collection-inline-value">
-            {sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'}/
-            {requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'}
-          </span>
-        </div>
-
-        <div className="sprint-card-meta">
-          <span className="sprint-card-label">创建时间</span>
-          <span className="api-collection-inline-value">{formatTime(pickCreatedAt(task))}</span>
-        </div>
-
-        <Paragraph
-          className="api-collection-description ai-task-card-description"
-          type="secondary"
-          ellipsis={{ rows: 2 }}
-          title={task.instruction || '暂无生成指令'}
-        >
-          {task.instruction || '暂无生成指令'}
-        </Paragraph>
-
-        <div
-          className="sprint-card-actions ai-task-card-actions"
-          onClick={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <Tooltip title="查看详情">
-            <Button
-              type="text"
-              shape="circle"
-              className="action-btn-read"
-              icon={<EyeOutlined />}
-              aria-label="查看详情"
-              onClick={(event) => {
-                event.stopPropagation()
-                navigate(`/ai-testing/function-tasks/${taskId}`)
-              }}
-            />
-          </Tooltip>
-          <Tooltip title={runState?.isLoading ? '运行记录加载中' : '运行任务'}>
-            <span>
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-run"
-                icon={<CaretRightOutlined />}
-                aria-label="运行任务"
-                disabled={!runnableTask}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleRunFunctionalTask(task)
-                }}
-              />
-            </span>
-          </Tooltip>
-          <Tooltip title="编辑任务">
-            <span>
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-update"
-                icon={<EditOutlined />}
-                aria-label="编辑任务"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  openEditFunctionalDrawer(task)
-                }}
-              />
-            </span>
-          </Tooltip>
-          <Popconfirm title="确认删除该任务？" onConfirm={() => deleteFunctionalTaskMutation.mutate(taskId)}>
-            <Tooltip title="删除任务">
-              <Button
-                danger
-                type="text"
-                shape="circle"
-                className="action-btn-delete"
-                icon={<DeleteOutlined />}
-                aria-label="删除任务"
-                onClick={(event) => event.stopPropagation()}
-                loading={deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId}
-              />
-            </Tooltip>
-          </Popconfirm>
-        </div>
-      </Card>
-    )
-  }
+        )
+      },
+    },
+  ]
 
   const content = (
     <>
@@ -771,8 +728,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
         <section className="workbench-panel workbench-board-panel ai-testing-task-panel">
           <div className="panel-header ai-task-panel-header">
             <Text strong>AI 用例生成任务</Text>
-            <Space wrap size={8}>
-              <AiTaskQuickLinks />
+            <Space wrap size={8} className="ai-task-panel-tools">
               <Button
                 type="primary"
                 className="action-btn-create"
@@ -809,9 +765,16 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                 </Empty>
               </div>
             ) : (
-              <div className={`ai-task-card-grid${shouldFillTaskGrid ? ' ai-task-grid-fill-page' : ''}`}>
-                {pagedTasks.map((item) => renderTaskCard(item))}
-              </div>
+              <Table<UnifiedAiTask>
+                className="ai-task-list-table"
+                columns={columns}
+                dataSource={pagedTasks}
+                rowKey={getUnifiedTaskKey}
+                pagination={false}
+                onRow={(item) => ({
+                  onClick: () => navigate(getUnifiedTaskContext(item).detailPath),
+                })}
+              />
             )}
           </div>
 
@@ -822,7 +785,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
               pageSize={pageSize}
               total={unifiedTasks.length}
               showSizeChanger
-              pageSizeOptions={['18', '24', '30', '36', '48', '60']}
+              pageSizeOptions={['10', '20', '30', '50']}
               onChange={(nextPage, nextPageSize) => {
                 setPage(nextPage)
                 setPageSize(nextPageSize)
@@ -834,15 +797,20 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
 
       <Modal
         open={createKindModalOpen}
-        title="选择模板"
+        title={
+          <div className="ai-task-kind-modal-title">
+            <span>选择模板</span>
+            <Text type="secondary">选择一个生成入口后继续创建任务</Text>
+          </div>
+        }
         className="ai-task-kind-modal"
-        width={880}
+        width={760}
         footer={
           <Space size={10}>
+            <Button onClick={() => setCreateKindModalOpen(false)}>取消</Button>
             <Button type="primary" disabled={!selectedCreateKindOption || selectedCreateKindOption.disabled} onClick={handleCreateKindConfirm}>
               确认
             </Button>
-            <Button onClick={() => setCreateKindModalOpen(false)}>取消</Button>
           </Space>
         }
         onCancel={() => setCreateKindModalOpen(false)}
@@ -866,6 +834,17 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                   <span className="ai-task-kind-title">{option.title}</span>
                   <span className="ai-task-kind-description">{option.description}</span>
                 </span>
+                {option.disabled ? <span className="ai-task-kind-badge">暂未开放</span> : null}
+                {!option.disabled && selected ? (
+                  <span className="ai-task-kind-check" aria-hidden="true">
+                    <CheckOutlined />
+                  </span>
+                ) : null}
+                {!option.disabled && !selected ? (
+                  <span className="ai-task-kind-arrow" aria-hidden="true">
+                    <RightOutlined />
+                  </span>
+                ) : null}
               </button>
             )
           })}
@@ -919,12 +898,14 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
 
       <LlmConnectionSelectModal
         open={Boolean(llmSelectTaskId)}
+        projectId={activeProjectId}
         onClose={() => setLlmSelectTaskId(null)}
         onConfirm={handleLlmSelectConfirm}
         loading={runTaskMutation.isPending}
       />
       <LlmConnectionSelectModal
         open={Boolean(functionalLlmSelectTaskId)}
+        projectId={activeProjectId}
         onClose={() => {
           setFunctionalLlmSelectTaskId(null)
           setFunctionalCheckpointEnabled(false)

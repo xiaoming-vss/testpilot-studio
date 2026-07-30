@@ -112,7 +112,14 @@ export function buildUiTestSuiteUpdatePayload(suite: UiTestSuite, values: UiTest
   const payload: Partial<
     Pick<
       UiTestSuite,
-      'name' | 'description' | 'headless' | 'slowMoMs' | 'viewportWidth' | 'viewportHeight' | 'defaultStepTimeoutMs'
+      | 'name'
+      | 'description'
+      | 'headless'
+      | 'slowMoMs'
+      | 'viewportWidth'
+      | 'viewportHeight'
+      | 'defaultStepTimeoutMs'
+      | 'screenshotPolicy'
     >
   > = {}
 
@@ -128,6 +135,7 @@ export function buildUiTestSuiteUpdatePayload(suite: UiTestSuite, values: UiTest
     suite.defaultStepTimeoutMs ?? undefined,
     values.defaultStepTimeoutMs,
   )
+  setDefinedValueIfChanged(payload, 'screenshotPolicy', suite.screenshotPolicy ?? undefined, values.screenshotPolicy)
 
   return payload
 }

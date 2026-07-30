@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { LlmConnectionsPanel } from '@/features/base-services/components/LlmConnectionsPanel'
 import { ZentaoConnectionsPanel } from '@/features/base-services/components/ZentaoConnectionsPanel'
+import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -46,6 +47,7 @@ const tabOptions: Array<{
 
 export function BaseServicesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { activeProjectId } = useActiveProject()
 
   const activeTab = useMemo<BaseServiceTab>(() => {
     const tab = searchParams.get('tab')
@@ -89,9 +91,9 @@ export function BaseServicesPage() {
       <section className="workbench-panel base-services-panel">
         <div className={`base-services-panel-body${activeTab === 'zentao' || activeTab === 'llm' ? ' base-services-panel-body-immersive' : ''}`}>
           {activeTab === 'zentao' ? (
-            <ZentaoConnectionsPanel />
+            <ZentaoConnectionsPanel projectId={activeProjectId} />
           ) : activeTab === 'llm' ? (
-            <LlmConnectionsPanel />
+            <LlmConnectionsPanel projectId={activeProjectId} />
           ) : (
             <>
               <div className="base-services-panel-header">

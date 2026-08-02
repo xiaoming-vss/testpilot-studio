@@ -31,8 +31,9 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
 import { FunctionalCaseGenerateTaskDrawer, type FunctionalCaseGenerateTaskFormValues } from '../components/FunctionalCaseGenerateTaskDrawer'
+import { UiCaseGenerateTaskDrawer, type UiCaseGenerateTaskFormValues } from '../components/UiCaseGenerateTaskDrawer'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
-import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun, FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun } from '../types'
+import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun, FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun, UiCaseGenerateTask, UiCaseGenerateTaskRun } from '../types'
 import { getApiCaseGenerateTaskRunStatusMeta, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
@@ -53,6 +54,10 @@ type UnifiedAiTask =
   | {
       kind: 'functional'
       task: FunctionalCaseGenerateTask
+    }
+  | {
+      kind: 'ui'
+      task: UiCaseGenerateTask
     }
 
 const createKindOptions: Array<{
@@ -77,9 +82,8 @@ const createKindOptions: Array<{
   {
     key: 'ui',
     title: 'UI测试',
-    description: 'UI 生成任务暂未接入创建流程。',
+    description: '上传 ZIP 源码包生成可编辑、可审核的 UI 候选用例。',
     icon: <BugOutlined />,
-    disabled: true,
   },
 ]
 
@@ -91,8 +95,14 @@ function getFunctionalTaskId(task: FunctionalCaseGenerateTask) {
   return task.taskId ?? ''
 }
 
+function getUiTaskId(task: UiCaseGenerateTask) {
+  return task.taskId ?? ''
+}
+
 function getUnifiedTaskKey(item: UnifiedAiTask) {
-  return `${item.kind}:${item.kind === 'api' ? getTaskId(item.task) : getFunctionalTaskId(item.task)}`
+  if (item.kind === 'api') return `api:${getTaskId(item.task)}`
+  if (item.kind === 'functional') return `functional:${getFunctionalTaskId(item.task)}`
+  return `ui:${getUiTaskId(item.task)}`
 }
 
 function getUnifiedTaskTime(item: UnifiedAiTask) {
@@ -107,12 +117,12 @@ function footerRange(total: number, page: number, pageSize: number) {
   return `显示第 ${start} 条 - 第 ${end} 条，共 ${total} 条`
 }
 
-function getRunSortTime(run: ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun) {
+function getRunSortTime(run: ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun | UiCaseGenerateTaskRun) {
   const time = new Date(run.createdAt || run.startedAt || run.updatedAt || '').getTime()
   return Number.isNaN(time) ? 0 : time
 }
 
-function getLatestRun<T extends ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun>(runs?: T[]) {
+function getLatestRun<T extends ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun | UiCaseGenerateTaskRun>(runs?: T[]) {
   return [...(runs ?? [])].sort((left, right) => getRunSortTime(right) - getRunSortTime(left))[0]
 }
 
@@ -120,6 +130,7 @@ function sourceTypeLabel(item: UnifiedAiTask) {
   if (item.kind === 'api') {
     return item.task.sourceType === 'swagger' ? 'Swagger导入' : 'OpenAPI导入'
   }
+  if (item.kind === 'ui') return 'ZIP 源码包'
   return '需求分析'
 }
 
@@ -149,11 +160,15 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   const [selectedCreateKind, setSelectedCreateKind] = useState<AiTaskKind>('api')
   const [llmSelectTaskId, setLlmSelectTaskId] = useState<string | null>(null)
   const [functionalLlmSelectTaskId, setFunctionalLlmSelectTaskId] = useState<string | null>(null)
+  const [uiLlmSelectTaskId, setUiLlmSelectTaskId] = useState<string | null>(null)
   const [functionalCheckpointEnabled, setFunctionalCheckpointEnabled] = useState(false)
+  const [uiDrawerOpen, setUiDrawerOpen] = useState(false)
+  const [uiDrawerSprintId, setUiDrawerSprintId] = useState<string | undefined>(undefined)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
   const [functionalForm] = Form.useForm<FunctionalCaseGenerateTaskFormValues>()
+  const [uiForm] = Form.useForm<UiCaseGenerateTaskFormValues>()
 
   const tasksQuery = useQuery({
     queryKey: ['apiCaseGenerateTasks', activeProjectId],
@@ -163,6 +178,11 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   const functionalTasksQuery = useQuery({
     queryKey: ['functionalCaseGenerateTasks', activeProjectId],
     queryFn: () => api.getFunctionalCaseGenerateTasks(activeProjectId!),
+    enabled: Boolean(activeProjectId),
+  })
+  const uiTasksQuery = useQuery({
+    queryKey: ['uiCaseGenerateTasks', activeProjectId],
+    queryFn: () => api.getUiCaseGenerateTasks(activeProjectId!),
     enabled: Boolean(activeProjectId),
   })
   const sprintsQuery = useQuery({
@@ -183,6 +203,11 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     queryKey: ['requirements', 'aiTestingFunctional', functionalDrawerSprintId],
     queryFn: () => api.getRequirements(functionalDrawerSprintId!),
     enabled: Boolean(functionalDrawerSprintId),
+  })
+  const uiRequirementOptionsQuery = useQuery({
+    queryKey: ['requirements', 'aiTestingUi', uiDrawerSprintId],
+    queryFn: () => api.getRequirements(uiDrawerSprintId!),
+    enabled: Boolean(uiDrawerSprintId),
   })
   const allRequirementsQuery = useQuery({
     queryKey: ['requirementsPool', 'aiTesting', activeProjectId, sprintOptions.map((item) => item.value).join(',')],
@@ -209,6 +234,14 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       })),
     [functionalRequirementOptionsQuery.data],
   )
+  const uiRequirementOptions = useMemo(
+    () =>
+      listItems(uiRequirementOptionsQuery.data).map((requirement) => ({
+        label: requirement.name,
+        value: normalizeRequirementId(requirement),
+      })),
+    [uiRequirementOptionsQuery.data],
+  )
   const sprintNameMap = useMemo(
     () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
@@ -227,8 +260,9 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       [
         ...listItems(tasksQuery.data).map((task) => ({ kind: 'api' as const, task })),
         ...listItems(functionalTasksQuery.data).map((task) => ({ kind: 'functional' as const, task })),
+        ...listItems(uiTasksQuery.data).map((task) => ({ kind: 'ui' as const, task })),
       ].sort((left, right) => getUnifiedTaskTime(right) - getUnifiedTaskTime(left)),
-    [functionalTasksQuery.data, tasksQuery.data],
+    [functionalTasksQuery.data, tasksQuery.data, uiTasksQuery.data],
   )
   const pagedTasks = useMemo(
     () => unifiedTasks.slice((page - 1) * pageSize, page * pageSize),
@@ -243,6 +277,10 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       pagedTasks
         .filter((item): item is Extract<UnifiedAiTask, { kind: 'functional' }> => item.kind === 'functional')
         .map((item) => item.task),
+    [pagedTasks],
+  )
+  const pagedUiTasks = useMemo(
+    () => pagedTasks.filter((item): item is Extract<UnifiedAiTask, { kind: 'ui' }> => item.kind === 'ui').map((item) => item.task),
     [pagedTasks],
   )
   const apiTaskRunQueries = useQueries({
@@ -261,6 +299,16 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       return {
         queryKey: ['functionalCaseGenerateTaskRuns', taskId],
         queryFn: () => api.getFunctionalCaseGenerateTaskRuns(taskId),
+        enabled: Boolean(taskId),
+      }
+    }),
+  })
+  const uiTaskRunQueries = useQueries({
+    queries: pagedUiTasks.map((task) => {
+      const taskId = getUiTaskId(task)
+      return {
+        queryKey: ['uiCaseGenerateTaskRuns', taskId],
+        queryFn: () => api.getUiCaseGenerateTaskRuns(taskId),
         enabled: Boolean(taskId),
       }
     }),
@@ -285,6 +333,16 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     ] as const)
     return new Map(entries)
   }, [functionalTaskRunQueries, pagedFunctionalTasks])
+  const latestUiRunMap = useMemo(() => {
+    const entries = pagedUiTasks.map((task, index) => [
+      getUiTaskId(task),
+      {
+        isLoading: uiTaskRunQueries[index]?.isLoading ?? false,
+        latestRun: getLatestRun(uiTaskRunQueries[index]?.data),
+      },
+    ] as const)
+    return new Map(entries)
+  }, [pagedUiTasks, uiTaskRunQueries])
   const selectedCreateKindOption = useMemo(
     () => createKindOptions.find((option) => option.key === selectedCreateKind),
     [selectedCreateKind],
@@ -380,6 +438,52 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     },
   })
 
+  const createUiTaskMutation = useMutation({
+    mutationFn: async (values: UiCaseGenerateTaskFormValues) => {
+      const { sourceArchiveFile, ...payload } = values
+      const task = await api.createUiCaseGenerateTask(activeProjectId!, payload)
+      const taskId = getUiTaskId(task)
+      try {
+        return await api.uploadUiCaseGenerateTaskSourceArchive(taskId, sourceArchiveFile)
+      } catch (error) {
+        navigate(`/ai-testing/ui-tasks/${taskId}`, {
+          state: {
+            pendingSourceArchive: sourceArchiveFile,
+            pendingSourceArchiveError: getErrorMessage(error),
+          },
+        })
+        throw error
+      }
+    },
+    onSuccess: (task) => {
+      const taskId = getUiTaskId(task)
+      message.success('UI 任务和源码包已创建')
+      closeUiDrawer()
+      queryClient.setQueryData(['uiCaseGenerateTask', taskId], task)
+      queryClient.invalidateQueries({ queryKey: ['uiCaseGenerateTasks', activeProjectId] })
+      navigate(`/ai-testing/ui-tasks/${taskId}`)
+    },
+  })
+
+  const deleteUiTaskMutation = useMutation({
+    mutationFn: (taskId: string) => api.deleteUiCaseGenerateTask(taskId),
+    onSuccess: () => {
+      message.success('UI 任务已删除')
+      queryClient.invalidateQueries({ queryKey: ['uiCaseGenerateTasks', activeProjectId] })
+    },
+  })
+
+  const runUiTaskMutation = useMutation({
+    mutationFn: ({ taskId, connectionId }: { taskId: string; connectionId: string }) =>
+      api.runUiCaseGenerateTask(taskId, { connectionId }),
+    onSuccess: (run) => {
+      message.success('任务已加入执行队列')
+      setUiLlmSelectTaskId(null)
+      queryClient.invalidateQueries({ queryKey: ['uiCaseGenerateTaskRuns', run.taskId] })
+      queryClient.invalidateQueries({ queryKey: ['uiCaseGenerateTasks', activeProjectId] })
+    },
+  })
+
   function openCreateDrawer() {
     setEditingTask(null)
     const defaultSprintId = sprintOptions[0]?.value
@@ -448,6 +552,25 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     functionalForm.resetFields()
   }
 
+  function openCreateUiDrawer() {
+    const defaultSprintId = sprintOptions[0]?.value
+    setUiDrawerSprintId(defaultSprintId)
+    uiForm.setFieldsValue({
+      name: '',
+      sprintId: defaultSprintId,
+      requirementId: undefined,
+      instruction: '',
+      sourceArchiveFile: undefined,
+    })
+    setUiDrawerOpen(true)
+  }
+
+  function closeUiDrawer() {
+    setUiDrawerOpen(false)
+    setUiDrawerSprintId(undefined)
+    uiForm.resetFields()
+  }
+
   function openCreateKindModal() {
     setSelectedCreateKind('api')
     setCreateKindModalOpen(true)
@@ -472,6 +595,8 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       openCreateFunctionalDrawer()
       return
     }
+    setCreateKindModalOpen(false)
+    openCreateUiDrawer()
   }
 
   function handleRunTask(task: ApiCaseGenerateTask) {
@@ -536,6 +661,20 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     })
   }
 
+  function handleRunUiTask(task: UiCaseGenerateTask) {
+    const taskId = getUiTaskId(task)
+    const latestRun = latestUiRunMap.get(taskId)?.latestRun
+    if (!task.sourceArchive) {
+      message.warning('请先上传源码 ZIP')
+      return
+    }
+    if (!isRunnableApiCaseGenerateTaskRun(latestRun?.status)) {
+      message.warning('任务执行中，暂时不能重复运行')
+      return
+    }
+    setUiLlmSelectTaskId(taskId)
+  }
+
   function getUnifiedTaskContext(item: UnifiedAiTask) {
     if (item.kind === 'api') {
       const task = item.task
@@ -547,6 +686,18 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       const sprintName = sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'
       const requirementName = requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'
 
+      return { detailPath, latestRun, requirementName, runState, runnableTask, source: sourceTypeLabel(item), sprintName, taskId }
+    }
+
+    if (item.kind === 'ui') {
+      const task = item.task
+      const taskId = getUiTaskId(task)
+      const runState = latestUiRunMap.get(taskId)
+      const latestRun = runState?.latestRun
+      const runnableTask = Boolean(task.sourceArchive) && !runState?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
+      const detailPath = `/ai-testing/ui-tasks/${taskId}`
+      const sprintName = sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'
+      const requirementName = requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'
       return { detailPath, latestRun, requirementName, runState, runnableTask, source: sourceTypeLabel(item), sprintName, taskId }
     }
 
@@ -636,6 +787,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       render: (_, item) => {
         const { detailPath, runState, runnableTask, taskId } = getUnifiedTaskContext(item)
         const isApiTask = item.kind === 'api'
+        const isUiTask = item.kind === 'ui'
         return (
           <Space
             size={6}
@@ -655,6 +807,10 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                   onClick={() => {
                     if (isApiTask) {
                       handleRunTask(item.task)
+                      return
+                    }
+                    if (isUiTask) {
+                      handleRunUiTask(item.task)
                       return
                     }
                     handleRunFunctionalTask(item.task)
@@ -685,6 +841,10 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                       openEditDrawer(item.task)
                       return
                     }
+                    if (isUiTask) {
+                      navigate(detailPath)
+                      return
+                    }
                     openEditFunctionalDrawer(item.task)
                   }}
                 />
@@ -695,6 +855,10 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
               onConfirm={() => {
                 if (isApiTask) {
                   deleteTaskMutation.mutate(taskId)
+                  return
+                }
+                if (isUiTask) {
+                  deleteUiTaskMutation.mutate(taskId)
                   return
                 }
                 deleteFunctionalTaskMutation.mutate(taskId)
@@ -711,7 +875,9 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                   loading={
                     isApiTask
                       ? deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId
-                      : deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId
+                      : isUiTask
+                        ? deleteUiTaskMutation.isPending && deleteUiTaskMutation.variables === taskId
+                        : deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId
                   }
                 />
               </Tooltip>
@@ -746,13 +912,14 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
           {functionalTasksQuery.error ? (
             <Alert showIcon type="error" title={getErrorMessage(functionalTasksQuery.error)} style={{ margin: '12px 18px 0' }} />
           ) : null}
+          {uiTasksQuery.error ? <Alert showIcon type="error" title={getErrorMessage(uiTasksQuery.error)} style={{ margin: '12px 18px 0' }} /> : null}
 
           <div className="table-body-scroll ai-testing-card-scroll">
             {!activeProjectId ? (
               <div className="sprint-card-loading ai-testing-empty-shell">
                 <Empty description="请先选择项目" />
               </div>
-            ) : tasksQuery.isLoading || functionalTasksQuery.isLoading ? (
+            ) : tasksQuery.isLoading || functionalTasksQuery.isLoading || uiTasksQuery.isLoading ? (
               <div className="sprint-card-loading ai-testing-empty-shell">
                 <Empty description="任务加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
               </div>
@@ -896,12 +1063,36 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
         }}
       />
 
+      <UiCaseGenerateTaskDrawer
+        open={uiDrawerOpen}
+        form={uiForm}
+        loading={createUiTaskMutation.isPending}
+        error={createUiTaskMutation.error}
+        sprintOptions={sprintOptions}
+        requirementOptions={uiRequirementOptions}
+        onSprintChange={(value) => {
+          setUiDrawerSprintId(value)
+          uiForm.setFieldValue('requirementId', undefined)
+        }}
+        onClose={closeUiDrawer}
+        onFinish={(values) => createUiTaskMutation.mutate(values)}
+      />
+
       <LlmConnectionSelectModal
         open={Boolean(llmSelectTaskId)}
         projectId={activeProjectId}
         onClose={() => setLlmSelectTaskId(null)}
         onConfirm={handleLlmSelectConfirm}
         loading={runTaskMutation.isPending}
+      />
+      <LlmConnectionSelectModal
+        open={Boolean(uiLlmSelectTaskId)}
+        projectId={activeProjectId}
+        onClose={() => setUiLlmSelectTaskId(null)}
+        onConfirm={(connectionId) => {
+          if (uiLlmSelectTaskId) runUiTaskMutation.mutate({ taskId: uiLlmSelectTaskId, connectionId })
+        }}
+        loading={runUiTaskMutation.isPending}
       />
       <LlmConnectionSelectModal
         open={Boolean(functionalLlmSelectTaskId)}

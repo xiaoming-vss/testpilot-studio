@@ -1,4 +1,5 @@
 export type ApiCaseGenerateTaskSourceType = 'openapi' | 'swagger'
+export type UiCaseGenerateTaskSourceType = 'source_archive'
 export type FunctionalCaseGenerateTaskSourceType = 'text' | 'docx'
 export type RequirementAnalysisTaskSourceType = 'text' | 'word' | 'docx' | string
 export type ApiCaseGenerateTaskRunStatus =
@@ -19,6 +20,11 @@ export type ApiCaseGenerateTaskRunImportedTarget = {
   targetType: 'api_collection' | (string & {})
   targetId: string
 }
+
+export type CaseGenerateTaskRunStatus = ApiCaseGenerateTaskRunStatus
+export type CaseGenerateTaskRunReviewStatus = ApiCaseGenerateTaskRunReviewStatus
+export type CaseGenerateTaskRunImportStatus = ApiCaseGenerateTaskRunImportStatus
+export type CaseGenerateTaskRunImportedTarget = ApiCaseGenerateTaskRunImportedTarget
 
 export type AiSkillLibraryItem = {
   skillSpaceId: string
@@ -79,6 +85,72 @@ export type ApiCaseGenerateTask = {
   updatedAt?: string
 }
 
+export type UiCaseSourceArchive = {
+  archiveId: string
+  filename: string
+  sizeBytes: number
+  sha256: string
+  uploadedAt: string
+}
+
+export type UiCaseGenerateTask = {
+  taskId?: string
+  taskType?: 'ui_case_generate' | string
+  name: string
+  projectId?: string
+  sprintId?: string
+  requirementId?: string
+  creatorUserId?: string
+  sourceType: UiCaseGenerateTaskSourceType
+  sourceContent: ''
+  sourceArchive: UiCaseSourceArchive | null
+  instruction: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type UiCaseGenerateTaskRunSnapshot = {
+  instruction?: string
+  name?: string
+  projectId?: string
+  requirementId?: string
+  runId?: string
+  sourceType?: UiCaseGenerateTaskSourceType
+  sprintId?: string
+  taskId?: string
+  taskType?: string
+  sourceArchive?: UiCaseSourceArchive | null
+  [key: string]: unknown
+}
+
+export type UiCaseGenerateTaskRun = {
+  runId?: string
+  taskId?: string
+  projectId?: string
+  sprintId?: string
+  requirementId?: string
+  status?: CaseGenerateTaskRunStatus
+  reviewStatus?: CaseGenerateTaskRunReviewStatus
+  importStatus?: CaseGenerateTaskRunImportStatus
+  importedTargets?: CaseGenerateTaskRunImportedTarget[]
+  importedAt?: string | null
+  reviewerUserId?: string
+  reviewedAt?: string
+  reviewComment?: string
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
+  errorMessage?: string
+  createdAt?: string
+  updatedAt?: string
+  triggerType?: string
+  triggerUserId?: string
+  snapshot?: UiCaseGenerateTaskRunSnapshot
+  configJson?: unknown
+  resultYaml?: string
+  resultSummaryJson?: unknown
+}
+
 export type ApiCaseGenerateTaskRunSnapshot = {
   instruction?: string
   name?: string
@@ -129,6 +201,27 @@ export type CreateApiCaseGenerateTaskPayload = {
   sourceContent: string
   instruction: string
 }
+
+export type CreateUiCaseGenerateTaskPayload = {
+  name: string
+  sprintId: string
+  requirementId: string
+  instruction?: string
+}
+
+export type UpdateUiCaseGenerateTaskPayload = Partial<CreateUiCaseGenerateTaskPayload>
+
+export type RunUiCaseGenerateTaskPayload = {
+  connectionId: string
+}
+
+export type UpdateUiCaseGenerateTaskRunResultPayload = {
+  resultYaml: string
+}
+
+export type ReviewUiCaseGenerateTaskRunPayload =
+  | { action: 'approve'; reviewComment?: string }
+  | { action: 'reject'; reviewComment?: string }
 
 export type UpdateApiCaseGenerateTaskPayload = Partial<CreateApiCaseGenerateTaskPayload>
 

@@ -26,6 +26,7 @@ import { AiSkillLibraryPage } from '@/features/ai-testing/pages/AiSkillLibraryPa
 import { AiTestingOverviewPage } from '@/features/ai-testing/pages/AiTestingOverviewPage'
 import { ApiCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/ApiCaseGenerateTaskDetailPage'
 import { FunctionalCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/FunctionalCaseGenerateTaskDetailPage'
+import { UiCaseGenerateTaskDetailPage } from '@/features/ai-testing/pages/UiCaseGenerateTaskDetailPage'
 import { RequirementAnalysisTaskDetailPage } from '@/features/ai-testing/pages/RequirementAnalysisTaskDetailPage'
 import { BaseServicesPage } from '@/features/base-services/pages/BaseServicesPage'
 import { TestingPage } from '@/features/testing/pages/TestingPage'
@@ -165,6 +166,7 @@ export function AppShell() {
             <Route path="/ai-testing/tasks" element={<UnifiedAiTestingPage />} />
             <Route path="/ai-testing/tasks/:taskId" element={<ApiCaseGenerateTaskDetailPage />} />
             <Route path="/ai-testing/function-tasks/:taskId" element={<FunctionalCaseGenerateTaskDetailPage />} />
+            <Route path="/ai-testing/ui-tasks/:taskId" element={<UiCaseGenerateTaskDetailPage />} />
             <Route path="/ai-testing/requirement-analysis-tasks/:taskId" element={<RequirementAnalysisTaskDetailPage />} />
             <Route path="/base-services" element={<BaseServicesPage />} />
             <Route path="/api-automation" element={<Navigate to="/testing?tab=api" replace />} />

@@ -125,7 +125,10 @@ UI 层以 Ant Design 为基础组件库，辅以大量业务样式文件实现�
 | `/testing` | 测试主工作台，基于 `tab` 在功能/API/UI 间切换 |
 | `/test-cases/suites/:suiteId` | 功能测试集详情页 |
 | `/ai-testing` | AI 测试首页 |
+| `/ai-testing/tasks` | API、功能与 UI 生成任务统一列表 |
 | `/ai-testing/tasks/:taskId` | API 用例生成任务详情 |
+| `/ai-testing/function-tasks/:taskId` | 功能用例生成任务详情 |
+| `/ai-testing/ui-tasks/:taskId` | UI 用例生成任务详情与源码包、候选审核工作区 |
 | `/base-services` | 基础服务页 |
 | `/api-automation/collections/:collectionId` | API 测试集详情页 |
 | `/ui-automation/suites/:suiteId` | UI 测试集详情页 |
@@ -210,6 +213,15 @@ UI 层以 Ant Design 为基础组件库，辅以大量业务样式文件实现�
 - `ApiCaseGenerateTaskRun`
   - 记录任务执行状态、快照、审核状态等
   - 运行时需要显式传入一个可用的 `LlmConnection.connectionId`
+- `UiCaseGenerateTask`
+  - 隶属于项目，同时关联迭代和必填需求
+  - 以可替换的 `UiCaseSourceArchive` 作为唯一生成来源，不保存或展示 `sourceContent`
+- `UiCaseSourceArchive`
+  - 保存 ZIP 文件名、字节大小、SHA256 与上传时间元数据
+  - 浏览器不读取或解压其源码内容
+- `UiCaseGenerateTaskRun`
+  - 记录 pending、claimed、running、success、failed 状态以及完整候选 YAML
+  - 成功且待审核时允许编辑，批准或拒绝后冻结；审核与正式资产导入相互独立
 
 ### 5.6 基础服务域
 
@@ -309,15 +321,17 @@ UI 层以 Ant Design 为基础组件库，辅以大量业务样式文件实现�
 
 职责：
 
-- 管理 API 用例生成任务
+- 通过统一列表管理 API、功能与 UI 用例生成任务
 - 查看任务运行记录
 - 在任务运行前选择可用的 LLM 连接
-- 为未来 UI/功能测试生成保留入口
+- 管理 UI 任务的 ZIP 源码包、候选结果编辑和审核
 
 设计要点：
 
-- 当前仅 `API测试` 标签页接入真实数据与操作
-- `UI测试`、`功能测试` 仅展示 Coming Soon 占位态
+- 三类生成任务使用同一列表，并以任务类型标签和来源列区分
+- UI 任务创建采用“先创建任务、再上传 ZIP”的两请求流程；上传失败保留任务供详情页重试
+- 源码包与运行服务端状态由 React Query 管理，本地文件、弹窗和 YAML 草稿保持为页面临时状态
+- UI 候选使用 YAML 解析器做结构化预览，但保存始终提交完整原文，避免丢失未知字段
 - 列表页与详情页的“运行”操作都会先弹出 LLM 连接选择弹窗
 - 仅允许选择状态为 `active` 的 LLM 连接
 - 若没有可用连接，前端引导用户跳转到基础服务页完成配置
@@ -467,7 +481,8 @@ type ApiEnvelope<T> = {
 - 功能测试集与功能测试用例编辑
 - API 测试集列表、环境管理、用例编辑、断言、提取、运行报告、导入
 - UI 测试集列表、步骤编排、调试运行、测试集报告、导入
-- AI 测试中的 API 用例生成任务管理
+- AI 测试中的 API、功能与 UI 用例生成任务管理
+- UI 生成源码包上传与替换、运行轮询、候选 YAML 编辑和人工审核
 - AI 测试运行前的 LLM 连接选择流程
 - 禅道连接管理与绑定入口
 - LLM 连接管理
@@ -475,7 +490,7 @@ type ApiEnvelope<T> = {
 ### 9.2 半实现或占位能力
 
 - 项目详情页、迭代详情页更多业务深化能力未在当前代码中形成独立完整工作流
-- AI 测试中的 UI 测试生成、功能测试生成仍为占位态
+- UI 候选结果导入正式 UI 测试套件仍属于后续能力
 - 基础服务中的 GitLab 为待后端接入骨架
 - 功能测试当前偏测试资产维护，未形成完整执行闭环
 

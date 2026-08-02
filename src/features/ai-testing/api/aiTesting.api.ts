@@ -6,6 +6,7 @@ import type {
   CreateApiCaseGenerateTaskPayload,
   CreateFunctionalCaseGenerateTaskPayload,
   CreateRequirementAnalysisTaskPayload,
+  CreateUiCaseGenerateTaskPayload,
   FunctionalCaseGenerateTask,
   FunctionalCaseGenerateTaskRun,
   ImportApiCaseGenerateTaskRunPayload,
@@ -20,6 +21,7 @@ import type {
   RetryFunctionalCaseGenerateTaskRunStagePayload,
   RunFunctionalCaseGenerateTaskPayload,
   RunRequirementAnalysisTaskPayload,
+  RunUiCaseGenerateTaskPayload,
   UpdateApiCaseGenerateTaskPayload,
   UpdateApiCaseGenerateTaskRunResultPayload,
   UploadAiSkillPayload,
@@ -27,6 +29,11 @@ import type {
   UpdateFunctionalCaseGenerateTaskRunStageOutputPayload,
   UpdateRequirementAnalysisTaskPayload,
   UpdateRequirementAnalysisTaskRunStageOutputPayload,
+  ReviewUiCaseGenerateTaskRunPayload,
+  UiCaseGenerateTask,
+  UiCaseGenerateTaskRun,
+  UpdateUiCaseGenerateTaskPayload,
+  UpdateUiCaseGenerateTaskRunResultPayload,
 } from '../types'
 import type { Requirement } from '@/features/requirements/types'
 
@@ -148,6 +155,49 @@ export const aiTestingApi = {
   deleteFunctionalCaseGenerateTask: (taskId: string) =>
     request<Record<string, never>>(`/v1/function-case-generate-tasks/${taskId}`, {
       method: 'DELETE',
+    }),
+  getUiCaseGenerateTasks: (projectId: string) =>
+    request<ListResponse<UiCaseGenerateTask>>(`/v1/projects/${projectId}/ui-case-generate-tasks`),
+  createUiCaseGenerateTask: (projectId: string, body: CreateUiCaseGenerateTaskPayload) =>
+    request<UiCaseGenerateTask>(`/v1/projects/${projectId}/ui-case-generate-tasks`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  getUiCaseGenerateTask: (taskId: string) =>
+    request<UiCaseGenerateTask>(`/v1/ui-case-generate-tasks/${taskId}`),
+  updateUiCaseGenerateTask: (taskId: string, body: UpdateUiCaseGenerateTaskPayload) =>
+    request<UiCaseGenerateTask>(`/v1/ui-case-generate-tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteUiCaseGenerateTask: (taskId: string) =>
+    request<Record<string, never>>(`/v1/ui-case-generate-tasks/${taskId}`, { method: 'DELETE' }),
+  uploadUiCaseGenerateTaskSourceArchive: (taskId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+    return request<UiCaseGenerateTask>(`/v1/ui-case-generate-tasks/${taskId}/source-archive`, {
+      method: 'PUT',
+      body: formData,
+    })
+  },
+  runUiCaseGenerateTask: (taskId: string, body: RunUiCaseGenerateTaskPayload) =>
+    request<UiCaseGenerateTaskRun>(`/v1/ui-case-generate-tasks/${taskId}/run`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  getUiCaseGenerateTaskRuns: (taskId: string) =>
+    request<ListResponse<UiCaseGenerateTaskRun>>(`/v1/ui-case-generate-tasks/${taskId}/runs`),
+  getUiCaseGenerateTaskRun: (runId: string) =>
+    request<UiCaseGenerateTaskRun>(`/v1/ui-case-generate-task-runs/${runId}`),
+  updateUiCaseGenerateTaskRunResult: (runId: string, body: UpdateUiCaseGenerateTaskRunResultPayload) =>
+    request<UiCaseGenerateTaskRun>(`/v1/ui-case-generate-task-runs/${runId}/result`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  reviewUiCaseGenerateTaskRun: (runId: string, body: ReviewUiCaseGenerateTaskRunPayload) =>
+    request<UiCaseGenerateTaskRun>(`/v1/ui-case-generate-task-runs/${runId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
   getRequirementAnalysisTasks: (projectId: string) =>
     request<ListResponse<RequirementAnalysisTask>>(`/v1/projects/${projectId}/requirement-analysis-tasks`),

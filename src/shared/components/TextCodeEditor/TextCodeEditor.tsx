@@ -74,6 +74,8 @@ type TextCodeEditorProps = {
   onChange?: (value: string) => void
   height?: number
   minHeight?: number
+  readOnly?: boolean
+  ariaLabel?: string
 }
 
 export function TextCodeEditor({
@@ -81,6 +83,8 @@ export function TextCodeEditor({
   onChange,
   height,
   minHeight = 260,
+  readOnly = false,
+  ariaLabel,
 }: TextCodeEditorProps) {
   const themeMode = useThemeStore((state) => state.mode)
   const editorTheme = useMemo(
@@ -104,8 +108,14 @@ export function TextCodeEditor({
             keymap.of([indentWithTab]),
             EditorView.lineWrapping,
             editorTheme,
+            EditorView.contentAttributes.of({
+              ...(ariaLabel ? { 'aria-label': ariaLabel } : {}),
+              'aria-readonly': String(readOnly),
+            }),
           ]}
           className="json-editor-codemirror"
+          editable={!readOnly}
+          readOnly={readOnly}
           onChange={(nextValue) => onChange?.(nextValue)}
         />
       </div>

@@ -4837,3 +4837,40 @@
 .app-shell-macos .ai-testing-page .ai-testing-card-scroll {
   padding: 16px 18px !important;
 }
+.api-import-conflict-comparison {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.45fr) repeat(2, minmax(280px, 1fr));
+  overflow: auto;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+}
+
+.api-import-conflict-heading,
+.api-import-conflict-label,
+.api-import-conflict-value {
+  padding: 10px 12px;
+  border-right: 1px solid var(--ant-color-border-secondary);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.api-import-conflict-heading {
+  font-weight: 600;
+  background: var(--ant-color-fill-alter);
+}
+
+.api-import-conflict-row {
+  display: contents;
+}
+
+.api-import-conflict-label {
+  font-weight: 500;
+  background: var(--ant-color-fill-quaternary);
+}
+
+.api-import-conflict-value {
+  min-width: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}

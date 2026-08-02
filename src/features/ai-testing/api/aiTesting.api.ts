@@ -8,6 +8,8 @@ import type {
   CreateRequirementAnalysisTaskPayload,
   FunctionalCaseGenerateTask,
   FunctionalCaseGenerateTaskRun,
+  ImportApiCaseGenerateTaskRunPayload,
+  ImportApiCaseGenerateTaskRunResult,
   RequirementAnalysisTask,
   RequirementAnalysisTaskRun,
   ReviewApiCaseGenerateTaskRunPayload,
@@ -19,6 +21,7 @@ import type {
   RunFunctionalCaseGenerateTaskPayload,
   RunRequirementAnalysisTaskPayload,
   UpdateApiCaseGenerateTaskPayload,
+  UpdateApiCaseGenerateTaskRunResultPayload,
   UploadAiSkillPayload,
   UpdateFunctionalCaseGenerateTaskPayload,
   UpdateFunctionalCaseGenerateTaskRunStageOutputPayload,
@@ -71,8 +74,18 @@ export const aiTestingApi = {
     request<ListResponse<ApiCaseGenerateTaskRun>>(`/v1/api-case-generate-tasks/${taskId}/runs`),
   getApiCaseGenerateTaskRun: (runId: string) =>
     request<ApiCaseGenerateTaskRun>(`/v1/api-case-generate-task-runs/${runId}`),
+  updateApiCaseGenerateTaskRunResult: (runId: string, body: UpdateApiCaseGenerateTaskRunResultPayload) =>
+    request<ApiCaseGenerateTaskRun>(`/v1/api-case-generate-task-runs/${runId}/result`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   reviewApiCaseGenerateTaskRun: (runId: string, body: ReviewApiCaseGenerateTaskRunPayload) =>
     request<ApiCaseGenerateTaskRun>(`/v1/api-case-generate-task-runs/${runId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  importApiCaseGenerateTaskRun: (runId: string, body: ImportApiCaseGenerateTaskRunPayload) =>
+    request<ImportApiCaseGenerateTaskRunResult>(`/v1/api-case-generate-task-runs/${runId}/import`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

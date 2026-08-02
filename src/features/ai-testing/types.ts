@@ -13,6 +13,12 @@ export type ApiCaseGenerateTaskRunStatus =
   | string
 
 export type ApiCaseGenerateTaskRunReviewStatus = 'pending' | 'approved' | 'rejected' | string
+export type ApiCaseGenerateTaskRunImportStatus = 'pending' | 'imported' | (string & {})
+
+export type ApiCaseGenerateTaskRunImportedTarget = {
+  targetType: 'api_collection' | (string & {})
+  targetId: string
+}
 
 export type AiSkillLibraryItem = {
   skillSpaceId: string
@@ -94,6 +100,9 @@ export type ApiCaseGenerateTaskRun = {
   requirementId?: string
   status?: ApiCaseGenerateTaskRunStatus
   reviewStatus?: ApiCaseGenerateTaskRunReviewStatus
+  importStatus?: ApiCaseGenerateTaskRunImportStatus
+  importedTargets?: ApiCaseGenerateTaskRunImportedTarget[]
+  importedAt?: string
   importedCollectionId?: string
   reviewerUserId?: string
   reviewedAt?: string
@@ -122,6 +131,65 @@ export type CreateApiCaseGenerateTaskPayload = {
 }
 
 export type UpdateApiCaseGenerateTaskPayload = Partial<CreateApiCaseGenerateTaskPayload>
+
+export type UpdateApiCaseGenerateTaskRunResultPayload = {
+  resultYaml: string
+}
+
+export type ImportApiCaseGenerateTaskRunPayload = {
+  collectionId: string
+  confirmOverwrite?: boolean
+}
+
+export type ApiCaseGenerateTaskRunImportExtractRule = {
+  name?: string
+  enabled?: boolean
+  orderNo?: number
+  source?: string
+  sourceExpr?: string
+  varKey?: string
+  defaultValue?: unknown
+}
+
+export type ApiCaseGenerateTaskRunImportAssertRule = {
+  name?: string
+  enabled?: boolean
+  orderNo?: number
+  assertSource?: string
+  targetExpr?: string
+  comparator?: string
+  expectedValue?: unknown
+}
+
+export type ApiCaseGenerateTaskRunImportCase = {
+  name?: string
+  description?: string
+  enabled?: boolean
+  orderNo?: number
+  method?: string
+  urlTemplate?: string
+  headers?: unknown
+  query?: unknown
+  bodyType?: string
+  bodyJson?: unknown
+  bodyText?: string
+  timeoutMs?: number
+  continueOnFailure?: boolean
+  extractRules?: ApiCaseGenerateTaskRunImportExtractRule[]
+  assertRules?: ApiCaseGenerateTaskRunImportAssertRule[]
+}
+
+export type ApiCaseGenerateTaskRunImportConflict = {
+  normalizedName: string
+  existingCase: ApiCaseGenerateTaskRunImportCase
+  generatedCase: ApiCaseGenerateTaskRunImportCase
+}
+
+export type ImportApiCaseGenerateTaskRunResult = {
+  requiresConfirmation: boolean
+  conflicts: ApiCaseGenerateTaskRunImportConflict[]
+  run: ApiCaseGenerateTaskRun
+}
 
 export type FunctionalCaseGenerateTask = {
   taskId?: string
@@ -272,12 +340,11 @@ export type RunRequirementAnalysisTaskPayload = {
 export type ReviewApiCaseGenerateTaskRunPayload =
   | {
       action: 'approve'
-      collectionId: string
-      comment?: string
+      reviewComment?: string
     }
   | {
       action: 'reject'
-      comment?: string
+      reviewComment?: string
     }
 
 export type ReviewFunctionalCaseGenerateTaskRunPayload =

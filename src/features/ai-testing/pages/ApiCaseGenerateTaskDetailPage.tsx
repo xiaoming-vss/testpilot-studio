@@ -4,14 +4,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
+import { ApiImportConflictModal } from '../components/ApiImportConflictModal'
 import { AiTaskQuickLinks } from '../components/AiTaskQuickLinks'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
-import { isApiCaseGenerateTaskRunInProgress, isRunnableApiCaseGenerateTaskRun, renderApiCaseGenerateTaskRunStatusTag } from '../utils/taskStatus'
+import type {
+  ApiCaseGenerateTaskRunImportConflict,
+  ImportApiCaseGenerateTaskRunPayload,
+  ReviewApiCaseGenerateTaskRunPayload,
+} from '../types'
+import { isRunnableApiCaseGenerateTaskRun, renderApiCaseGenerateTaskRunStatusTag } from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser'
 import { useAuthStore } from '@/features/auth/store/auth.store'
 import { api, listItems } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
+import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, normalizeUserName, pickUpdatedAt } from '@/utils/format'
 
 const runResultSectionDefinitions = [
@@ -25,6 +32,12 @@ type RunResultSectionKey = (typeof runResultSectionDefinitions)[number]['key']
 type RunResultModalState = {
   key: RunResultSectionKey
   label: string
+} | null
+
+type ImportConflictState = {
+  runId: string
+  collectionId: string
+  conflicts: ApiCaseGenerateTaskRunImportConflict[]
 } | null
 
 type ApiConfigRule = {
@@ -56,9 +69,14 @@ type ApiConfigDiagramData = {
 }
 
 const reviewStatusMetaMap: Record<string, { label: string; color: string }> = {
+  pending: { label: '待审核', color: 'gold' },
+  approved: { label: '已批准', color: 'success' },
+  rejected: { label: '已拒绝', color: 'default' },
+}
+
+const importStatusMetaMap: Record<string, { label: string; color: string }> = {
   pending: { label: '待导入', color: 'gold' },
-  approved: { label: '已导入', color: 'success' },
-  rejected: { label: '已丢弃', color: 'default' },
+  imported: { label: '已导入', color: 'success' },
 }
 
 function formatStructuredContent(value?: unknown) {
@@ -93,6 +111,15 @@ function renderReviewStatusTag(status?: string) {
     color: 'default',
   }
 
+  return <Tag color={meta.color}>{meta.label}</Tag>
+}
+
+function renderImportStatusTag(status?: string) {
+  const normalizedStatus = status ?? 'pending'
+  const meta = importStatusMetaMap[normalizedStatus] ?? {
+    label: normalizedStatus,
+    color: 'default',
+  }
   return <Tag color={meta.color}>{meta.label}</Tag>
 }
 
@@ -405,9 +432,14 @@ export function ApiCaseGenerateTaskDetailPage() {
   const [selectedRunRecordId, setSelectedRunRecordId] = useState<string | null>(null)
   const [runResultModal, setRunResultModal] = useState<RunResultModalState>(null)
   const [reviewModalRunId, setReviewModalRunId] = useState<string | null>(null)
+  const [discardCandidateConfirmOpen, setDiscardCandidateConfirmOpen] = useState(false)
+  const [importModalRunId, setImportModalRunId] = useState<string | null>(null)
+  const [importConflict, setImportConflict] = useState<ImportConflictState>(null)
   const [reviewSubmitAction, setReviewSubmitAction] = useState<'approve' | 'reject' | null>(null)
+  const [candidateYaml, setCandidateYaml] = useState('')
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
-  const [reviewForm] = Form.useForm<{ collectionId?: string; comment?: string }>()
+  const [reviewForm] = Form.useForm<{ reviewComment?: string }>()
+  const [importForm] = Form.useForm<{ collectionId: string }>()
   useCurrentUser()
   const currentUser = useAuthStore((state) => state.user)
 
@@ -573,18 +605,58 @@ export function ApiCaseGenerateTaskDetailPage() {
   const reviewRunMutation = useMutation({
     mutationFn: (payload: {
       runId: string
-      body:
-        | { action: 'approve'; collectionId: string; comment?: string }
-        | { action: 'reject'; comment?: string }
+      body: ReviewApiCaseGenerateTaskRunPayload
     }) => api.reviewApiCaseGenerateTaskRun(payload.runId, payload.body),
     onSuccess: (updatedRun, payload) => {
-      message.success(payload.body.action === 'approve' ? '已导入API测试集' : '已丢弃本次生成结果')
+      message.success(payload.body.action === 'approve' ? '候选结果已批准' : '候选结果已拒绝')
       setReviewModalRunId(null)
       setReviewSubmitAction(null)
       reviewForm.resetFields()
       setSelectedRunRecordId(updatedRun.runId ?? payload.runId)
-      queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTaskRun', payload.runId] })
+      queryClient.setQueryData(['apiCaseGenerateTaskRun', payload.runId], updatedRun)
       queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTaskRuns', taskId] })
+    },
+  })
+
+  const updateRunResultMutation = useMutation({
+    mutationFn: (payload: { runId: string; resultYaml: string }) =>
+      api.updateApiCaseGenerateTaskRunResult(payload.runId, { resultYaml: payload.resultYaml }),
+    onSuccess: (updatedRun, payload) => {
+      const savedYaml = updatedRun.resultYaml ?? payload.resultYaml
+      setCandidateYaml(savedYaml)
+      queryClient.setQueryData(['apiCaseGenerateTaskRun', payload.runId], updatedRun)
+      queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTaskRuns', taskId] })
+      message.success('候选结果已保存')
+    },
+  })
+
+  const importRunMutation = useMutation({
+    mutationFn: (payload: { runId: string } & ImportApiCaseGenerateTaskRunPayload) =>
+      api.importApiCaseGenerateTaskRun(payload.runId, {
+        collectionId: payload.collectionId,
+        ...(payload.confirmOverwrite ? { confirmOverwrite: true } : {}),
+      }),
+    onSuccess: (result, payload) => {
+      queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTaskRuns', taskId] })
+      if (result.requiresConfirmation) {
+        queryClient.setQueryData(['apiCaseGenerateTaskRun', payload.runId], (current: typeof selectedRun) => ({
+          ...current,
+          ...result.run,
+          runId: result.run.runId ?? current?.runId ?? payload.runId,
+        }))
+        setImportModalRunId(null)
+        setImportConflict({
+          runId: payload.runId,
+          collectionId: payload.collectionId,
+          conflicts: result.conflicts,
+        })
+        return
+      }
+      queryClient.setQueryData(['apiCaseGenerateTaskRun', payload.runId], result.run)
+      setImportModalRunId(null)
+      setImportConflict(null)
+      importForm.resetFields()
+      message.success('已导入 API 集合')
     },
   })
 
@@ -620,13 +692,9 @@ export function ApiCaseGenerateTaskDetailPage() {
   }, [selectedRunId])
 
   useEffect(() => {
-    if (!reviewModalRunId) {
-      reviewForm.resetFields()
-      return
-    }
+    if (!reviewModalRunId) return
     reviewForm.setFieldsValue({
-      collectionId: undefined,
-      comment: undefined,
+      reviewComment: undefined,
     })
   }, [reviewForm, reviewModalRunId])
 
@@ -636,8 +704,16 @@ export function ApiCaseGenerateTaskDetailPage() {
   )
   const runResultModalContent = runResultModal ? selectedRunResultSectionMap.get(runResultModal.key) : undefined
   const selectedRunReviewStatus = normalizeReviewStatus(selectedRun?.reviewStatus)
-  const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && !isApiCaseGenerateTaskRunInProgress(selectedRun?.status)
-  const selectedRunImportedCollectionId = selectedRun?.importedCollectionId ?? ''
+  const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && selectedRun?.status === 'success'
+  const candidateDirty = candidateYaml !== (selectedRun?.resultYaml ?? '')
+  const selectedRunImportStatus = selectedRun?.importStatus ?? 'pending'
+  const canImportSelectedRun = Boolean(selectedRun)
+    && selectedRun?.status === 'success'
+    && selectedRunReviewStatus === 'approved'
+    && selectedRunImportStatus === 'pending'
+  const selectedRunImportedCollectionId = selectedRun?.importedTargets?.find(
+    (target) => target.targetType === 'api_collection',
+  )?.targetId ?? ''
   const selectedRunImportedCollectionName = selectedRunImportedCollectionId
     ? (apiCollectionNameMap.get(selectedRunImportedCollectionId) ?? selectedRunImportedCollectionId)
     : ''
@@ -673,8 +749,43 @@ export function ApiCaseGenerateTaskDetailPage() {
   function openReviewModal(runId?: string) {
     if (!runId) return
     setSelectedRunRecordId(runId)
+    setCandidateYaml(selectedRun?.runId === runId ? (selectedRun.resultYaml ?? '') : '')
     setReviewModalRunId(runId)
     setReviewSubmitAction(null)
+  }
+
+  function closeReviewModal() {
+    setReviewModalRunId(null)
+    setReviewSubmitAction(null)
+    setCandidateYaml(selectedRun?.resultYaml ?? '')
+  }
+
+  function requestCloseReviewModal() {
+    if (!candidateDirty || !canReviewSelectedRun) {
+      closeReviewModal()
+      return
+    }
+    setDiscardCandidateConfirmOpen(true)
+  }
+
+  function handleSaveCandidateResult() {
+    if (!reviewModalRunId) return
+    updateRunResultMutation.mutate({ runId: reviewModalRunId, resultYaml: candidateYaml })
+  }
+
+  async function handleImportRun() {
+    if (!importModalRunId) return
+    const values = await importForm.validateFields()
+    importRunMutation.mutate({ runId: importModalRunId, collectionId: values.collectionId })
+  }
+
+  function handleConfirmImportOverwrite() {
+    if (!importConflict) return
+    importRunMutation.mutate({
+      runId: importConflict.runId,
+      collectionId: importConflict.collectionId,
+      confirmOverwrite: true,
+    })
   }
 
   async function handleCopyExpandedRunResult() {
@@ -709,17 +820,16 @@ export function ApiCaseGenerateTaskDetailPage() {
   async function handleApproveReview() {
     if (!reviewModalRunId) return
     if (!canReviewSelectedRun) {
-      message.warning('任务执行中，暂时不能导入')
+      message.warning('当前运行状态不允许批准候选结果')
       return
     }
-    const values = await reviewForm.validateFields(['collectionId', 'comment'])
+    const values = await reviewForm.validateFields(['reviewComment'])
     setReviewSubmitAction('approve')
     reviewRunMutation.mutate({
       runId: reviewModalRunId,
       body: {
         action: 'approve',
-        collectionId: values.collectionId || '',
-        comment: values.comment?.trim() || undefined,
+        reviewComment: values.reviewComment?.trim() || undefined,
       },
     })
   }
@@ -727,7 +837,7 @@ export function ApiCaseGenerateTaskDetailPage() {
   function handleRejectReview() {
     if (!reviewModalRunId) return
     if (!canReviewSelectedRun) {
-      message.warning('任务执行中，暂时不能导入')
+      message.warning('当前运行状态不允许拒绝候选结果')
       return
     }
     const values = reviewForm.getFieldsValue()
@@ -736,7 +846,7 @@ export function ApiCaseGenerateTaskDetailPage() {
       runId: reviewModalRunId,
       body: {
         action: 'reject',
-        comment: values.comment?.trim() || undefined,
+        reviewComment: values.reviewComment?.trim() || undefined,
       },
     })
   }
@@ -902,6 +1012,9 @@ export function ApiCaseGenerateTaskDetailPage() {
                                 <span className="ai-task-run-history-review-status">
                                   {renderReviewStatusTag(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)}
                                 </span>
+                                <span className="ai-task-run-history-review-status">
+                                  {renderImportStatusTag(active && selectedRun ? selectedRun.importStatus : record.importStatus)}
+                                </span>
                                 <span className="ai-task-run-history-record-field">开始：{formatTime(record.startedAt)}</span>
                                 <span className="ai-task-run-history-record-field">结束：{formatTime(record.finishedAt)}</span>
                                 <span className="ai-task-run-history-record-field">耗时：{formatDurationSeconds(record.durationMs)}</span>
@@ -928,11 +1041,17 @@ export function ApiCaseGenerateTaskDetailPage() {
                               })}
                               {active && selectedRun ? (
                                 <div className="ai-task-run-history-review-inline">
-                                  {selectedRunReviewStatus === 'approved' && selectedRunImportedCollectionName ? (
+                                  {selectedRunImportStatus === 'imported' && selectedRunImportedCollectionName ? (
                                     <span className="ai-task-run-history-record-field">导入：{selectedRunImportedCollectionName}</span>
                                   ) : null}
+                                  {selectedRun.reviewerUserId ? (
+                                    <span className="ai-task-run-history-record-field">审核人：{selectedRun.reviewerUserId}</span>
+                                  ) : null}
                                   {selectedRun.reviewedAt ? (
-                                    <span className="ai-task-run-history-record-field">导入时间：{formatTime(selectedRun.reviewedAt)}</span>
+                                    <span className="ai-task-run-history-record-field">审核时间：{formatTime(selectedRun.reviewedAt)}</span>
+                                  ) : null}
+                                  {selectedRun.importedAt ? (
+                                    <span className="ai-task-run-history-record-field">导入时间：{formatTime(selectedRun.importedAt)}</span>
                                   ) : null}
                                   {selectedRun.reviewComment ? (
                                     <Popover
@@ -945,7 +1064,7 @@ export function ApiCaseGenerateTaskDetailPage() {
                                         className="ai-task-run-review-note-btn"
                                         onClick={(event) => event.stopPropagation()}
                                       >
-                                        导入备注
+                                        审核备注
                                       </button>
                                     </Popover>
                                   ) : null}
@@ -958,7 +1077,41 @@ export function ApiCaseGenerateTaskDetailPage() {
                                         openReviewModal(record.runId)
                                       }}
                                     >
-                                      导入
+                                      审核候选结果
+                                    </Button>
+                                  ) : null}
+                                  {!canReviewSelectedRun && selectedRun.status === 'success' && selectedRun.resultYaml ? (
+                                    <Button
+                                      size="small"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        openReviewModal(record.runId)
+                                      }}
+                                    >
+                                      查看候选结果
+                                    </Button>
+                                  ) : null}
+                                  {canImportSelectedRun ? (
+                                    <Button
+                                      size="small"
+                                      type="primary"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        setImportModalRunId(record.runId ?? null)
+                                      }}
+                                    >
+                                      导入 API 集合
+                                    </Button>
+                                  ) : null}
+                                  {selectedRunImportStatus === 'imported' && selectedRunImportedCollectionId ? (
+                                    <Button
+                                      size="small"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        navigate(`/api-automation/collections/${selectedRunImportedCollectionId}`)
+                                      }}
+                                    >
+                                      查看目标集合
                                     </Button>
                                   ) : null}
                                 </div>
@@ -1015,19 +1168,13 @@ export function ApiCaseGenerateTaskDetailPage() {
       />
 
       <Modal
-        title={canReviewSelectedRun ? '导入 AI 生成结果' : 'API 用例生成结果'}
+        title="候选结果审核"
         open={Boolean(reviewModalRunId)}
-        onCancel={() => {
-          setReviewModalRunId(null)
-          setReviewSubmitAction(null)
-        }}
+        onCancel={requestCloseReviewModal}
         footer={
           canReviewSelectedRun
             ? [
-                <Button key="cancel" onClick={() => {
-                  setReviewModalRunId(null)
-                  setReviewSubmitAction(null)
-                }}>
+                <Button key="cancel" onClick={requestCloseReviewModal}>
                   取消
                 </Button>,
                 <Button
@@ -1035,25 +1182,23 @@ export function ApiCaseGenerateTaskDetailPage() {
                   danger
                   ghost
                   loading={reviewRunMutation.isPending && reviewSubmitAction === 'reject'}
+                  disabled={candidateDirty || updateRunResultMutation.isPending || reviewRunMutation.isPending}
                   onClick={handleRejectReview}
                 >
-                  不导入
+                  拒绝候选
                 </Button>,
                 <Button
                   key="approve"
                   type="primary"
                   loading={reviewRunMutation.isPending && reviewSubmitAction === 'approve'}
-                  disabled={apiCollectionsQuery.isLoading || apiCollectionOptions.length === 0}
+                  disabled={candidateDirty || updateRunResultMutation.isPending || reviewRunMutation.isPending}
                   onClick={handleApproveReview}
                 >
-                  确认导入
+                  批准候选
                 </Button>,
               ]
             : [
-                <Button key="close" type="primary" onClick={() => {
-                  setReviewModalRunId(null)
-                  setReviewSubmitAction(null)
-                }}>
+                <Button key="close" type="primary" onClick={requestCloseReviewModal}>
                   关闭
                 </Button>,
               ]
@@ -1070,36 +1215,101 @@ export function ApiCaseGenerateTaskDetailPage() {
                   <div className="ai-task-run-result-popover-loading">
                     <Spin />
                   </div>
-                ) : selectedRun?.resultYaml ? (
-                  <pre className="ai-task-code-block">{formatStructuredContent(selectedRun.resultYaml)}</pre>
+                ) : selectedRun ? (
+                  <>
+                    <TextCodeEditor
+                      ariaLabel="候选结果 YAML"
+                      value={candidateYaml}
+                      onChange={setCandidateYaml}
+                      readOnly={!canReviewSelectedRun}
+                      minHeight={360}
+                    />
+                    {updateRunResultMutation.error ? (
+                      <Alert showIcon type="error" title={getErrorMessage(updateRunResultMutation.error)} />
+                    ) : null}
+                    {reviewRunMutation.error ? (
+                      <Alert showIcon type="error" title={getErrorMessage(reviewRunMutation.error)} />
+                    ) : null}
+                    {canReviewSelectedRun ? (
+                      <Button
+                        type="primary"
+                        loading={updateRunResultMutation.isPending}
+                        disabled={candidateYaml === (selectedRun.resultYaml ?? '')}
+                        onClick={handleSaveCandidateResult}
+                      >
+                        保存候选结果
+                      </Button>
+                    ) : null}
+                  </>
                 ) : (
                   <div className="ai-task-run-result-popover-empty">当前记录暂无 YAML 结果</div>
                 )}
               </div>
             </div>
-            <div className="ai-task-review-modal-section">
-              <Form.Item
-                label="通过后导入到API测试集"
-                name="collectionId"
-                rules={[{ required: true, message: '请选择要导入的API测试集' }]}
-                extra={!apiCollectionsQuery.isLoading && apiCollectionOptions.length === 0 ? '当前需求下还没有可用的API测试集' : undefined}
-              >
-                <Select
-                  showSearch
-                  placeholder={apiCollectionsQuery.isLoading ? 'API测试集加载中...' : '请选择API测试集'}
-                  options={apiCollectionOptions}
-                  loading={apiCollectionsQuery.isLoading}
-                  optionFilterProp="label"
-                  disabled={!canReviewSelectedRun}
-                />
-              </Form.Item>
-            </div>
           </div>
-          <Form.Item label="导入备注" name="comment">
-            <Input.TextArea rows={4} placeholder="请输入导入备注或不导入原因" disabled={!canReviewSelectedRun} />
+          <Form.Item label="审核备注" name="reviewComment">
+            <Input.TextArea rows={4} placeholder="请输入审核备注或拒绝原因" disabled={!canReviewSelectedRun} />
           </Form.Item>
         </Form>
       </Modal>
+
+      <Modal
+        title="修改尚未保存，确定放弃吗？"
+        open={discardCandidateConfirmOpen}
+        okText="放弃修改"
+        cancelText="继续编辑"
+        onCancel={() => setDiscardCandidateConfirmOpen(false)}
+        onOk={() => {
+          setDiscardCandidateConfirmOpen(false)
+          closeReviewModal()
+        }}
+        destroyOnHidden
+      >
+        放弃后将恢复为最近一次保存的候选结果。
+      </Modal>
+
+      <Modal
+        title="导入 API 集合"
+        open={Boolean(importModalRunId)}
+        onCancel={() => {
+          setImportModalRunId(null)
+          importForm.resetFields()
+        }}
+        onOk={handleImportRun}
+        okText="开始导入"
+        cancelText="取消"
+        confirmLoading={importRunMutation.isPending}
+        destroyOnHidden
+      >
+        {importRunMutation.error ? (
+          <Alert showIcon type="error" title={getErrorMessage(importRunMutation.error)} />
+        ) : null}
+        <Form form={importForm} layout="vertical">
+          <Form.Item
+            label="目标 API 集合"
+            name="collectionId"
+            rules={[{ required: true, message: '请选择目标 API 集合' }]}
+            extra={!apiCollectionsQuery.isLoading && apiCollectionOptions.length === 0 ? '当前需求下还没有可用的 API 集合' : undefined}
+          >
+            <Select
+              showSearch
+              placeholder={apiCollectionsQuery.isLoading ? 'API 集合加载中...' : '请选择 API 集合'}
+              options={apiCollectionOptions}
+              loading={apiCollectionsQuery.isLoading}
+              optionFilterProp="label"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <ApiImportConflictModal
+        open={Boolean(importConflict)}
+        conflicts={importConflict?.conflicts ?? []}
+        loading={importRunMutation.isPending}
+        error={importConflict ? importRunMutation.error : undefined}
+        onCancel={() => setImportConflict(null)}
+        onConfirm={handleConfirmImportOverwrite}
+      />
 
       <Modal
         title={

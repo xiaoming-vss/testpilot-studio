@@ -113,18 +113,19 @@ describe('UI 用例生成任务详情', () => {
     expect(await screen.findByRole('button', { name: '导入正式 UI 套件' })).toBeInTheDocument()
   })
 
-  it('缺少任一资格状态时不提供导入入口', async () => {
-    const approvedRunWithoutImportStatus = {
-      ...run,
-      reviewStatus: 'approved',
-      importStatus: undefined,
-    }
+  it.each([
+    ['非成功', { status: 'failed', reviewStatus: 'approved', importStatus: 'pending' }],
+    ['未批准', { status: 'success', reviewStatus: 'pending', importStatus: 'pending' }],
+    ['已导入', { status: 'success', reviewStatus: 'approved', importStatus: 'imported' }],
+    ['缺少导入状态', { status: 'success', reviewStatus: 'approved', importStatus: undefined }],
+  ])('%s 运行不提供导入入口', async (_label, state) => {
+    const ineligibleRun = { ...run, ...state }
     installFetchHandler((url) => {
       if (url.pathname === '/v1/ui-case-generate-tasks/ui-task-1/runs') {
-        return jsonResponse({ items: [approvedRunWithoutImportStatus], total: 1 })
+        return jsonResponse({ items: [ineligibleRun], total: 1 })
       }
       if (url.pathname === '/v1/ui-case-generate-task-runs/ui-run-1') {
-        return jsonResponse(approvedRunWithoutImportStatus)
+        return jsonResponse(ineligibleRun)
       }
     })
     renderPage()
@@ -135,7 +136,7 @@ describe('UI 用例生成任务详情', () => {
 
   it.each([
     [200, 'ok', '当前需求下暂无可用套件'],
-    [403, '无权查看该需求的套件', '无权查看该需求的套件'],
+    [403, '无权查看该需求的套件', '无权限执行 UI 用例导入操作：无权查看该需求的套件'],
   ])('套件查询返回 %s 时在选择弹窗展示阻断状态', async (status, backendMessage, expectedText) => {
     const approvedRun = { ...run, reviewStatus: 'approved' }
     installFetchHandler((url) => {
@@ -148,7 +149,8 @@ describe('UI 用例生成任务详情', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByRole('button', { name: '导入正式 UI 套件' }))
+    const entryButton = await screen.findByRole('button', { name: '导入正式 UI 套件' })
+    await user.click(entryButton)
     if (status === 200) await user.click(await screen.findByLabelText('目标 UI 套件'))
 
     expect(await screen.findByText(expectedText)).toBeInTheDocument()
@@ -171,7 +173,8 @@ describe('UI 用例生成任务详情', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByRole('button', { name: '导入正式 UI 套件' }))
+    const entryButton = await screen.findByRole('button', { name: '导入正式 UI 套件' })
+    await user.click(entryButton)
     const suiteSelect = await screen.findByLabelText('目标 UI 套件')
     await user.click(suiteSelect)
     await user.click(await screen.findByText('登录回归套件'))
@@ -180,6 +183,7 @@ describe('UI 用例生成任务详情', () => {
     await user.click(importButton)
 
     await waitFor(() => expect(importButton).toBeDisabled())
+    expect(entryButton).toBeDisabled()
     expect(cancelButton).toBeDisabled()
     expect(suiteSelect).toBeDisabled()
 
@@ -206,7 +210,13 @@ describe('UI 用例生成任务详情', () => {
         return jsonResponse(approvedRun)
       }
       if (url.pathname === '/v1/requirements/requirement-1/ui-test-suites') {
-        return jsonResponse({ items: [{ suiteId: 'suite-1', name: '登录回归套件' }], total: 1 })
+        return jsonResponse({
+          items: [
+            { suiteId: 'suite-1', name: '登录回归套件' },
+            { suiteId: 'suite-2', name: '支付回归套件' },
+          ],
+          total: 2,
+        })
       }
       if (url.pathname === '/v1/ui-case-generate-task-runs/ui-run-1/import' && init?.method === 'POST') {
         importBody = JSON.parse(String(init.body))
@@ -226,7 +236,10 @@ describe('UI 用例生成任务详情', () => {
     renderPage()
 
     await user.click(await screen.findByRole('button', { name: '导入正式 UI 套件' }))
-    await user.click(await screen.findByLabelText('目标 UI 套件'))
+    const suiteSearch = await screen.findByLabelText('目标 UI 套件')
+    await user.click(suiteSearch)
+    await user.type(suiteSearch, '登录')
+    expect(screen.queryByText('支付回归套件')).not.toBeInTheDocument()
     await user.click(await screen.findByText('登录回归套件'))
     await user.click(screen.getByRole('button', { name: '开始导入' }))
 
@@ -376,9 +389,52 @@ describe('UI 用例生成任务详情', () => {
     expect((await screen.findAllByText('已导入')).length).toBeGreaterThan(0)
   })
 
+  it('确认阶段套件失效时保留冲突内容并禁止旧目标再次确认', async () => {
+    const approvedRun = { ...run, requirementId: 'requirement-1', reviewStatus: 'approved' }
+    const conflict = {
+      normalizedName: 'login',
+      existingCase: { name: 'Login', enabled: true, orderNo: 1, stepsJson: [] },
+      generatedCase: { name: ' login ', enabled: false, orderNo: 7, stepsJson: [] },
+    }
+    let suiteRequests = 0
+    let importRequests = 0
+    installFetchHandler((url, init) => {
+      if (url.pathname === '/v1/ui-case-generate-tasks/ui-task-1/runs') return jsonResponse({ items: [approvedRun], total: 1 })
+      if (url.pathname === '/v1/ui-case-generate-task-runs/ui-run-1' && !init?.method) return jsonResponse(approvedRun)
+      if (url.pathname === '/v1/requirements/requirement-1/ui-test-suites') {
+        suiteRequests += 1
+        return jsonResponse(suiteRequests === 1
+          ? { items: [{ suiteId: 'suite-1', name: '登录回归套件' }], total: 1 }
+          : { items: [], total: 0 })
+      }
+      if (url.pathname.endsWith('/ui-run-1/import') && init?.method === 'POST') {
+        importRequests += 1
+        return importRequests === 1
+          ? jsonResponse({ requiresConfirmation: true, conflicts: [conflict], run: approvedRun })
+          : jsonResponse({}, 404, '目标套件不存在')
+      }
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '导入正式 UI 套件' }))
+    await user.click(await screen.findByLabelText('目标 UI 套件'))
+    await user.click(await screen.findByText('登录回归套件'))
+    await user.click(screen.getByRole('button', { name: '开始导入' }))
+
+    expect(await screen.findByText(/同名用例原位覆盖，非冲突候选同时新增/)).toBeInTheDocument()
+    const confirmButton = screen.getByRole('button', { name: '整批确认覆盖' })
+    await user.click(confirmButton)
+
+    expect(await screen.findByText('目标套件不存在')).toBeInTheDocument()
+    expect(screen.getAllByText(/login/).length).toBeGreaterThan(0)
+    await waitFor(() => expect(confirmButton).toBeDisabled())
+    expect(importRequests).toBe(2)
+  })
+
   it.each([
-    [400, '候选数据不合法', '候选数据不合法'],
-    [403, '无权导入该套件', '无权导入该套件'],
+    [400, '该运行已经导入', '该运行已经导入'],
+    [403, '无权导入该套件', '无权限执行 UI 用例导入操作：无权导入该套件'],
     [404, '目标套件不存在', '目标套件不存在'],
     [500, '事务执行失败', '服务端导入失败，未完成正式资产写入：事务执行失败'],
   ])('导入失败 %s 时在选择弹窗保留套件并允许重试', async (status, backendMessage, expectedMessage) => {
@@ -442,7 +498,7 @@ describe('UI 用例生成任务详情', () => {
     expect(screen.getByRole('button', { name: '查看正式套件' })).toBeInTheDocument()
   })
 
-  it('冲突预览期间手工刷新可收敛到其他操作完成的导入状态', async () => {
+  it('冲突预览期间页面重新聚焦可收敛到其他操作完成的导入状态', async () => {
     const approvedRun = { ...run, requirementId: 'requirement-1', reviewStatus: 'approved' }
     const importedRun = {
       ...approvedRun,
@@ -481,7 +537,7 @@ describe('UI 用例生成任务详情', () => {
     await user.click(screen.getByRole('button', { name: '开始导入' }))
     expect(await screen.findByText('发现 1 个同名用例冲突')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /刷新/ }))
+    window.dispatchEvent(new Event('focus'))
 
     expect(await screen.findByText('该运行已由其他操作完成导入')).toBeInTheDocument()
     expect((await screen.findAllByText('已导入')).length).toBeGreaterThan(0)

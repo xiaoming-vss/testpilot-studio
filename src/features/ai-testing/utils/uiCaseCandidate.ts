@@ -1,7 +1,7 @@
 import { parse } from 'yaml'
 
 const caseFieldNames = new Set(['name', 'enabled', 'orderNo', 'stepsJson'])
-const stepFieldNames = new Set([
+export const uiCaseStepFieldNames = [
   'orderNo',
   'stepName',
   'keyword',
@@ -10,7 +10,9 @@ const stepFieldNames = new Set([
   'operationValue',
   'continueOnFailure',
   'enabled',
-])
+] as const
+
+const stepFieldNames = new Set<string>(uiCaseStepFieldNames)
 
 export type UiCandidateStepView = Record<string, unknown> & {
   extraFields: Record<string, unknown>

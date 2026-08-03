@@ -55,9 +55,18 @@ function archiveErrorMessage(error: unknown) {
 
 function uiImportErrorMessage(error: unknown) {
   const messageText = getErrorMessage(error)
+  if (error instanceof ApiError && error.status === 403) {
+    return `无权限执行 UI 用例导入操作：${messageText}`
+  }
   return error instanceof ApiError && error.status >= 500
     ? `服务端导入失败，未完成正式资产写入：${messageText}`
     : messageText
+}
+
+function isUiRunImportable(run?: UiCaseGenerateTaskRun) {
+  return run?.status === 'success'
+    && run.reviewStatus === 'approved'
+    && run.importStatus === 'pending'
 }
 
 function CandidatePreview({ yaml }: { yaml: string }) {
@@ -197,12 +206,12 @@ export function UiCaseGenerateTaskDetailPage() {
   const canEditCandidate = selectedRun?.status === 'success' && (selectedRun.reviewStatus ?? 'pending') === 'pending'
   const hasUnsavedChanges = draftYaml !== savedYaml
   const canReview = canEditCandidate && Boolean(savedYaml.trim()) && !hasUnsavedChanges
-  const canImport = selectedRun?.status === 'success'
-    && selectedRun.reviewStatus === 'approved'
-    && selectedRun.importStatus === 'pending'
+  const canImport = isUiRunImportable(selectedRun)
   const selectedSuiteId = selectedRunId ? selectedSuiteIds[selectedRunId] : undefined
   const importedSuiteId = selectedRun?.importedTargets?.find((target) => target.targetType === 'ui_suite')?.targetId
   const importedSuiteName = listItems(suitesQuery.data).find((suite) => suite.suiteId === importedSuiteId)?.name ?? importedSuiteId
+  const conflictSuiteAvailable = !importConflict
+    || listItems(suitesQuery.data).some((suite) => suite.suiteId === importConflict.suiteId)
 
   const applyImportedRun = useCallback((updatedRun: UiCaseGenerateTaskRun) => {
     queryClient.setQueryData(['uiCaseGenerateTaskRun', updatedRun.runId], updatedRun)
@@ -344,11 +353,7 @@ export function UiCaseGenerateTaskDetailPage() {
       message.info('该运行已由其他操作完成导入')
       return
     }
-    if (
-      latestRun?.status === 'success'
-      && latestRun.reviewStatus === 'approved'
-      && latestRun.importStatus === 'pending'
-    ) {
+    if (isUiRunImportable(latestRun)) {
       setImportModalOpen(true)
     }
   }
@@ -462,7 +467,7 @@ export function UiCaseGenerateTaskDetailPage() {
                 <Input aria-label="审核备注" placeholder="审核备注（可选）" value={reviewComment} disabled={!canEditCandidate} onChange={(event) => setReviewComment(event.target.value)} style={{ width: 260 }} />
                 <Button disabled={!canReview} loading={reviewMutation.isPending} onClick={() => reviewMutation.mutate('approve')}>批准候选</Button>
                 <Button danger disabled={!canReview} loading={reviewMutation.isPending} onClick={() => reviewMutation.mutate('reject')}>拒绝候选</Button>
-                {canImport ? <Button type="primary" onClick={openImportModal}>导入正式 UI 套件</Button> : null}
+                {canImport ? <Button type="primary" disabled={importMutation.isPending} onClick={openImportModal}>导入正式 UI 套件</Button> : null}
                 {selectedRun.importStatus === 'imported' && importedSuiteId ? (
                   <Button onClick={() => navigate(`/ui-automation/suites/${importedSuiteId}`)}>查看正式套件</Button>
                 ) : null}
@@ -491,7 +496,7 @@ export function UiCaseGenerateTaskDetailPage() {
         onCancel={() => { if (!importMutation.isPending) setImportModalOpen(false) }}
         onOk={() => selectedSuiteId && importMutation.mutate({ suiteId: selectedSuiteId, confirmOverwrite: false })}
       >
-        {suitesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(suitesQuery.error)} style={{ marginBottom: 12 }} /> : null}
+        {suitesQuery.error ? <Alert showIcon type="error" title={uiImportErrorMessage(suitesQuery.error)} style={{ marginBottom: 12 }} /> : null}
         {importMutation.error ? <Alert showIcon type="error" title={uiImportErrorMessage(importMutation.error)} style={{ marginBottom: 12 }} /> : null}
         <Select
           aria-label="目标 UI 套件"
@@ -517,6 +522,7 @@ export function UiCaseGenerateTaskDetailPage() {
         loading={importMutation.isPending}
         errorMessage={importConflict && importMutation.error ? uiImportErrorMessage(importMutation.error) : undefined}
         conflictsChanged={importConflictsChanged}
+        confirmDisabled={!conflictSuiteAvailable}
         onCancel={() => {
           if (importMutation.isPending) return
           importMutation.reset()
@@ -524,7 +530,7 @@ export function UiCaseGenerateTaskDetailPage() {
           setImportConflictsChanged(false)
         }}
         onConfirm={() => {
-          if (!importConflict || importMutation.isPending) return
+          if (!importConflict || importMutation.isPending || !conflictSuiteAvailable) return
           importMutation.reset()
           importMutation.mutate({ suiteId: importConflict.suiteId, confirmOverwrite: true })
         }}

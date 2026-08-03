@@ -4,6 +4,7 @@ import type {
   UiCaseGenerateTaskRunImportConflict,
   UiCaseGenerateTaskRunImportStep,
 } from '../types'
+import { uiCaseStepFieldNames } from '../utils/uiCaseCandidate'
 
 const { Text } = Typography
 
@@ -13,22 +14,25 @@ type UiImportConflictModalProps = {
   loading: boolean
   errorMessage?: string
   conflictsChanged?: boolean
+  confirmDisabled?: boolean
   onCancel: () => void
   onConfirm: () => void
 }
 
-const knownStepFields: Array<{ key: keyof UiCaseGenerateTaskRunImportStep; label: string }> = [
-  { key: 'orderNo', label: '排序号' },
-  { key: 'stepName', label: '步骤名称' },
-  { key: 'keyword', label: '关键字' },
-  { key: 'locatorType', label: '定位类型' },
-  { key: 'locatorValue', label: '定位值' },
-  { key: 'operationValue', label: '操作值' },
-  { key: 'continueOnFailure', label: '失败策略' },
-  { key: 'enabled', label: '启用状态' },
-]
+const stepFieldLabels: Record<(typeof uiCaseStepFieldNames)[number], string> = {
+  orderNo: '排序号',
+  stepName: '步骤名称',
+  keyword: '关键字',
+  locatorType: '定位类型',
+  locatorValue: '定位值',
+  operationValue: '操作值',
+  continueOnFailure: '失败策略',
+  enabled: '启用状态',
+}
 
-const knownStepFieldNames = new Set(knownStepFields.map(({ key }) => key))
+const knownStepFields = uiCaseStepFieldNames.map((key) => ({ key, label: stepFieldLabels[key] }))
+
+const knownStepFieldNames = new Set<string>(knownStepFields.map(({ key }) => key))
 
 function hasOwn(record: object, key: PropertyKey) {
   return Object.prototype.hasOwnProperty.call(record, key)
@@ -121,6 +125,7 @@ export function UiImportConflictModal({
   loading,
   errorMessage,
   conflictsChanged,
+  confirmDisabled,
   onCancel,
   onConfirm,
 }: UiImportConflictModalProps) {
@@ -132,7 +137,7 @@ export function UiImportConflictModal({
       okText="整批确认覆盖"
       cancelText="取消覆盖"
       confirmLoading={loading}
-      okButtonProps={{ disabled: loading }}
+      okButtonProps={{ disabled: loading || confirmDisabled }}
       cancelButtonProps={{ disabled: loading }}
       onCancel={onCancel}
       onOk={onConfirm}
@@ -143,7 +148,7 @@ export function UiImportConflictModal({
         showIcon
         type="warning"
         title={`发现 ${conflicts.length} 个同名用例冲突`}
-        description="当前仅预览冲突，不会写入正式资产。确认后将重新检查并整批覆盖。"
+        description="当前仅预览冲突，不会写入正式资产。确认后将重新检查：同名用例原位覆盖，非冲突候选同时新增；任一操作失败则整批回滚。"
         style={{ marginBottom: 12 }}
       />
       {conflictsChanged ? (

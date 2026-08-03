@@ -2,13 +2,13 @@
 
 TestPilot Studio 当前已具备 API 与功能用例生成任务能力，但 UI 用例生成仍是占位入口。用户无法基于项目源码创建 UI 候选用例，也无法在前端完成源码包上传、任务运行、候选结果编辑和人工审核。
 
-后端已经提供 UI 用例生成任务、ZIP 源码包上传、运行、结果修改和审核接口。前端需要在不引入正式资产导入的前提下，将这些能力接入现有统一生成任务工作台，并保持与现有 API/功能生成流程一致的状态、轮询、错误和审核体验。
+后端已经提供 UI 用例生成任务、ZIP 源码包上传、运行、结果修改和审核接口。本规格先将这些能力接入现有统一生成任务工作台，并保持与现有 API/功能生成流程一致的状态、轮询、错误和审核体验；正式资产导入由后续规格补充。
 
 ## Solution
 
 在现有统一生成任务列表中启用 UI 测试任务类型。用户创建 UI 生成任务时必须同时选择一个符合限制的 ZIP 源码包；前端先创建任务，再使用返回的任务 ID 上传源码包。完成后进入 UI 任务详情页，用户可以查看或替换源码包、选择 LLM 连接运行任务、查看运行历史、预览和编辑候选 YAML，并批准或拒绝候选结果。
 
-源码包是 UI 生成任务唯一的生成来源。前端不展示或提交 `sourceContent`，不读取或解压源码包内容，也不调用任何内部 Worker 接口。审核完成后候选结果只读；审核通过仍处于待导入状态，但本功能不提供任何导入入口。
+源码包是 UI 生成任务唯一的生成来源。前端不展示或提交 `sourceContent`，不读取或解压源码包内容，也不调用任何内部 Worker 接口。审核完成后候选结果只读；本规格原始交付止于审核，后续导入能力见 `docs/specs/ui-approved-candidate-import.md`。
 
 ## User Stories
 
@@ -106,12 +106,12 @@ TestPilot Studio 当前已具备 API 与功能用例生成任务能力，但 UI 
 - Unsaved edits survive save failures; review is unavailable until changes are saved or discarded.
 - Review actions are exactly `approve` and `reject`, with optional `reviewComment`.
 - Successful review updates the selected run immediately and freezes editing.
-- Approval displays approved and pending-import states but no import control.
+- Approval displays approved and pending-import states；后续规格在满足严格资格时增加导入控制。
 - Query 403 errors show a blocking no-access state and suppress protected content.
 - Mutation 403 errors preserve safe local state and use explicit permission language.
 - Server state remains in React Query; forms, selected files, modal state, selected runs, and drafts stay local or transient.
 - Product documentation and system design are updated for the unified list and completed UI generation/review flow.
-- The later UI-suite import endpoint is not called or surfaced.
+- 本规格交付时不调用 UI 套件导入端点；后续实现以 `docs/specs/ui-approved-candidate-import.md` 为准。
 
 ## Testing Decisions
 
@@ -128,7 +128,7 @@ TestPilot Studio 当前已具备 API 与功能用例生成任务能力，但 UI 
 - Tests cover missing-archive run guidance and backend 400 handling.
 - Tests cover pending, claimed, running, success, and failed states.
 - Tests cover YAML edit/save, failed-save draft preservation, structured nested-step preview, and raw fallback.
-- Tests cover approve/reject values, empty-result ineligibility, reviewed-result read-only behavior, and absence of import controls.
+- Tests cover approve/reject values, empty-result ineligibility, and reviewed-result read-only behavior；导入控制由后续规格单独覆盖。
 - Tests cover query and mutation 403 behavior plus archive 400, 404, and 413 errors.
 - Covered workflows fail if any request targets `/internal/ai-worker/**`.
 - Backend ZIP extraction security is not tested in the browser.
@@ -136,9 +136,8 @@ TestPilot Studio 当前已具备 API 与功能用例生成任务能力，但 UI 
 
 ## Out of Scope
 
-- Importing approved UI candidates into UI test suites.
-- Rendering an import button or automatically importing after approval.
-- Calling the UI candidate import endpoint or implementing conflict/overwrite flows.
+- Importing approved UI candidates into UI test suites（此项仅对本规格原始范围成立，后续由 `ui-approved-candidate-import.md` 实现）。
+- Automatically importing after approval；后续导入仍必须由用户显式发起。
 - Reading, previewing, indexing, or extracting files inside the ZIP in the browser.
 - Calling `/internal/ai-worker/**`.
 - Selecting or freezing a requirement-document version.
@@ -155,5 +154,5 @@ TestPilot Studio 当前已具备 API 与功能用例生成任务能力，但 UI 
 - 后端校验是压缩包完整性、解压后大小、文件数、路径穿越、绝对路径、符号链接、重复路径、候选 YAML 结构及资源归属的最终事实。
 - OpenAPI 将任务请求字段声明为 nullable，但前端采用已经确认的更严格业务校验。
 - 当前 OpenAPI 运行 schema 不支持 `instruction`，因此本次前端不发送该字段。
-- 后端虽已暴露后续导入能力，但页面必须保持“审核”与“正式资产导入”的领域边界。
+- 页面保持“审核”与“正式资产导入”的领域边界：审核不会自动导入，后续导入是独立显式操作。
 - 已确认的主要测试接缝是页面边界与 mock HTTP，只有文件校验和 YAML 解析使用窄纯函数接缝。

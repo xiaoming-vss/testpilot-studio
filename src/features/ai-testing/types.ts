@@ -17,7 +17,7 @@ export type ApiCaseGenerateTaskRunReviewStatus = 'pending' | 'approved' | 'rejec
 export type ApiCaseGenerateTaskRunImportStatus = 'pending' | 'imported' | (string & {})
 
 export type ApiCaseGenerateTaskRunImportedTarget = {
-  targetType: 'api_collection' | (string & {})
+  targetType: 'api_collection' | 'ui_suite' | (string & {})
   targetId: string
 }
 
@@ -222,6 +222,42 @@ export type UpdateUiCaseGenerateTaskRunResultPayload = {
 export type ReviewUiCaseGenerateTaskRunPayload =
   | { action: 'approve'; reviewComment?: string }
   | { action: 'reject'; reviewComment?: string }
+
+export type ImportUiCaseGenerateTaskRunPayload = {
+  suiteId: string
+  confirmOverwrite?: boolean
+}
+
+export type UiCaseGenerateTaskRunImportStep = {
+  orderNo?: unknown
+  stepName?: unknown
+  keyword?: unknown
+  locatorType?: unknown
+  locatorValue?: unknown
+  operationValue?: unknown
+  continueOnFailure?: unknown
+  enabled?: unknown
+  [key: string]: unknown
+}
+
+export type UiCaseGenerateTaskRunImportCase = {
+  name?: unknown
+  enabled?: unknown
+  orderNo?: unknown
+  stepsJson: UiCaseGenerateTaskRunImportStep[]
+}
+
+export type UiCaseGenerateTaskRunImportConflict = {
+  normalizedName: string
+  existingCase: UiCaseGenerateTaskRunImportCase
+  generatedCase: UiCaseGenerateTaskRunImportCase
+}
+
+export type UiCaseGenerateTaskRunImportResult = {
+  requiresConfirmation: boolean
+  conflicts: UiCaseGenerateTaskRunImportConflict[]
+  run: UiCaseGenerateTaskRun
+}
 
 export type UpdateApiCaseGenerateTaskPayload = Partial<CreateApiCaseGenerateTaskPayload>
 

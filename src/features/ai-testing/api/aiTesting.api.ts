@@ -11,6 +11,7 @@ import type {
   FunctionalCaseGenerateTaskRun,
   ImportApiCaseGenerateTaskRunPayload,
   ImportApiCaseGenerateTaskRunResult,
+  ImportUiCaseGenerateTaskRunPayload,
   RequirementAnalysisTask,
   RequirementAnalysisTaskRun,
   ReviewApiCaseGenerateTaskRunPayload,
@@ -32,6 +33,7 @@ import type {
   ReviewUiCaseGenerateTaskRunPayload,
   UiCaseGenerateTask,
   UiCaseGenerateTaskRun,
+  UiCaseGenerateTaskRunImportResult,
   UpdateUiCaseGenerateTaskPayload,
   UpdateUiCaseGenerateTaskRunResultPayload,
 } from '../types'
@@ -196,6 +198,11 @@ export const aiTestingApi = {
     }),
   reviewUiCaseGenerateTaskRun: (runId: string, body: ReviewUiCaseGenerateTaskRunPayload) =>
     request<UiCaseGenerateTaskRun>(`/v1/ui-case-generate-task-runs/${runId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  importUiCaseGenerateTaskRun: (runId: string, body: ImportUiCaseGenerateTaskRunPayload) =>
+    request<UiCaseGenerateTaskRunImportResult>(`/v1/ui-case-generate-task-runs/${runId}/import`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

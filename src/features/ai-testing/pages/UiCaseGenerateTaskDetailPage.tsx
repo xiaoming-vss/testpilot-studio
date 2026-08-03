@@ -1,14 +1,15 @@
 import { ArrowLeftOutlined, CaretRightOutlined, EditOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Empty, Input, Modal, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
+import { UiImportConflictModal } from '../components/UiImportConflictModal'
 import { validateUiSourceArchive } from '../utils/uiSourceArchive'
-import type { UiCaseGenerateTaskRun } from '../types'
+import type { UiCaseGenerateTaskRun, UiCaseGenerateTaskRunImportConflict } from '../types'
 import { parseUiCaseCandidate } from '../utils/uiCaseCandidate'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
-import { api, ApiError, listItems } from '@/services/api'
+import { api, ApiError, listItems, type ListResponse } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId } from '@/utils/format'
 
@@ -39,10 +40,23 @@ function reviewTag(status?: string) {
   return <Tag color="gold">待审核</Tag>
 }
 
+function importTag(status?: string) {
+  if (status === 'imported') return <Tag color="success">已导入</Tag>
+  if (status === 'pending') return <Tag color="gold">待导入</Tag>
+  return <Tag>{status ?? '未知'}</Tag>
+}
+
 function archiveErrorMessage(error: unknown) {
   const messageText = getErrorMessage(error)
   return error instanceof ApiError && error.status === 413
     ? `源码包超过上传大小限制：${messageText}`
+    : messageText
+}
+
+function uiImportErrorMessage(error: unknown) {
+  const messageText = getErrorMessage(error)
+  return error instanceof ApiError && error.status >= 500
+    ? `服务端导入失败，未完成正式资产写入：${messageText}`
     : messageText
 }
 
@@ -113,6 +127,13 @@ export function UiCaseGenerateTaskDetailPage() {
   const [editInstruction, setEditInstruction] = useState('')
   const [editSprintId, setEditSprintId] = useState<string>()
   const [editRequirementId, setEditRequirementId] = useState<string>()
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [selectedSuiteIds, setSelectedSuiteIds] = useState<Record<string, string | undefined>>({})
+  const [importConflict, setImportConflict] = useState<{
+    suiteId: string
+    conflicts: UiCaseGenerateTaskRunImportConflict[]
+  } | null>(null)
+  const [importConflictsChanged, setImportConflictsChanged] = useState(false)
 
   const taskQuery = useQuery({
     queryKey: ['uiCaseGenerateTask', taskId],
@@ -157,6 +178,13 @@ export function UiCaseGenerateTaskDetailPage() {
     queryFn: () => api.getRequirements(editSprintId!),
     enabled: editModalOpen && Boolean(editSprintId),
   })
+  const importRequirementId = selectedRun?.requirementId ?? taskQuery.data?.requirementId
+  const suitesQuery = useQuery({
+    queryKey: ['uiTestSuites', importRequirementId],
+    queryFn: () => api.getUiTestSuites(importRequirementId!),
+    enabled: importModalOpen && Boolean(importRequirementId),
+    retry: false,
+  })
 
   useEffect(() => {
     const nextYaml = selectedRun?.resultYaml ?? ''
@@ -169,6 +197,31 @@ export function UiCaseGenerateTaskDetailPage() {
   const canEditCandidate = selectedRun?.status === 'success' && (selectedRun.reviewStatus ?? 'pending') === 'pending'
   const hasUnsavedChanges = draftYaml !== savedYaml
   const canReview = canEditCandidate && Boolean(savedYaml.trim()) && !hasUnsavedChanges
+  const canImport = selectedRun?.status === 'success'
+    && selectedRun.reviewStatus === 'approved'
+    && selectedRun.importStatus === 'pending'
+  const selectedSuiteId = selectedRunId ? selectedSuiteIds[selectedRunId] : undefined
+  const importedSuiteId = selectedRun?.importedTargets?.find((target) => target.targetType === 'ui_suite')?.targetId
+  const importedSuiteName = listItems(suitesQuery.data).find((suite) => suite.suiteId === importedSuiteId)?.name ?? importedSuiteId
+
+  const applyImportedRun = useCallback((updatedRun: UiCaseGenerateTaskRun) => {
+    queryClient.setQueryData(['uiCaseGenerateTaskRun', updatedRun.runId], updatedRun)
+    queryClient.setQueryData<ListResponse<UiCaseGenerateTaskRun>>(['uiCaseGenerateTaskRuns', taskId], (current) => {
+      if (!current) return current
+      const items = listItems(current).map((item) => (
+        item.runId === updatedRun.runId ? updatedRun : item
+      )) as ListResponse<UiCaseGenerateTaskRun>
+      items.items = items
+      items.total = current.total
+      return items
+    })
+  }, [queryClient, taskId])
+
+  const closeImportInteractions = useCallback(() => {
+    setImportModalOpen(false)
+    setImportConflict(null)
+    setImportConflictsChanged(false)
+  }, [])
 
   function navigateBack() {
     if (!hasUnsavedChanges) {
@@ -253,6 +306,74 @@ export function UiCaseGenerateTaskDetailPage() {
       message.success(updatedRun.reviewStatus === 'approved' ? '候选结果已批准' : '候选结果已拒绝')
     },
   })
+  const importMutation = useMutation({
+    mutationFn: (payload: { suiteId: string; confirmOverwrite: boolean }) => (
+      api.importUiCaseGenerateTaskRun(selectedRunId!, payload)
+    ),
+    onSuccess: (result, payload) => {
+      if (result.requiresConfirmation) {
+        setImportModalOpen(false)
+        setImportConflict({ suiteId: payload.suiteId, conflicts: result.conflicts })
+        setImportConflictsChanged(payload.confirmOverwrite)
+        return
+      }
+      applyImportedRun(result.run)
+      closeImportInteractions()
+      message.success('正式 UI 用例导入成功')
+    },
+    onError: async (error) => {
+      if (error instanceof ApiError && (error.status === 400 || error.status === 404)) {
+        const refreshed = await selectedRunQuery.refetch()
+        if (error.status === 404) suitesQuery.refetch()
+        if (refreshed.data?.importStatus === 'imported') {
+          applyImportedRun(refreshed.data)
+          closeImportInteractions()
+          message.info('该运行已由其他操作完成导入')
+        }
+      }
+    },
+  })
+
+  async function openImportModal() {
+    importMutation.reset()
+    const refreshed = await selectedRunQuery.refetch()
+    const latestRun = refreshed.data
+    if (latestRun?.importStatus === 'imported') {
+      applyImportedRun(latestRun)
+      closeImportInteractions()
+      message.info('该运行已由其他操作完成导入')
+      return
+    }
+    if (
+      latestRun?.status === 'success'
+      && latestRun.reviewStatus === 'approved'
+      && latestRun.importStatus === 'pending'
+    ) {
+      setImportModalOpen(true)
+    }
+  }
+
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (selectedRunId) selectedRunQuery.refetch()
+    }
+    window.addEventListener('focus', refreshOnFocus)
+    return () => window.removeEventListener('focus', refreshOnFocus)
+  }, [selectedRunId, selectedRunQuery])
+
+  useEffect(() => {
+    if (selectedRun?.importStatus !== 'imported' || (!importModalOpen && !importConflict)) return
+    applyImportedRun(selectedRun)
+    closeImportInteractions()
+    message.info('该运行已由其他操作完成导入')
+  }, [applyImportedRun, closeImportInteractions, importConflict, importModalOpen, selectedRun])
+
+  useEffect(() => {
+    if (!selectedRunId || !selectedSuiteId || !suitesQuery.isSuccess) return
+    if (listItems(suitesQuery.data).some((suite) => suite.suiteId === selectedSuiteId)) return
+    setSelectedSuiteIds((current) => ({ ...current, [selectedRunId]: undefined }))
+    message.warning('上次选择的 UI 套件已不可用，请重新选择')
+  }, [selectedRunId, selectedSuiteId, suitesQuery.data, suitesQuery.isSuccess])
 
   if (taskQuery.isLoading) return <div className="workbench-page"><Spin /></div>
   if (taskQuery.error) {
@@ -313,6 +434,7 @@ export function UiCaseGenerateTaskDetailPage() {
             columns={[
               { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
               { title: '审核', dataIndex: 'reviewStatus', render: (value) => reviewTag(value) },
+              { title: '导入', dataIndex: 'importStatus', render: (value) => importTag(value) },
               { title: '开始时间', dataIndex: 'startedAt', render: (value, item) => formatTime(value ?? item.createdAt) },
               { title: '完成时间', dataIndex: 'finishedAt', render: (value) => formatTime(value) },
               { title: '错误', dataIndex: 'errorMessage', render: (value) => value || '-' },
@@ -325,7 +447,7 @@ export function UiCaseGenerateTaskDetailPage() {
             <Alert showIcon type="error" title={getErrorMessage(selectedRunQuery.error)} description="无法访问该运行详情，候选内容已隐藏。" />
           </Card>
         ) : selectedRun ? (
-          <Card title={<Space>候选结果 {statusTag(selectedRun.status)} {reviewTag(selectedRun.reviewStatus)} {selectedRun.reviewStatus === 'approved' ? <Tag color="gold">待导入</Tag> : null}</Space>}>
+          <Card title={<Space>候选结果 {statusTag(selectedRun.status)} {reviewTag(selectedRun.reviewStatus)} {selectedRun.reviewStatus === 'approved' ? importTag(selectedRun.importStatus) : null}</Space>}>
             {saveMutation.error ? <Alert showIcon type="error" title={getErrorMessage(saveMutation.error)} style={{ marginBottom: 12 }} /> : null}
             {reviewMutation.error ? <Alert showIcon type="error" title={getErrorMessage(reviewMutation.error)} style={{ marginBottom: 12 }} /> : null}
             <Tabs items={[
@@ -340,11 +462,73 @@ export function UiCaseGenerateTaskDetailPage() {
                 <Input aria-label="审核备注" placeholder="审核备注（可选）" value={reviewComment} disabled={!canEditCandidate} onChange={(event) => setReviewComment(event.target.value)} style={{ width: 260 }} />
                 <Button disabled={!canReview} loading={reviewMutation.isPending} onClick={() => reviewMutation.mutate('approve')}>批准候选</Button>
                 <Button danger disabled={!canReview} loading={reviewMutation.isPending} onClick={() => reviewMutation.mutate('reject')}>拒绝候选</Button>
+                {canImport ? <Button type="primary" onClick={openImportModal}>导入正式 UI 套件</Button> : null}
+                {selectedRun.importStatus === 'imported' && importedSuiteId ? (
+                  <Button onClick={() => navigate(`/ui-automation/suites/${importedSuiteId}`)}>查看正式套件</Button>
+                ) : null}
               </Space>
+              {selectedRun.importStatus === 'imported' ? (
+                <Descriptions size="small" column={2} items={[
+                  { key: 'importedAt', label: '导入时间', children: formatTime(selectedRun.importedAt ?? undefined) },
+                  { key: 'importedTarget', label: '目标套件', children: importedSuiteName ?? '-' },
+                ]} />
+              ) : null}
             </Space>
           </Card>
         ) : <Card><Empty description="请选择一条运行记录查看候选结果" /></Card>}
       </Space>
+
+      <Modal
+        title="导入正式 UI 套件"
+        open={importModalOpen}
+        okText="开始导入"
+        cancelText="取消"
+        okButtonProps={{
+          disabled: !selectedSuiteId || suitesQuery.isLoading || Boolean(suitesQuery.error) || importMutation.isPending,
+          loading: importMutation.isPending,
+        }}
+        cancelButtonProps={{ disabled: importMutation.isPending }}
+        onCancel={() => { if (!importMutation.isPending) setImportModalOpen(false) }}
+        onOk={() => selectedSuiteId && importMutation.mutate({ suiteId: selectedSuiteId, confirmOverwrite: false })}
+      >
+        {suitesQuery.error ? <Alert showIcon type="error" title={getErrorMessage(suitesQuery.error)} style={{ marginBottom: 12 }} /> : null}
+        {importMutation.error ? <Alert showIcon type="error" title={uiImportErrorMessage(importMutation.error)} style={{ marginBottom: 12 }} /> : null}
+        <Select
+          aria-label="目标 UI 套件"
+          showSearch
+          optionFilterProp="label"
+          placeholder="请选择当前需求下的 UI 套件"
+          loading={suitesQuery.isLoading}
+          disabled={importMutation.isPending}
+          value={selectedSuiteId}
+          options={listItems(suitesQuery.data).map((suite) => ({ label: suite.name, value: suite.suiteId }))}
+          notFoundContent={suitesQuery.isLoading ? '加载中' : '当前需求下暂无可用套件'}
+          onChange={(suiteId) => {
+            if (!selectedRunId) return
+            setSelectedSuiteIds((current) => ({ ...current, [selectedRunId]: suiteId }))
+          }}
+          style={{ width: '100%' }}
+        />
+      </Modal>
+
+      <UiImportConflictModal
+        open={Boolean(importConflict)}
+        conflicts={importConflict?.conflicts ?? []}
+        loading={importMutation.isPending}
+        errorMessage={importConflict && importMutation.error ? uiImportErrorMessage(importMutation.error) : undefined}
+        conflictsChanged={importConflictsChanged}
+        onCancel={() => {
+          if (importMutation.isPending) return
+          importMutation.reset()
+          setImportConflict(null)
+          setImportConflictsChanged(false)
+        }}
+        onConfirm={() => {
+          if (!importConflict || importMutation.isPending) return
+          importMutation.reset()
+          importMutation.mutate({ suiteId: importConflict.suiteId, confirmOverwrite: true })
+        }}
+      />
 
       <Modal
         title="编辑 UI 用例生成任务"

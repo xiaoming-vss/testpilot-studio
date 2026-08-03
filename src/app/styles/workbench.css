@@ -3254,3 +3254,34 @@ body,
   color: rgba(72, 86, 150, 0.78) !important;
   background: rgba(255, 255, 255, 0.62) !important;
 }
+.ui-import-conflict-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.ui-import-conflict-side {
+  min-width: 0;
+}
+
+.ui-import-conflict-side h4 {
+  margin: 0 0 12px;
+}
+
+.ui-import-conflict-text,
+.ui-import-conflict-json {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ui-import-conflict-json {
+  margin: 0;
+  font-family: var(--font-family-mono, monospace);
+}
+
+@media (max-width: 900px) {
+  .ui-import-conflict-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

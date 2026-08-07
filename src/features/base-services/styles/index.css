@@ -384,6 +384,16 @@
   min-height: 260px;
 }
 
+.base-services-panel-hint.ant-typography {
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.base-services-empty-note.ant-typography {
+  font-size: 12px;
+}
+
 @media (max-width: 1880px) {
   .base-services-grid-fill-page {
     flex: 0 0 auto;
@@ -1074,5 +1084,4 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.36),
     0 10px 22px rgba(10, 132, 255, 0.2) !important;
 }
-
 

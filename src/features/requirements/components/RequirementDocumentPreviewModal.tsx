@@ -1,8 +1,22 @@
-import { DownloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Modal, Spin, Tabs } from 'antd'
+import {
+  CheckCircleFilled,
+  ColumnWidthOutlined,
+  DownloadOutlined,
+  FileTextOutlined,
+  FileWordOutlined,
+} from '@ant-design/icons'
+import { Alert, Button, Empty, Modal, Spin } from 'antd'
 import { useMutation } from '@tanstack/react-query'
 import { renderAsync } from 'docx-preview'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react'
 import { useAuthStore } from '@/features/auth/store/auth.store'
 import type { Requirement } from '@/features/requirements/types'
 import {
@@ -237,6 +251,33 @@ function RequirementTextPreview({ previewUrl }: { previewUrl: string }) {
   )
 }
 
+function RequirementUnderstandingArticle({ content }: { content: string }) {
+  const lines = content.split(/\r?\n/)
+  const firstContentIndex = lines.findIndex((line) => line.trim())
+
+  return (
+    <article className="requirement-document-understanding-content">
+      {lines.map((line, index) => {
+        const value = line.trim()
+        if (!value) return <span className="requirement-document-understanding-spacer" key={`space-${index}`} />
+        if (index === firstContentIndex) return <h1 key={`title-${index}`}>{value.replace(/^#\s+/, '')}</h1>
+        if (/^#{2,3}\s+/.test(value) || /^[一二三四五六七八九十]+[、.]/.test(value)) {
+          return <h2 key={`section-${index}`}>{value.replace(/^#{2,3}\s+/, '')}</h2>
+        }
+        if (/^\d+[.、]\s*/.test(value)) return <h3 key={`item-${index}`}>{value}</h3>
+        if (/^[-*•]\s*/.test(value)) {
+          return (
+            <ul key={`bullet-${index}`}>
+              <li>{value.replace(/^[-*•]\s*/, '')}</li>
+            </ul>
+          )
+        }
+        return <p key={`paragraph-${index}`}>{value}</p>
+      })}
+    </article>
+  )
+}
+
 type RequirementDocumentPreviewModalProps = {
   open: boolean
   onClose: () => void
@@ -252,6 +293,31 @@ type RequirementDocumentPreviewContentProps = Omit<RequirementDocumentPreviewMod
   embedded?: boolean
 }
 
+function RequirementPreviewPane({
+  title,
+  icon,
+  meta,
+  children,
+}: {
+  title: string
+  icon: ReactNode
+  meta: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="requirement-document-pane">
+      <div className="requirement-document-pane-header">
+        <div className="requirement-document-pane-title">
+          {icon}
+          <span>{title}</span>
+          {meta}
+        </div>
+      </div>
+      <div className="requirement-document-pane-body">{children}</div>
+    </section>
+  )
+}
+
 export function RequirementDocumentPreviewContent({
   requirementId,
   requirementName,
@@ -261,6 +327,7 @@ export function RequirementDocumentPreviewContent({
   documentDownloadUrl,
   embedded = false,
 }: RequirementDocumentPreviewContentProps) {
+  const [splitPercent, setSplitPercent] = useState(50)
   const isWord = isWordDocument(documentType)
   const sourceDocumentPath = documentDownloadUrl || (requirementId ? `/v1/requirements/${requirementId}/download` : undefined)
   const documentUrl = useMemo(() => resolveRequirementDocumentUrl(sourceDocumentPath), [sourceDocumentPath])
@@ -297,12 +364,23 @@ export function RequirementDocumentPreviewContent({
     }
   }
 
+  function handleSplitPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+    const workspace = event.currentTarget.parentElement
+    if (!workspace) return
+    const bounds = workspace.getBoundingClientRect()
+    const nextPercent = ((event.clientX - bounds.left) / bounds.width) * 100
+    setSplitPercent(Math.min(68, Math.max(32, nextPercent)))
+  }
+
+  function handleSplitKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    setSplitPercent((current) => Math.min(68, Math.max(32, current + (event.key === 'ArrowLeft' ? -2 : 2))))
+  }
+
   const documentPreviewContent = (
-    <div
-      className={`requirement-document-modal-stage${
-        isWord ? ' docx-mode' : ' text-mode'
-      }`}
-    >
+    <div className={`requirement-document-modal-stage${isWord ? ' docx-mode' : ' text-mode'}`}>
       {isWord && (documentUrl || requirementId) ? (
         <RequirementDocxPreview
           requirementId={requirementId}
@@ -312,6 +390,10 @@ export function RequirementDocumentPreviewContent({
         />
       ) : !isWord && documentUrl ? (
         <RequirementTextPreview previewUrl={previewUrl} />
+      ) : !isWord && understandingResult ? (
+        <div className="requirement-document-text-host">
+          <article className="requirement-document-text-article">{understandingResult}</article>
+        </div>
       ) : (
         <div className="requirement-document-text-host">
           <div className="requirement-document-text-article">暂无源文件</div>
@@ -322,7 +404,7 @@ export function RequirementDocumentPreviewContent({
 
   const analysisResultContent = understandingResult ? (
     <div className="requirement-document-understanding">
-      <pre className="requirement-document-understanding-content">{understandingResult}</pre>
+      <RequirementUnderstandingArticle content={understandingResult} />
     </div>
   ) : (
     <div className="requirement-document-understanding-empty">
@@ -332,9 +414,12 @@ export function RequirementDocumentPreviewContent({
 
   return (
     <div className={`requirement-document-modal${embedded ? ' requirement-document-inline' : ''}`}>
-      <div className="requirement-document-modal-toolbar">
+      <header className="requirement-document-modal-toolbar">
         <div className="requirement-document-modal-toolbar-main">
-          <div className="requirement-document-modal-title">需求文档</div>
+          <div className="requirement-document-modal-title-row">
+            <FileWordOutlined className="requirement-document-modal-title-icon" />
+            <div className="requirement-document-modal-title">需求文档</div>
+          </div>
           <div className="requirement-document-modal-meta">
             <span className="requirement-document-type-chip">{documentTypeLabel}</span>
             <span className="requirement-document-file-name" title={documentName}>
@@ -353,24 +438,52 @@ export function RequirementDocumentPreviewContent({
             下载原文件
           </Button>
         ) : null}
-      </div>
+      </header>
       {downloadMutation.error ? <Alert showIcon type="error" title={getErrorMessage(downloadMutation.error)} /> : null}
-      <Tabs
-        className="requirement-document-tabs"
-        defaultActiveKey="document"
-        items={[
-          {
-            key: 'document',
-            label: '需求文档',
-            children: documentPreviewContent,
-          },
-          {
-            key: 'analysis',
-            label: '增强文本',
-            children: analysisResultContent,
-          },
-        ]}
-      />
+      <div
+        className="requirement-document-workspace is-compare"
+        style={{ gridTemplateColumns: `${splitPercent}fr 1px ${100 - splitPercent}fr` }}
+      >
+        <RequirementPreviewPane
+          title="需求文档"
+          icon={<FileWordOutlined />}
+          meta={<span className="requirement-document-pane-meta">原始版式</span>}
+        >
+          {documentPreviewContent}
+        </RequirementPreviewPane>
+        <div
+          className="requirement-document-pane-divider"
+          role="separator"
+          aria-label="调整原文与增强文本宽度"
+          aria-orientation="vertical"
+          aria-valuemin={32}
+          aria-valuemax={68}
+          aria-valuenow={Math.round(splitPercent)}
+          tabIndex={0}
+          onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+          onPointerMove={handleSplitPointerMove}
+          onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+          onKeyDown={handleSplitKeyDown}
+        >
+          <ColumnWidthOutlined />
+        </div>
+        <RequirementPreviewPane
+          title="增强文本"
+          icon={<FileTextOutlined />}
+          meta={
+            understandingResult ? (
+              <span className="requirement-document-analysis-status">
+                <CheckCircleFilled />
+                已提取
+              </span>
+            ) : (
+              <span className="requirement-document-pane-meta">暂无内容</span>
+            )
+            }
+        >
+          {analysisResultContent}
+        </RequirementPreviewPane>
+      </div>
     </div>
   )
 }
@@ -391,7 +504,7 @@ export function RequirementDocumentPreviewModal({
       open={open}
       onCancel={onClose}
       footer={null}
-      width="min(1180px, calc(100vw - 56px))"
+      width="min(1620px, calc(100vw - 72px))"
       centered
       destroyOnHidden
       className="requirement-document-dialog"

@@ -42,6 +42,7 @@ export function UiTestSuiteDrawer({
 }) {
   const watchedViewportWidth = Form.useWatch('viewportWidth', form)
   const watchedViewportHeight = Form.useWatch('viewportHeight', form)
+  const concreteRequirementOptions = requirementOptions?.filter((option) => option.value !== 'all')
 
   return (
     <Drawer
@@ -74,7 +75,7 @@ export function UiTestSuiteDrawer({
               ) : null}
               {requirementOptions ? (
                 <Form.Item name="requirementId" label="所属需求" rules={[{ required: true, message: '请选择所属需求' }]}>
-                  <Select placeholder="请选择需求" options={requirementOptions} />
+                  <Select placeholder="请选择需求" options={concreteRequirementOptions} />
                 </Form.Item>
               ) : null}
             </div>

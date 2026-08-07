@@ -10,6 +10,7 @@ import type {
   Sprint,
   SprintCreatePayload,
   SprintUpdatePayload,
+  CreateUiTestCasePayload,
   UiTestCase,
   UiTestSuite,
 } from '../services/api'
@@ -142,16 +143,27 @@ export function buildUiTestSuiteUpdatePayload(suite: UiTestSuite, values: UiTest
 
 export function buildUiTestCaseUpdatePayload(
   uiTestCase: UiTestCase,
-  values: Pick<UiTestCase, 'name' | 'enabled' | 'orderNo' | 'stepsJson'>,
+  values: CreateUiTestCasePayload,
 ) {
-  const payload: Partial<Pick<UiTestCase, 'name' | 'enabled' | 'orderNo' | 'stepsJson'>> = {}
+  const payload: Partial<CreateUiTestCasePayload> = {}
 
   setValueIfChanged(payload, 'name', uiTestCase.name, values.name)
   setBooleanIfChanged(payload, 'enabled', uiTestCase.enabled, values.enabled)
   if ((uiTestCase.orderNo ?? undefined) !== (values.orderNo ?? undefined)) payload.orderNo = values.orderNo
-  if (normalizeText(uiTestCase.stepsJson) !== normalizeText(values.stepsJson)) payload.stepsJson = values.stepsJson ?? '[]'
+  if (normalizeStepsJson(uiTestCase.stepsJson) !== normalizeStepsJson(values.stepsJson)) payload.stepsJson = values.stepsJson ?? '[]'
 
   return payload
+}
+
+function normalizeStepsJson(value: UiTestCase['stepsJson']) {
+  if (!value) return ''
+
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value
+    return JSON.stringify(parsed)
+  } catch {
+    return typeof value === 'string' ? normalizeText(value) : ''
+  }
 }
 
 export function buildApiEnvironmentUpdatePayload(

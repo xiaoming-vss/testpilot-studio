@@ -11,7 +11,6 @@ import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Spin, Tag }
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AiTaskQuickLinks } from '../components/AiTaskQuickLinks'
 import {
   RequirementAnalysisRunModal,
   type RequirementAnalysisRunFormValues,
@@ -112,11 +111,6 @@ function getRequirementAnalysisStageMeta(stage?: string) {
 function getRequirementAnalysisStageField(stage?: string) {
   if (!stage) return undefined
   return requirementAnalysisStageFieldMap[stage]
-}
-
-function formatDurationSeconds(durationMs?: number | null) {
-  if (durationMs === undefined || durationMs === null) return '-'
-  return `${(durationMs / 1000).toFixed(2)} s`
 }
 
 function normalizeInstruction(instruction?: string) {
@@ -661,7 +655,6 @@ export function RequirementAnalysisTaskDetailPage() {
                   </div>
                 ))}
                 <div className="ai-task-detail-inline-actions">
-                  <AiTaskQuickLinks />
                   <Button
                     className="action-btn-run"
                     icon={<CaretRightOutlined />}
@@ -829,7 +822,6 @@ export function RequirementAnalysisTaskDetailPage() {
                                       <Tag color={recordStageMeta.color}>{recordStageMeta.label}</Tag>
                                     </span>
                                   ) : null}
-                                  <span className="ai-task-run-history-record-field">耗时：{formatDurationSeconds(record.durationMs)}</span>
                                 </div>
                               </div>
                               <div className="ai-task-run-history-record-actions">
@@ -937,7 +929,7 @@ export function RequirementAnalysisTaskDetailPage() {
                   loading={reviseStageMutation.isPending && stageReviewAction === 'revise'}
                   disabled={stageActionPending && stageReviewAction !== 'revise'}
                 >
-                  AI 修改
+                  继续优化
                 </Button>,
                 <Button
                   key="approve"
@@ -993,6 +985,7 @@ export function RequirementAnalysisTaskDetailPage() {
 
       <Modal
         title="AI 修改"
+        className="ai-task-revise-modal"
         open={reviseModalOpen}
         onCancel={() => {
           if (reviseStageMutation.isPending) return

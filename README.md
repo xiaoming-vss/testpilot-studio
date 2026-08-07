@@ -55,8 +55,8 @@ npm run verify
 - `.agents/`
 - `.codex/`
 - `.trellis/`
+- `.scratch/`
 - `.trae/`
-- `AGENTS.md`
 - `output/`
 - `dist/`
 - `node_modules/`

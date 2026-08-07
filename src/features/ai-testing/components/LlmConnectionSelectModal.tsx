@@ -59,6 +59,7 @@ export function LlmConnectionSelectModal({
 
   return (
     <Modal
+      rootClassName="llm-connection-select-modal"
       title="选择 LLM 模型"
       open={open}
       onCancel={handleClose}

@@ -56,7 +56,7 @@ function renderField(record: object, key: PropertyKey, booleanLabels?: [string, 
 }
 
 function otherStepFields(step: UiCaseGenerateTaskRunImportStep) {
-  return Object.fromEntries(Object.entries(step).filter(([key]) => !knownStepFieldNames.has(key)))
+  return Object.fromEntries(Object.entries(step).filter(([key]) => key !== '__rowKey' && !knownStepFieldNames.has(key)))
 }
 
 function CaseDetails({ title, value }: { title: string; value: UiCaseGenerateTaskRunImportCase }) {

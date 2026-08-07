@@ -23,8 +23,8 @@ export function TestPilotLogo({ size = 28, className, title = 'MTX Logo' }: Test
     >
       <defs>
         <linearGradient id={plateGradientId} x1="29" y1="1" x2="29" y2="57" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#ffffff" />
-          <stop offset="1" stopColor="#f3f7fc" />
+          <stop className="mtx-logo__plate-start" stopColor="#ffffff" />
+          <stop className="mtx-logo__plate-end" offset="1" stopColor="#f3f7fc" />
         </linearGradient>
       </defs>
       <rect className="mtx-logo__plate" x="1" y="1" width="56" height="56" rx="14" fill={`url(#${plateGradientId})`} />

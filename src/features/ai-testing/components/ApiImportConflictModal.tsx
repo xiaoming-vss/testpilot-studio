@@ -84,14 +84,15 @@ export function ApiImportConflictModal({
         description="当前仅支持整批覆盖。确认时后端会重新检查集合，请以下一次响应为准。"
       />
       {error ? <Alert showIcon type="error" title={getErrorMessage(error)} /> : null}
-      <Collapse
-        defaultActiveKey={conflicts.map((_, index) => String(index))}
-        items={conflicts.map((conflict, index) => ({
-          key: String(index),
-          label: conflict.generatedCase.name || conflict.existingCase.name || conflict.normalizedName,
-          children: <CaseComparison conflict={conflict} />,
-        }))}
-      />
+      <div className="api-import-conflict-list">
+        <Collapse
+          items={conflicts.map((conflict, index) => ({
+            key: String(index),
+            label: conflict.generatedCase.name || conflict.existingCase.name || conflict.normalizedName,
+            children: <CaseComparison conflict={conflict} />,
+          }))}
+        />
+      </div>
     </Modal>
   )
 }

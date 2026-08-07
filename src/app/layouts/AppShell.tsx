@@ -63,7 +63,7 @@ export function AppShell() {
   const items: MenuProps['items'] = [
     { key: '/projects', icon: <AppstoreOutlined />, label: '项目总览' },
     { key: '/testing', icon: <ExperimentOutlined />, label: '测试' },
-    { key: '/ai-testing', icon: <RobotOutlined />, label: 'AI测试' },
+    { key: '/ai-testing', icon: <RobotOutlined />, label: '测试设计' },
     { key: '/base-services', icon: <LinkOutlined />, label: '基础服务' },
   ]
 

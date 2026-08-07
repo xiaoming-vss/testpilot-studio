@@ -18,6 +18,21 @@ export type UiTestSuite = {
   updated_at?: string
 }
 
+export type UiTestCaseStep = {
+  orderNo?: number
+  stepName?: string
+  keyword?: string
+  locatorType?: string
+  locatorValue?: string
+  operationValue?: string
+  expectValue?: string
+  comparator?: string
+  timeoutMs?: number
+  continueOnFailure?: boolean
+  enabled?: boolean
+  description?: string
+}
+
 export type UiTestCase = {
   caseId?: string
   suiteId?: string
@@ -25,7 +40,7 @@ export type UiTestCase = {
   name: string
   enabled?: boolean
   orderNo?: number
-  stepsJson?: string
+  stepsJson?: string | UiTestCaseStep[]
   createdAt?: string
   created_at?: string
   updatedAt?: string

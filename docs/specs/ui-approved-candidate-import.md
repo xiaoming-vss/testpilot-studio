@@ -91,7 +91,7 @@ UI 用例生成任务已经能够从源码包产出候选结果，并支持编�
 - When refresh after a duplicate-import response returns `imported`, import UI closes and the page reports that another operation completed the import. When it remains `pending`, the original error remains retryable.
 - Successful import keeps the user on the generation task detail, displays imported time and the `ui_suite` target, and exposes a navigation action to the existing formal suite detail route.
 - The generation detail does not query formal cases after success because it does not render a formal case list. The destination suite detail owns the latest formal-case query.
-- UI import behavior never reads `importedCollectionId`. Compatibility fields used by API or functional generation are not removed in this work.
+- API, functional, and UI generation runs share the array-based imported-target lifecycle; UI import reads only the `ui_suite` target and never falls back to a single-target field.
 - The UI generation API module gains the run-import operation, and generation-domain types gain the request, response, conflict-case, and open-ended step contracts.
 - Existing product, system-design, and prior UI-generation specifications are updated to replace the former “no UI import” scope with the completed formal-asset-import lifecycle.
 
@@ -113,7 +113,7 @@ UI 用例生成任务已经能够从源码包产出候选结果，并支持编�
 - Tests cover 400, 403, 404, and 500 in the appropriate modal, retained safe state, and retry behavior.
 - Tests cover a duplicate-import 400 followed by an imported refresh and by a still-pending refresh.
 - Tests cover page focus or explicit refresh updating an externally imported run to read-only imported state.
-- Tests verify that UI import logic does not read or make decisions from `importedCollectionId`.
+- Tests verify that UI import eligibility and target display use `importStatus` and the `ui_suite` entry in `importedTargets`.
 - Tests verify that the browser calls only the run-import endpoint for formal-asset import and never calls formal-case delete, create, or update APIs to simulate overwrite.
 - Preserving an existing formal case ID during overwrite is a backend integration-test responsibility because the import response does not return formal cases and the generation detail does not load them.
 

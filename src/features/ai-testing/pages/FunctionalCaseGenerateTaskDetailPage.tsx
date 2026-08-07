@@ -1,12 +1,13 @@
 import { ArrowLeftOutlined, CaretRightOutlined, DeleteOutlined, DownOutlined, EditOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Popover, Spin, Tabs, Tag } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FunctionalCaseGenerateTaskDrawer, type FunctionalCaseGenerateTaskFormValues } from '../components/FunctionalCaseGenerateTaskDrawer'
-import { AiTaskQuickLinks } from '../components/AiTaskQuickLinks'
+import { FunctionalImportConflictModal } from '../components/FunctionalImportConflictModal'
+import { ImportMigrationWarning } from '../components/ImportMigrationWarning'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
-import type { FunctionalCaseGenerateTaskRun } from '../types'
+import type { FunctionalCaseGenerateTaskRun, FunctionalCaseGenerateTaskRunImportConflict } from '../types'
 import { getApiCaseGenerateTaskRunStatusMeta, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import { JsonEditor } from '@/shared/components/JsonEditor/JsonEditor'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
@@ -14,6 +15,7 @@ import { message } from '@/shared/utils/feedback'
 import '@/features/ai-testing/styles/index.css'
 import { RequirementDocumentPreviewContent } from '@/features/requirements/components/RequirementDocumentPreviewModal'
 import { hasRequirementDocument } from '@/features/requirements/utils/requirementDocument'
+import { ApiError } from '@/shared/api/request'
 import { api, listItems } from '@/services/api'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickUpdatedAt } from '@/utils/format'
 
@@ -50,9 +52,14 @@ type GeneratedCaseImportStats = {
 }
 
 const reviewStatusMetaMap: Record<string, { label: string; color: string }> = {
-  pending: { label: '待导入', color: 'gold' },
-  approved: { label: '已导入', color: 'success' },
-  rejected: { label: '已丢弃', color: 'default' },
+  pending: { label: '待审核', color: 'gold' },
+  approved: { label: '已批准', color: 'success' },
+  rejected: { label: '已拒绝', color: 'default' },
+}
+
+const importStatusMetaMap: Record<string, { label: string; color: string }> = {
+  pending: { label: '待导入', color: 'purple' },
+  imported: { label: '已导入', color: 'success' },
 }
 
 const functionalStageMetaMap: Record<string, { label: string; color: string }> = {
@@ -370,6 +377,38 @@ function parseRequirementAnalysisContent(content: string): RequirementAnalysisSe
   }
 }
 
+function RequirementAnalysisCollapsibleSection({
+  title,
+  count,
+  color,
+  children,
+}: {
+  title: string
+  count: number
+  color: string
+  children: ReactNode
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <section className="ai-requirement-analysis-section">
+      <button
+        type="button"
+        className="ai-requirement-analysis-section-head"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="ai-requirement-analysis-section-title">
+          {expanded ? <DownOutlined aria-hidden /> : <RightOutlined aria-hidden />}
+          <span>{title}</span>
+        </span>
+        <Tag color={color}>{count}</Tag>
+      </button>
+      {expanded ? children : null}
+    </section>
+  )
+}
+
 function RequirementAnalysisDiagramView({ content }: { content: string }) {
   const parsed = useMemo(() => parseRequirementAnalysisContent(content), [content])
 
@@ -399,11 +438,7 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
   return (
     <div className="ai-requirement-analysis-view">
       {coreFunctions.length > 0 ? (
-        <section className="ai-requirement-analysis-section">
-          <div className="ai-requirement-analysis-section-head">
-            <div className="ai-requirement-analysis-section-title">平台核心功能</div>
-            <Tag color="blue">{coreFunctions.length}</Tag>
-          </div>
+        <RequirementAnalysisCollapsibleSection title="平台核心功能" count={coreFunctions.length} color="blue">
           <div className="ai-requirement-analysis-grid two-col">
             {coreFunctions.map((item, index) => (
               <article key={`core-${index}`} className="ai-requirement-analysis-card">
@@ -412,10 +447,6 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
                   <span>能力说明</span>
                   <p>{toDisplayText(item.function_description ?? item.description) || '-'}</p>
                 </div>
-                <div className="ai-requirement-analysis-field">
-                  <span>来源依据</span>
-                  <p>{formatTextList(item.derived_from) || '-'}</p>
-                </div>
                 <div className="ai-requirement-analysis-field accent">
                   <span>业务价值</span>
                   <p>{toDisplayText(item.business_value) || '-'}</p>
@@ -423,15 +454,11 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
               </article>
             ))}
           </div>
-        </section>
+        </RequirementAnalysisCollapsibleSection>
       ) : null}
 
       {targetSections.length > 0 || legacyTargets.length > 0 ? (
-        <section className="ai-requirement-analysis-section">
-          <div className="ai-requirement-analysis-section-head">
-            <div className="ai-requirement-analysis-section-title">目标理解</div>
-            <Tag color="cyan">{targetSections.length || legacyTargets.length}</Tag>
-          </div>
+        <RequirementAnalysisCollapsibleSection title="目标理解" count={targetSections.length || legacyTargets.length} color="cyan">
           <div className="ai-requirement-analysis-list">
             {targetSections.length > 0 ? targetSections.map((item, index) => (
               <article key={`target-${item.key}`} className="ai-requirement-analysis-row-card">
@@ -451,15 +478,11 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
               </article>
             ))}
           </div>
-        </section>
+        </RequirementAnalysisCollapsibleSection>
       ) : null}
 
       {risks.length > 0 ? (
-        <section className="ai-requirement-analysis-section">
-          <div className="ai-requirement-analysis-section-head">
-            <div className="ai-requirement-analysis-section-title">风险点预测</div>
-            <Tag color="volcano">{risks.length}</Tag>
-          </div>
+        <RequirementAnalysisCollapsibleSection title="风险点预测" count={risks.length} color="volcano">
           <div className="ai-requirement-analysis-grid two-col">
             {risks.map((item, index) => (
               <article key={`risk-${index}`} className="ai-requirement-analysis-card risk">
@@ -475,15 +498,11 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
               </article>
             ))}
           </div>
-        </section>
+        </RequirementAnalysisCollapsibleSection>
       ) : null}
 
       {flows.length > 0 ? (
-        <section className="ai-requirement-analysis-section">
-          <div className="ai-requirement-analysis-section-head">
-            <div className="ai-requirement-analysis-section-title">功能流程</div>
-            <Tag color="geekblue">{flows.length}</Tag>
-          </div>
+        <RequirementAnalysisCollapsibleSection title="功能流程" count={flows.length} color="geekblue">
           <div className="ai-requirement-analysis-flow-list">
             {flows.map((item, index) => (
               <article key={`flow-${index}`} className="ai-requirement-analysis-flow-card">
@@ -491,26 +510,18 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
                 <div className="ai-requirement-analysis-flow-body">
                   <div className="ai-requirement-analysis-card-title">{toDisplayText(item.flow_name) || `流程 ${index + 1}`}</div>
                   <div className="ai-requirement-analysis-field">
-                    <span>步骤</span>
-                    <p>{formatTextList(item.steps ?? item.description) || '-'}</p>
-                  </div>
-                  <div className="ai-requirement-analysis-field accent">
-                    <span>依赖</span>
-                    <p>{formatTextList(item.dependencies) || '-'}</p>
+                    <span>流程和依赖链</span>
+                    <p>{toDisplayText(item.description) || '-'}</p>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-        </section>
+        </RequirementAnalysisCollapsibleSection>
       ) : null}
 
       {scenes.length > 0 ? (
-        <section className="ai-requirement-analysis-section">
-          <div className="ai-requirement-analysis-section-head">
-            <div className="ai-requirement-analysis-section-title">场景设计</div>
-            <Tag color="purple">{scenes.length}</Tag>
-          </div>
+        <RequirementAnalysisCollapsibleSection title="场景设计" count={scenes.length} color="purple">
           <div className="ai-requirement-analysis-scene-groups">
             {scenes.map((scene, index) => {
               const subCategories = toRecordArray(scene.subcategories ?? scene.sub_category)
@@ -525,16 +536,8 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
                       <article key={`scene-${index}-sub-${subIndex}`} className="ai-requirement-analysis-card nested">
                         <div className="ai-requirement-analysis-card-title">{toDisplayText(item.name ?? item.scene_type) || `子场景 ${subIndex + 1}`}</div>
                         <div className="ai-requirement-analysis-field">
-                          <span>覆盖范围</span>
-                          <p>{toDisplayText(item.coverage ?? item.description) || '-'}</p>
-                        </div>
-                        <div className="ai-requirement-analysis-field">
-                          <span>验证重点</span>
-                          <p>{toDisplayText(item.verification_focus) || '-'}</p>
-                        </div>
-                        <div className="ai-requirement-analysis-field accent">
-                          <span>保护价值/风险</span>
-                          <p>{toDisplayText(item.protected_value_or_risk) || '-'}</p>
+                          <span>场景说明</span>
+                          <p>{toDisplayText(item.description) || '-'}</p>
                         </div>
                       </article>
                     ))}
@@ -543,7 +546,7 @@ function RequirementAnalysisDiagramView({ content }: { content: string }) {
               )
             })}
           </div>
-        </section>
+        </RequirementAnalysisCollapsibleSection>
       ) : null}
     </div>
   )
@@ -586,6 +589,7 @@ function RequirementAnalysisView({ content }: { content: string }) {
 
 function GeneratedCasesDiagramView({ content }: { content: string }) {
   const moduleGroups = useMemo(() => parseGeneratedCases(content), [content])
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(() => new Set())
 
   if (moduleGroups.length === 0) {
     return isJsonText(content) ? (
@@ -604,34 +608,56 @@ function GeneratedCasesDiagramView({ content }: { content: string }) {
         <Tag color="blue">用例 {totalCases}</Tag>
       </div>
       <div className="ai-generated-cases-module-list">
-        {moduleGroups.map((group, groupIndex) => (
-          <section key={`module-${groupIndex}`} className="ai-generated-cases-module">
-            <div className="ai-generated-cases-module-head">
-              <div className="ai-generated-cases-module-title">{group.moduleName}</div>
-              <Tag color="default">{group.cases.length} 条</Tag>
-            </div>
-            <div className="ai-generated-cases-case-list">
-              {group.cases.map((testCase, caseIndex) => (
-                <article key={`case-${groupIndex}-${caseIndex}`} className="ai-generated-cases-case-card">
-                  <div className="ai-generated-cases-case-header">
-                    <div className="ai-generated-cases-case-name">{testCase.displayName}</div>
-                    <div className="ai-generated-cases-case-badges">
-                      {testCase.tagFields.map((tag) => (
-                        <Tag key={tag.key} color="orange">{tag.value}</Tag>
+        {moduleGroups.map((group, groupIndex) => {
+          const expanded = expandedModules.has(group.moduleName)
+
+          return (
+            <section key={`module-${groupIndex}`} className="ai-generated-cases-module">
+              <button
+                type="button"
+                className="ai-generated-cases-module-head"
+                aria-expanded={expanded}
+                aria-label={`${group.moduleName}，${group.cases.length} 条，${expanded ? '收起' : '展开'}`}
+                onClick={() => {
+                  setExpandedModules((current) => {
+                    const next = new Set(current)
+                    if (expanded) next.delete(group.moduleName)
+                    else next.add(group.moduleName)
+                    return next
+                  })
+                }}
+              >
+                <div className="ai-generated-cases-module-title">
+                  {expanded ? <DownOutlined aria-hidden /> : <RightOutlined aria-hidden />}
+                  <span>{group.moduleName}</span>
+                </div>
+                <Tag color="default">{group.cases.length} 条</Tag>
+              </button>
+              {expanded ? (
+                <div className="ai-generated-cases-case-list">
+                  {group.cases.map((testCase, caseIndex) => (
+                    <article key={`case-${groupIndex}-${caseIndex}`} className="ai-generated-cases-case-card">
+                      <div className="ai-generated-cases-case-header">
+                        <div className="ai-generated-cases-case-name">{testCase.displayName}</div>
+                        <div className="ai-generated-cases-case-badges">
+                          {testCase.tagFields.map((tag) => (
+                            <Tag key={tag.key} color="orange">{tag.value}</Tag>
+                          ))}
+                        </div>
+                      </div>
+                      {testCase.detailFields.map((field) => (
+                        <div key={field.key} className={`ai-generated-cases-case-field${field.key === 'expected_results' || field.key === 'expectedResult' || field.key === 'expectedResults' ? ' accent' : ''}`}>
+                          <span>{field.label}</span>
+                          <p>{field.value}</p>
+                        </div>
                       ))}
-                    </div>
-                  </div>
-                  {testCase.detailFields.map((field) => (
-                    <div key={field.key} className={`ai-generated-cases-case-field${field.key === 'expected_results' || field.key === 'expectedResult' || field.key === 'expectedResults' ? ' accent' : ''}`}>
-                      <span>{field.label}</span>
-                      <p>{field.value}</p>
-                    </div>
+                    </article>
                   ))}
-                </article>
-              ))}
-            </div>
-          </section>
-        ))}
+                </div>
+              ) : null}
+            </section>
+          )
+        })}
       </div>
     </div>
   )
@@ -1256,9 +1282,11 @@ function CaseNamesResultView({
   )
 }
 
-function formatDurationSeconds(durationMs?: number | null) {
-  if (durationMs === undefined || durationMs === null) return '-'
-  return `${(durationMs / 1000).toFixed(2)} s`
+function getRunOperationErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.status === 403) {
+    return error.message ? `无权限执行当前操作：${error.message}` : '无权限执行当前操作'
+  }
+  return getErrorMessage(error)
 }
 
 function renderRunStatusTag(status?: string) {
@@ -1267,7 +1295,7 @@ function renderRunStatusTag(status?: string) {
 }
 
 function normalizeReviewStatus(status?: string) {
-  return status ?? 'pending'
+  return status ?? 'unknown'
 }
 
 function getFunctionalStageMeta(stage?: string) {
@@ -1289,6 +1317,16 @@ function renderReviewStatusTag(status?: string) {
   return <Tag color={meta.color}>{meta.label}</Tag>
 }
 
+function renderImportStatusTag(status?: string) {
+  const normalizedStatus = status ?? 'unknown'
+  const meta = importStatusMetaMap[normalizedStatus] ?? {
+    label: normalizedStatus,
+    color: 'default',
+  }
+
+  return <Tag color={meta.color}>{meta.label}</Tag>
+}
+
 export function FunctionalCaseGenerateTaskDetailPage() {
   const { taskId = '' } = useParams()
   const navigate = useNavigate()
@@ -1302,7 +1340,13 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   const [runResultModal, setRunResultModal] = useState<RunResultModalState>(null)
   const [resultModalRunId, setResultModalRunId] = useState<string | null>(null)
   const [reviewSubmitAction, setReviewSubmitAction] = useState<'approve' | 'reject' | null>(null)
-  const [importResultView, setImportResultView] = useState<GeneratedCasesViewMode>('json')
+  const [reviewComment, setReviewComment] = useState('')
+  const [candidateModalView, setCandidateModalView] = useState<'preview' | 'edit'>('preview')
+  const [candidateYaml, setCandidateYaml] = useState('')
+  const [importConflict, setImportConflict] = useState<{
+    runId: string
+    conflicts: FunctionalCaseGenerateTaskRunImportConflict[]
+  } | null>(null)
   const [checkpointEnabled, setCheckpointEnabled] = useState(false)
   const [stageOutputDraft, setStageOutputDraft] = useState('')
   const [stageOutputDirty, setStageOutputDirty] = useState(false)
@@ -1313,7 +1357,6 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   const [runResultGeneratedCasesView, setRunResultGeneratedCasesView] = useState<GeneratedCasesViewMode>('json')
   const [stageRequirementAnalysisView, setStageRequirementAnalysisView] = useState<RequirementAnalysisViewMode>('json')
   const [form] = Form.useForm<FunctionalCaseGenerateTaskFormValues>()
-  const [reviewForm] = Form.useForm<{ comment?: string }>()
 
   const taskQuery = useQuery({
     queryKey: ['functionalCaseGenerateTask', taskId],
@@ -1481,26 +1524,69 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   const reviewRunMutation = useMutation({
     mutationFn: (payload: {
       runId: string
-      body: { action: 'approve'; comment?: string } | { action: 'reject'; comment?: string }
+      body: { action: 'approve'; reviewComment?: string } | { action: 'reject'; reviewComment?: string }
     }) => api.reviewFunctionalCaseGenerateTaskRun(payload.runId, payload.body),
     onSuccess: (updatedRun, payload) => {
-      message.success(payload.body.action === 'approve' ? '已导入功能测试集' : '已丢弃本次生成结果')
+      message.success(payload.body.action === 'approve' ? '候选结果审核已批准' : '候选结果审核已拒绝')
       setResultModalRunId(null)
       setReviewSubmitAction(null)
-      reviewForm.resetFields()
       setSelectedRunRecordId(updatedRun.runId ?? payload.runId)
       queryClient.setQueryData(['functionalCaseGenerateTaskRun', payload.runId], updatedRun)
       queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
       queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
-      const targetRequirementId = task?.requirementId ?? updatedRun.requirementId
+    },
+    onError: (error) => {
+      message.error(getRunOperationErrorMessage(error))
+      if (resultModalRunId) {
+        queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', resultModalRunId] })
+      }
+    },
+  })
+
+  const updateRunResultMutation = useMutation({
+    mutationFn: (payload: { runId: string; resultYaml: string }) =>
+      api.updateFunctionalCaseGenerateTaskRunResult(payload.runId, { resultYaml: payload.resultYaml }),
+    onSuccess: (updatedRun, payload) => {
+      message.success('候选结果已保存')
+      setCandidateYaml(formatStructuredContent(updatedRun.resultYaml ?? payload.resultYaml))
+      queryClient.setQueryData(['functionalCaseGenerateTaskRun', payload.runId], updatedRun)
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
+    },
+    onError: (error, payload) => {
+      message.error(getRunOperationErrorMessage(error))
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+    },
+  })
+
+  const importRunMutation = useMutation({
+    mutationFn: (payload: { runId: string; confirmOverwrite: boolean }) =>
+      api.importFunctionalCaseGenerateTaskRun(payload.runId, {
+        confirmOverwrite: payload.confirmOverwrite,
+      }),
+    onSuccess: (result, payload) => {
+      queryClient.setQueryData(['functionalCaseGenerateTaskRun', payload.runId], result.run)
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
+
+      if (result.requiresConfirmation) {
+        setImportConflict({ runId: payload.runId, conflicts: result.conflicts })
+        return
+      }
+
+      setImportConflict(null)
+      message.success('正式功能用例导入成功')
+      const targetRequirementId = task?.requirementId ?? result.run.requirementId
       if (targetRequirementId) {
         queryClient.invalidateQueries({ queryKey: ['functionTestSuites', targetRequirementId] })
       }
       queryClient.invalidateQueries({ queryKey: ['functionTestSuites'] })
       queryClient.invalidateQueries({ queryKey: ['functionTestCases'] })
     },
-    onError: (error) => {
-      message.error(getErrorMessage(error))
+    onError: (error, payload) => {
+      message.error(getRunOperationErrorMessage(error))
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRun', payload.runId] })
+      queryClient.invalidateQueries({ queryKey: ['functionalCaseGenerateTaskRuns', taskId] })
     },
   })
 
@@ -1636,14 +1722,18 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   )
   const stageActionPending = saveStageOutputMutation.isPending || reviewStageMutation.isPending
   const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && selectedRunStatus === 'success'
+  const canEditCandidate = canReviewSelectedRun
+  const candidateDirty = candidateYaml !== formatStructuredContent(selectedRun?.resultYaml ?? '')
 
   useEffect(() => {
     if (!resultModalRunId) {
-      reviewForm.resetFields()
+      setCandidateYaml('')
+      setReviewComment('')
       return
     }
-    reviewForm.setFieldsValue({ comment: selectedRun?.reviewComment || undefined })
-  }, [resultModalRunId, reviewForm, selectedRun?.reviewComment])
+    setReviewComment(selectedRun?.reviewComment ?? '')
+    setCandidateYaml(formatStructuredContent(selectedRun?.resultYaml ?? ''))
+  }, [resultModalRunId, selectedRun?.reviewComment, selectedRun?.resultYaml])
 
   useEffect(() => {
     const nextSourceKey = `${selectedRun?.runId ?? ''}:${selectedRun?.currentStage ?? ''}`
@@ -1781,28 +1871,27 @@ export function FunctionalCaseGenerateTaskDetailPage() {
     setSelectedRunRecordId(runId)
     setResultModalRunId(runId)
     setReviewSubmitAction(null)
+    setCandidateModalView('preview')
   }
 
   function closeResultModal() {
-    if (reviewRunMutation.isPending) return
+    if (reviewRunMutation.isPending || updateRunResultMutation.isPending) return
     setResultModalRunId(null)
     setReviewSubmitAction(null)
-    reviewForm.resetFields()
   }
 
   function handleApproveReview() {
     if (!resultModalRunId) return
     if (!canReviewSelectedRun) {
-      message.warning('任务执行中，暂时不能导入')
+      message.warning('当前运行状态不允许批准候选结果')
       return
     }
-    const values = reviewForm.getFieldsValue()
     setReviewSubmitAction('approve')
     reviewRunMutation.mutate({
       runId: resultModalRunId,
       body: {
         action: 'approve',
-        comment: values.comment?.trim() || undefined,
+        reviewComment: reviewComment.trim() || undefined,
       },
     })
   }
@@ -1810,18 +1899,32 @@ export function FunctionalCaseGenerateTaskDetailPage() {
   function handleRejectReview() {
     if (!resultModalRunId) return
     if (!canReviewSelectedRun) {
-      message.warning('任务执行中，暂时不能导入')
+      message.warning('当前运行状态不允许拒绝候选结果')
       return
     }
-    const values = reviewForm.getFieldsValue()
     setReviewSubmitAction('reject')
     reviewRunMutation.mutate({
       runId: resultModalRunId,
       body: {
         action: 'reject',
-        comment: values.comment?.trim() || undefined,
+        reviewComment: reviewComment.trim() || undefined,
       },
     })
+  }
+
+  function handleSaveCandidateResult() {
+    if (!resultModalRunId || !canEditCandidate) return
+    updateRunResultMutation.mutate({ runId: resultModalRunId, resultYaml: candidateYaml })
+  }
+
+  function handleImportRun(runId?: string) {
+    if (!runId || importRunMutation.isPending) return
+    importRunMutation.mutate({ runId, confirmOverwrite: false })
+  }
+
+  function handleConfirmImportOverwrite() {
+    if (!importConflict || importRunMutation.isPending) return
+    importRunMutation.mutate({ runId: importConflict.runId, confirmOverwrite: true })
   }
 
   return (
@@ -1846,7 +1949,6 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                   </div>
                 ))}
                 <div className="ai-task-detail-inline-actions">
-                  <AiTaskQuickLinks />
                   <Button
                     className="action-btn-run"
                     icon={<CaretRightOutlined />}
@@ -1930,18 +2032,24 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                         {runRecords.map((record, index) => {
                           const active = record.runId === selectedRunId
                           const reviewStatus = normalizeReviewStatus(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)
+                          const importStatus = active && selectedRun ? selectedRun.importStatus : record.importStatus
                           const recordStatus = String(active && selectedRun ? selectedRun.status ?? '' : record.status ?? '')
                           const recordSucceeded = recordStatus.toLowerCase() === 'success'
+                          const recordDetailedCasesReady = active && selectedRun?.currentStage === 'detailed_cases'
+                          const recordFailed = ['failed', 'error'].includes(recordStatus.toLowerCase())
                           const recordResultYaml = active && selectedRun ? selectedRun.resultYaml : record.resultYaml
                           const recordHasResultYaml = Boolean(formatStructuredContent(recordResultYaml))
+                          const recordErrorMessage = active && selectedRun ? selectedRun.errorMessage : record.errorMessage
+                          const recordHasErrorMessage = Boolean(recordErrorMessage?.trim())
                           const canReviewRecord = reviewStatus === 'pending' && recordStatus === 'success'
+                          const canImportRecord = reviewStatus === 'approved' && importStatus === 'pending' && recordStatus === 'success'
                           const visibleSections = runResultSectionDefinitions.filter(
                             (section) => {
                               if (section.key === 'enhancedText') {
                                 return active && section.key === selectedStageField?.key && checkpointStageWaitingReview
                               }
-                              if (section.key === 'resultYaml') return recordSucceeded || recordHasResultYaml
-                              if (section.key === 'errorMessage') return !recordSucceeded
+                              if (section.key === 'resultYaml') return recordSucceeded || recordDetailedCasesReady
+                              if (section.key === 'errorMessage') return recordFailed && recordHasErrorMessage
                               return true
                             },
                           )
@@ -1977,9 +2085,9 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                                   {recordSucceeded ? (
                                     <span className="ai-task-run-history-review-status">{renderReviewStatusTag(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)}</span>
                                   ) : null}
-                                  <span className="ai-task-run-history-record-field">开始：{formatTime(record.startedAt)}</span>
-                                  <span className="ai-task-run-history-record-field">结束：{formatTime(record.finishedAt)}</span>
-                                  <span className="ai-task-run-history-record-field">耗时：{formatDurationSeconds(record.durationMs)}</span>
+                                  {recordSucceeded ? (
+                                    <span className="ai-task-run-history-review-status">{renderImportStatusTag(importStatus)}</span>
+                                  ) : null}
                                 </div>
                               </div>
                               <div className="ai-task-run-history-record-actions">
@@ -2005,6 +2113,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                                 })}
                                 {active && selectedRun ? (
                                   <div className="ai-task-run-history-review-inline">
+                                    <ImportMigrationWarning importMigrationComplete={selectedRun.importMigrationComplete} />
                                     {canRetryStage ? (
                                       <Button
                                         size="small"
@@ -2018,14 +2127,17 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                                       </Button>
                                     ) : null}
                                     {selectedRun.reviewedAt ? (
-                                      <span className="ai-task-run-history-record-field">导入时间：{formatTime(selectedRun.reviewedAt)}</span>
+                                      <span className="ai-task-run-history-record-field">审核时间：{formatTime(selectedRun.reviewedAt)}</span>
                                     ) : null}
                                     {selectedRun.reviewComment ? (
                                       <Popover trigger="click" placement="bottomRight" content={<div className="ai-task-run-review-comment">{selectedRun.reviewComment}</div>}>
                                         <button type="button" className="ai-task-run-review-note-btn" onClick={(event) => event.stopPropagation()}>
-                                          导入备注
+                                          审核备注
                                         </button>
                                       </Popover>
+                                    ) : null}
+                                    {selectedRun.importedAt ? (
+                                      <span className="ai-task-run-history-record-field">导入时间：{formatTime(selectedRun.importedAt)}</span>
                                     ) : null}
                                     {canReviewRecord ? (
                                       <Button
@@ -2036,7 +2148,33 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                                           openResultModal(record.runId)
                                         }}
                                       >
-                                        导入
+                                        审核候选结果
+                                      </Button>
+                                    ) : null}
+                                    {!canReviewRecord && recordSucceeded && recordHasResultYaml ? (
+                                      <Button
+                                        size="small"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          openResultModal(record.runId)
+                                        }}
+                                      >
+                                        查看候选结果
+                                      </Button>
+                                    ) : null}
+                                    {canImportRecord ? (
+                                      <Button
+                                        size="small"
+                                        type="primary"
+                                        loading={importRunMutation.isPending && active}
+                                        disabled={importRunMutation.isPending}
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          setSelectedRunRecordId(record.runId ?? null)
+                                          handleImportRun(record.runId)
+                                        }}
+                                      >
+                                        导入正式用例
                                       </Button>
                                     ) : null}
                                   </div>
@@ -2198,6 +2336,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                         children: (
                           <TextCodeEditor
                             value={stageOutputDraft}
+                            language="json"
                             onChange={(value) => {
                               setStageOutputDraft(value)
                               setStageOutputDirty(true)
@@ -2237,6 +2376,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                         children: (
                           <TextCodeEditor
                             value={stageOutputDraft}
+                            language="json"
                             onChange={(value) => {
                               setStageOutputDraft(value)
                               setStageOutputDirty(true)
@@ -2309,7 +2449,7 @@ export function FunctionalCaseGenerateTaskDetailPage() {
 
         <Modal
           className="ai-task-import-result-modal"
-          title={canReviewSelectedRun ? '导入 AI 生成结果' : '功能测试用例生成结果'}
+          title={canReviewSelectedRun ? '审核候选结果' : '功能测试用例候选结果'}
           open={resultModalOpen}
           onCancel={closeResultModal}
           footer={
@@ -2323,17 +2463,19 @@ export function FunctionalCaseGenerateTaskDetailPage() {
                     danger
                     ghost
                     loading={reviewRunMutation.isPending && reviewSubmitAction === 'reject'}
+                    disabled={updateRunResultMutation.isPending || (reviewRunMutation.isPending && reviewSubmitAction !== 'reject')}
                     onClick={handleRejectReview}
                   >
-                    不导入
+                    拒绝
                   </Button>,
                   <Button
                     key="approve"
                     type="primary"
                     loading={reviewRunMutation.isPending && reviewSubmitAction === 'approve'}
+                    disabled={updateRunResultMutation.isPending || (reviewRunMutation.isPending && reviewSubmitAction !== 'approve')}
                     onClick={handleApproveReview}
                   >
-                    确认导入
+                    批准
                   </Button>,
                 ]
               : [
@@ -2346,43 +2488,95 @@ export function FunctionalCaseGenerateTaskDetailPage() {
           centered
           destroyOnHidden
         >
-          <Form form={reviewForm} layout="vertical" className="ai-task-import-result-form">
+          <Form layout="vertical" className="ai-task-import-result-form">
             <div className="ai-task-import-target-summary">
               <div className="ai-task-import-target-copy">
-                <strong>导入到当前任务关联需求</strong>
-                <span title={importTargetRequirementName}>目标需求：{importTargetRequirementName}</span>
+                <strong>候选结果</strong>
+                <span title={importTargetRequirementName}>关联需求：{importTargetRequirementName}</span>
               </div>
               <div className="ai-task-import-target-stats">
                 <Tag color="cyan">模块 {selectedRunImportStats.moduleCount}</Tag>
                 <Tag color="blue">用例 {selectedRunImportStats.caseCount}</Tag>
               </div>
             </div>
-            <div className="ai-task-review-modal-content ai-task-result-preview-modal-content ai-task-import-result-preview-content single-column">
-              <div className="ai-task-review-modal-section">
-                <div className="ai-task-review-modal-label">生成结果</div>
-                <div className="ai-task-review-modal-preview ai-task-import-result-preview">
-                  {selectedRunQuery.isLoading ? (
-                    <div className="ai-task-run-result-popover-loading">
-                      <Spin />
+            <Tabs
+              activeKey={candidateModalView}
+              onChange={(key) => setCandidateModalView(key as 'preview' | 'edit')}
+              items={[
+                {
+                  key: 'preview',
+                  label: '预览候选',
+                  children: (
+                    <div className="ai-task-review-modal-content ai-task-result-preview-modal-content ai-task-import-result-preview-content single-column">
+                      <div className="ai-task-review-modal-section">
+                        <div className="ai-task-review-modal-preview ai-task-import-result-preview">
+                          {selectedRunQuery.isLoading ? (
+                            <div className="ai-task-run-result-popover-loading">
+                              <Spin />
+                            </div>
+                          ) : selectedRun?.resultYaml ? (
+                            <GeneratedCasesDiagramView content={formatStructuredContent(selectedRun.resultYaml)} />
+                          ) : (
+                            <div className="ai-task-run-result-popover-empty">当前记录暂无结果</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  ) : selectedRun?.resultYaml ? (
-                    <GeneratedCasesResultView
-                      content={formatStructuredContent(selectedRun.resultYaml)}
-                      expanded
-                      activeView={importResultView}
-                      onViewChange={setImportResultView}
-                    />
-                  ) : (
-                    <div className="ai-task-run-result-popover-empty">当前记录暂无结果</div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <Form.Item label="导入备注" name="comment">
-              <Input.TextArea rows={4} placeholder="请输入导入备注或不导入原因" disabled={!canReviewSelectedRun} />
+                  ),
+                },
+                {
+                  key: 'edit',
+                  label: '编辑候选',
+                  children: (
+                    <div className="ai-task-review-modal-content single-column">
+                      <JsonEditor
+                        ariaLabel="功能候选结果 JSON"
+                        value={candidateYaml}
+                        onChange={setCandidateYaml}
+                        readOnly={!canEditCandidate}
+                        foldable
+                        minHeight={520}
+                      />
+                      {updateRunResultMutation.error ? (
+                        <Alert showIcon type="error" title={getErrorMessage(updateRunResultMutation.error)} />
+                      ) : null}
+                      {canEditCandidate ? (
+                        <Button
+                          type="primary"
+                          loading={updateRunResultMutation.isPending}
+                          disabled={!candidateDirty || reviewRunMutation.isPending}
+                          onClick={handleSaveCandidateResult}
+                        >
+                          保存候选结果
+                        </Button>
+                      ) : null}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+            {reviewRunMutation.error ? <Alert showIcon type="error" title={getErrorMessage(reviewRunMutation.error)} /> : null}
+            <Form.Item label="审核备注" htmlFor="functional-review-comment">
+              <Input.TextArea
+                id="functional-review-comment"
+                rows={4}
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="请输入审核备注或拒绝原因"
+                disabled={!canReviewSelectedRun}
+              />
             </Form.Item>
           </Form>
         </Modal>
+
+        <FunctionalImportConflictModal
+          open={Boolean(importConflict)}
+          conflicts={importConflict?.conflicts ?? []}
+          loading={importRunMutation.isPending}
+          error={importConflict ? importRunMutation.error : undefined}
+          onCancel={() => setImportConflict(null)}
+          onConfirm={handleConfirmImportOverwrite}
+        />
 
         <LlmConnectionSelectModal
           open={llmSelectOpen}

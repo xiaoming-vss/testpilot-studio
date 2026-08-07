@@ -13,13 +13,25 @@ export type ApiCaseGenerateTaskRunStatus =
   | 'canceled'
   | string
 
-export type ApiCaseGenerateTaskRunReviewStatus = 'pending' | 'approved' | 'rejected' | string
-export type ApiCaseGenerateTaskRunImportStatus = 'pending' | 'imported' | (string & {})
+export type GenerateTaskRunReviewStatus = 'pending' | 'approved' | 'rejected'
+export type GenerateTaskRunImportStatus = 'pending' | 'imported'
 
-export type ApiCaseGenerateTaskRunImportedTarget = {
-  targetType: 'api_collection' | 'ui_suite' | (string & {})
+export type ImportedTarget = {
+  targetType: 'api_collection' | 'function_suite' | 'ui_suite'
   targetId: string
 }
+
+export type GenerateTaskRunImportLifecycle = {
+  reviewStatus: GenerateTaskRunReviewStatus
+  importStatus: GenerateTaskRunImportStatus
+  importedTargets: ImportedTarget[]
+  importedAt: string | null
+  importMigrationComplete: boolean
+}
+
+export type ApiCaseGenerateTaskRunReviewStatus = GenerateTaskRunReviewStatus
+export type ApiCaseGenerateTaskRunImportStatus = GenerateTaskRunImportStatus
+export type ApiCaseGenerateTaskRunImportedTarget = ImportedTarget
 
 export type CaseGenerateTaskRunStatus = ApiCaseGenerateTaskRunStatus
 export type CaseGenerateTaskRunReviewStatus = ApiCaseGenerateTaskRunReviewStatus
@@ -102,7 +114,6 @@ export type UiCaseGenerateTask = {
   requirementId?: string
   creatorUserId?: string
   sourceType: UiCaseGenerateTaskSourceType
-  sourceContent: ''
   sourceArchive: UiCaseSourceArchive | null
   instruction: string
   createdAt?: string
@@ -123,17 +134,13 @@ export type UiCaseGenerateTaskRunSnapshot = {
   [key: string]: unknown
 }
 
-export type UiCaseGenerateTaskRun = {
+export type UiCaseGenerateTaskRun = GenerateTaskRunImportLifecycle & {
   runId?: string
   taskId?: string
   projectId?: string
   sprintId?: string
   requirementId?: string
   status?: CaseGenerateTaskRunStatus
-  reviewStatus?: CaseGenerateTaskRunReviewStatus
-  importStatus?: CaseGenerateTaskRunImportStatus
-  importedTargets?: CaseGenerateTaskRunImportedTarget[]
-  importedAt?: string | null
   reviewerUserId?: string
   reviewedAt?: string
   reviewComment?: string
@@ -164,18 +171,13 @@ export type ApiCaseGenerateTaskRunSnapshot = {
   taskType?: string
 }
 
-export type ApiCaseGenerateTaskRun = {
+export type ApiCaseGenerateTaskRun = GenerateTaskRunImportLifecycle & {
   runId?: string
   taskId?: string
   projectId?: string
   sprintId?: string
   requirementId?: string
   status?: ApiCaseGenerateTaskRunStatus
-  reviewStatus?: ApiCaseGenerateTaskRunReviewStatus
-  importStatus?: ApiCaseGenerateTaskRunImportStatus
-  importedTargets?: ApiCaseGenerateTaskRunImportedTarget[]
-  importedAt?: string
-  importedCollectionId?: string
   reviewerUserId?: string
   reviewedAt?: string
   reviewComment?: string
@@ -225,7 +227,7 @@ export type ReviewUiCaseGenerateTaskRunPayload =
 
 export type ImportUiCaseGenerateTaskRunPayload = {
   suiteId: string
-  confirmOverwrite?: boolean
+  confirmOverwrite: boolean
 }
 
 export type UiCaseGenerateTaskRunImportStep = {
@@ -241,10 +243,10 @@ export type UiCaseGenerateTaskRunImportStep = {
 }
 
 export type UiCaseGenerateTaskRunImportCase = {
-  name?: unknown
-  enabled?: unknown
-  orderNo?: unknown
-  stepsJson: UiCaseGenerateTaskRunImportStep[]
+  name: string
+  enabled: boolean
+  orderNo: number
+  stepsJson: unknown
 }
 
 export type UiCaseGenerateTaskRunImportConflict = {
@@ -267,45 +269,45 @@ export type UpdateApiCaseGenerateTaskRunResultPayload = {
 
 export type ImportApiCaseGenerateTaskRunPayload = {
   collectionId: string
-  confirmOverwrite?: boolean
+  confirmOverwrite: boolean
 }
 
 export type ApiCaseGenerateTaskRunImportExtractRule = {
-  name?: string
-  enabled?: boolean
-  orderNo?: number
-  source?: string
-  sourceExpr?: string
-  varKey?: string
-  defaultValue?: unknown
+  name: string
+  enabled: boolean
+  orderNo: number
+  source: string
+  sourceExpr: string
+  varKey: string
+  defaultValue: string
 }
 
 export type ApiCaseGenerateTaskRunImportAssertRule = {
-  name?: string
-  enabled?: boolean
-  orderNo?: number
-  assertSource?: string
-  targetExpr?: string
-  comparator?: string
-  expectedValue?: unknown
+  name: string
+  enabled: boolean
+  orderNo: number
+  assertSource: string
+  targetExpr: string
+  comparator: string
+  expectedValue: string
 }
 
 export type ApiCaseGenerateTaskRunImportCase = {
-  name?: string
-  description?: string
-  enabled?: boolean
-  orderNo?: number
-  method?: string
-  urlTemplate?: string
-  headers?: unknown
-  query?: unknown
-  bodyType?: string
-  bodyJson?: unknown
-  bodyText?: string
-  timeoutMs?: number
-  continueOnFailure?: boolean
-  extractRules?: ApiCaseGenerateTaskRunImportExtractRule[]
-  assertRules?: ApiCaseGenerateTaskRunImportAssertRule[]
+  name: string
+  description: string
+  enabled: boolean
+  orderNo: number
+  method: string
+  urlTemplate: string
+  headers: unknown
+  query: unknown
+  bodyType: string
+  bodyJson: unknown
+  bodyText: string
+  timeoutMs: number
+  continueOnFailure: boolean
+  extractRules: ApiCaseGenerateTaskRunImportExtractRule[]
+  assertRules: ApiCaseGenerateTaskRunImportAssertRule[]
 }
 
 export type ApiCaseGenerateTaskRunImportConflict = {
@@ -375,15 +377,13 @@ export type RequirementAnalysisTaskRunSnapshot = {
   [key: string]: unknown
 }
 
-export type FunctionalCaseGenerateTaskRun = {
+export type FunctionalCaseGenerateTaskRun = GenerateTaskRunImportLifecycle & {
   runId?: string
   taskId?: string
   projectId?: string
   sprintId?: string
   requirementId?: string
   status?: ApiCaseGenerateTaskRunStatus
-  reviewStatus?: ApiCaseGenerateTaskRunReviewStatus
-  importedCollectionId?: string
   reviewerUserId?: string
   reviewedAt?: string
   reviewComment?: string
@@ -413,7 +413,6 @@ export type RequirementAnalysisTaskRun = {
   requirementId?: string
   status?: ApiCaseGenerateTaskRunStatus
   reviewStatus?: ApiCaseGenerateTaskRunReviewStatus
-  importedCollectionId?: string
   reviewerUserId?: string
   reviewedAt?: string
   reviewComment?: string
@@ -479,12 +478,42 @@ export type ReviewApiCaseGenerateTaskRunPayload =
 export type ReviewFunctionalCaseGenerateTaskRunPayload =
   | {
       action: 'approve'
-      comment?: string
+      reviewComment?: string
     }
   | {
       action: 'reject'
-      comment?: string
+      reviewComment?: string
     }
+
+export type UpdateFunctionalCaseGenerateTaskRunResultPayload = {
+  resultYaml: string
+}
+
+export type ImportFunctionalCaseGenerateTaskRunPayload = {
+  confirmOverwrite: boolean
+}
+
+export type FunctionalCaseGenerateTaskRunImportCase = {
+  module: string
+  title: string
+  preconditions: string
+  steps: string
+  expectedResults: string
+  priority: string
+  caseType: string
+}
+
+export type FunctionalCaseGenerateTaskRunImportConflict = {
+  normalizedName: string
+  existingCase: FunctionalCaseGenerateTaskRunImportCase
+  generatedCase: FunctionalCaseGenerateTaskRunImportCase
+}
+
+export type ImportFunctionalCaseGenerateTaskRunResult = {
+  requiresConfirmation: boolean
+  conflicts: FunctionalCaseGenerateTaskRunImportConflict[]
+  run: FunctionalCaseGenerateTaskRun
+}
 
 export type UpdateFunctionalCaseGenerateTaskRunStageOutputPayload = {
   stage: string

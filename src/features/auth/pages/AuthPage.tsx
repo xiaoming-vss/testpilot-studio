@@ -111,7 +111,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             </div>
           </section>
         </section>
-        <footer className="auth-footer">© 2024 MTX. 版权所有</footer>
+        <footer className="auth-footer">© 2026 MTX. 版权所有</footer>
       </main>
     </div>
   )

@@ -5,9 +5,7 @@ export const uiTestKeywordOptions = [
   { label: 'dblclick · 双击元素', value: 'dblclick' },
   { label: 'input · 输入内容', value: 'input' },
   { label: 'clear · 清空输入框', value: 'clear' },
-  { label: 'press · 键盘输入', value: 'press' },
-  { label: 'wait_visible · 等待元素可见', value: 'wait_visible' },
-  { label: 'wait_hidden · 等待元素隐藏', value: 'wait_hidden' },
+  { label: 'press · 按键', value: 'press' },
   { label: 'wait_text · 等待文本出现', value: 'wait_text' },
   { label: 'assert_text · 断言元素文本', value: 'assert_text' },
   { label: 'assert_visible · 断言元素可见', value: 'assert_visible' },
@@ -32,16 +30,26 @@ export const uiTestComparatorOptions = [
   { label: 'eq', value: 'eq' },
 ]
 
-const uiStepOperationKeywords = new Set(['open', 'input', 'press', 'wait_text', 'screenshot', 'sleep'])
-const uiStepExpectKeywords = new Set(['wait_text', 'assert_text', 'assert_url'])
+const uiTestKeywords = new Set(uiTestKeywordOptions.map((item) => item.value))
+const uiTestLocatorTypes = new Set(uiTestLocatorTypeOptions.map((item) => item.value))
+const uiTestComparators = new Set(uiTestComparatorOptions.map((item) => item.value))
+
+const uiStepOperationKeywords = new Set([
+  'open',
+  'input',
+  'press',
+  'wait_text',
+  'assert_text',
+  'assert_visible',
+  'assert_url',
+  'sleep',
+])
 
 const uiStepLocatorRequiredKeywords = new Set([
   'click',
   'dblclick',
   'input',
   'clear',
-  'wait_visible',
-  'wait_hidden',
   'wait_text',
   'assert_text',
   'assert_visible',
@@ -54,9 +62,6 @@ type UiStepFieldMeta = {
   operationLabel?: string
   operationPlaceholder?: string
   operationHint?: string
-  expectLabel?: string
-  expectPlaceholder?: string
-  expectHint?: string
 }
 
 const uiStepFieldMetaMap: Record<string, UiStepFieldMeta> = {
@@ -66,40 +71,41 @@ const uiStepFieldMetaMap: Record<string, UiStepFieldMeta> = {
     operationHint: 'open 步骤必须填写完整 URL。',
   },
   input: {
-    locatorHint: 'input 一般需要先定位到输入框。',
+    locatorHint: 'input 必须定位可编辑元素，并会自动清空后再输入。',
     operationLabel: '输入值',
     operationPlaceholder: '例如：tester',
     operationHint: 'input 使用操作值作为输入内容。',
   },
+  clear: {
+    locatorHint: 'clear 仅适用于可填写文本的 input、textarea 或 contenteditable 元素。',
+  },
   press: {
     operationLabel: '按键名',
-    operationPlaceholder: '例如：Enter',
-    operationHint: 'press 使用操作值传按键名。',
+    operationPlaceholder: '例如：Enter、Control+A',
+    operationHint: '填写按键或组合键，例如 Enter、Escape、Tab、Control+A。',
   },
   wait_text: {
-    locatorHint: 'wait_text 一般需要先定位到目标元素。',
-    operationLabel: '回退文本',
+    locatorHint: 'wait_text 必须定位目标元素。',
+    operationLabel: '等待文本',
     operationPlaceholder: '例如：登录成功',
-    operationHint: '优先使用期望值；如果期望值为空，会回退到操作值。',
-    expectLabel: '期望文本',
-    expectPlaceholder: '例如：登录成功',
-    expectHint: 'wait_text 会优先读取期望值。',
+    operationHint: '填写需要等待出现的文本。',
   },
   assert_text: {
     locatorHint: 'assert_text 需要定位到目标元素。',
-    expectLabel: '期望文本',
-    expectPlaceholder: '例如：登录成功',
-    expectHint: 'assert_text 使用期望值作为断言内容。',
+    operationLabel: '期望文本',
+    operationPlaceholder: '例如：登录成功',
+    operationHint: '操作值即断言的期望文本，并且必须选择比较器。',
+  },
+  assert_visible: {
+    locatorHint: 'assert_visible 需要定位到目标元素。',
+    operationLabel: '超时时间(ms)',
+    operationPlaceholder: '例如：3000',
+    operationHint: '填写等待元素可见的超时时间，单位为毫秒。',
   },
   assert_url: {
-    expectLabel: '期望 URL',
-    expectPlaceholder: '例如：https://test.example.com/dashboard',
-    expectHint: 'assert_url 使用期望值作为断言内容。',
-  },
-  screenshot: {
-    operationLabel: '文件名',
-    operationPlaceholder: '例如：login-page.png',
-    operationHint: '可选；不填时后端会自动生成截图文件名。',
+    operationLabel: '期望 URL',
+    operationPlaceholder: '例如：https://test.example.com/dashboard',
+    operationHint: '操作值即期望 URL，并且必须选择比较器。',
   },
   sleep: {
     operationLabel: '等待时长(ms)',
@@ -125,6 +131,18 @@ export function getUiStepFieldMeta(keyword?: string) {
   return (keyword ? uiStepFieldMetaMap[keyword] : undefined) ?? {}
 }
 
+export function isValidUiStepKeyword(keyword?: string) {
+  return Boolean(keyword && uiTestKeywords.has(keyword))
+}
+
+export function isValidUiStepLocatorType(locatorType?: string) {
+  return Boolean(locatorType && uiTestLocatorTypes.has(locatorType))
+}
+
+export function isValidUiStepComparator(comparator?: string) {
+  return Boolean(comparator && uiTestComparators.has(comparator))
+}
+
 export function requiresUiStepLocator(keyword?: string) {
   return Boolean(keyword && uiStepLocatorRequiredKeywords.has(keyword))
 }
@@ -135,8 +153,4 @@ export function usesUiStepComparator(keyword?: string) {
 
 export function usesUiStepOperation(keyword?: string) {
   return Boolean(keyword && uiStepOperationKeywords.has(keyword))
-}
-
-export function usesUiStepExpect(keyword?: string) {
-  return Boolean(keyword && uiStepExpectKeywords.has(keyword))
 }

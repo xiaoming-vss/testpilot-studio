@@ -383,11 +383,22 @@ export function ProjectsPage() {
       key: 'name',
       width: '28%',
       ellipsis: true,
-      render: (name: RequirementPoolItem['name']) => (
-        <Space size={10} className="project-requirement-list-name">
-          <span className="project-requirement-list-status-dot" />
+      render: (name: RequirementPoolItem['name'], requirement) => (
+        <Space size={0} className="project-requirement-list-name">
           <Tooltip title={name}>
-            <Text ellipsis>{name}</Text>
+            <Text
+              ellipsis
+              onClick={(event) => {
+                event.stopPropagation()
+                if (hasRequirementDocument(requirement)) {
+                  setPreviewRequirement(requirement)
+                  return
+                }
+                openRequirementDrawer(requirement)
+              }}
+            >
+              {name}
+            </Text>
           </Tooltip>
         </Space>
       ),

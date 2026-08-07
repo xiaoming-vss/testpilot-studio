@@ -18,6 +18,10 @@ export type BlobResponse = {
   filename?: string
 }
 
+export type RequestConfig = {
+  normalizeListResponse?: boolean
+}
+
 export function listItems<T>(response: ListResponse<T> | { items: T[] } | T[] | undefined | null): T[] {
   if (!response) return []
   if (Array.isArray(response)) return (response as { items?: T[] }).items ?? response
@@ -40,7 +44,11 @@ function normalizeResponseData<T>(data: T): T {
   ) {
     const source = data as { items: unknown[]; total?: unknown }
     const items = source.items.slice() as unknown[] & { total: number; items: unknown[] }
-    items.items = items
+    // Keep compatibility with callers that read either the normalized array or
+    // its `items` field, but never point the field back at the array itself.
+    // A self-reference makes React Query's structural-sharing comparison recurse
+    // forever whenever a list is refetched after a successful mutation.
+    items.items = items.slice()
     items.total = typeof source.total === 'number' ? source.total : source.items.length
     return items as T
   }
@@ -60,7 +68,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}, config: RequestConfig = {}): Promise<T> {
   const token = useAuthStore.getState().token
   const headers = new Headers(options.headers)
   const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData
@@ -89,7 +97,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     throw new ApiError(payload.message || '请求失败', payload.code, response.status)
   }
 
-  return normalizeResponseData(payload.data)
+  return config.normalizeListResponse === false ? payload.data : normalizeResponseData(payload.data)
 }
 
 function getFilenameFromContentDisposition(contentDisposition: string | null) {

@@ -26,6 +26,36 @@ export type CreateZentaoConnectionPayload = {
 
 export type UpdateZentaoConnectionPayload = Partial<CreateZentaoConnectionPayload>
 
+export type GitlabConnection = {
+  connectionId: string
+  projectId?: string
+  provider: 'gitlab' | string
+  name: string
+  baseUrl: string
+  authType: 'personal_access_token' | string
+  account: string
+  status: IntegrationConnectionStatus
+  hasAccessToken: boolean
+  modelId?: string
+  tokenExpiresAt?: string | null
+  lastAuthAt?: string
+  lastAuthError?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type CreateGitlabConnectionPayload = {
+  name: string
+  baseUrl: string
+  accessToken: string
+}
+
+export type UpdateGitlabConnectionPayload = Partial<CreateGitlabConnectionPayload>
+
+export type ReauthGitlabConnectionPayload = {
+  accessToken?: string
+}
+
 export type ZentaoRemoteListResponse<T> = {
   items: T[]
   total: number

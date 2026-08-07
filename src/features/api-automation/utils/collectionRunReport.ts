@@ -39,7 +39,7 @@ export function getExecutionStatusMeta(status?: string) {
     case 'pending':
       return { color: 'default' as const, label: '等待中' }
     case 'running':
-      return { color: 'processing' as const, label: '运行中' }
+      return { color: 'green' as const, label: '运行中' }
     case 'success':
       return { color: 'success' as const, label: '成功' }
     case 'failed':
@@ -150,7 +150,7 @@ export function buildCollectionRunReportHtml(params: {
             <div class="case-title-row">
               <span class="order-chip">#${escapeHtml(String(item.orderNo ?? index + 1))}</span>
               <h2>${escapeHtml(item.caseName || `用例 ${index + 1}`)}</h2>
-              <span class="pill ${itemStatus.label === '成功' ? 'pill-success' : itemStatus.label === '失败' || itemStatus.label === '异常' ? 'pill-error' : itemStatus.label === '运行中' ? 'pill-info' : 'pill-default'}">${escapeHtml(itemStatus.label)}</span>
+<span class="pill ${itemStatus.label === '成功' || itemStatus.label === '运行中' ? 'pill-success' : itemStatus.label === '失败' || itemStatus.label === '异常' ? 'pill-error' : 'pill-default'}">${escapeHtml(itemStatus.label)}</span>
               ${item.continueOnFailure ? '<span class="pill pill-info">失败后继续</span>' : ''}
             </div>
             <div class="case-meta">
@@ -283,7 +283,7 @@ export function buildCollectionRunReportHtml(params: {
     <section class="hero">
       <div class="hero-top">
         <h1>${escapeHtml(collectionName)} · API测试集报告</h1>
-        <span class="pill ${reportStatus.label === '成功' ? 'pill-success' : reportStatus.label === '失败' || reportStatus.label === '异常' ? 'pill-error' : reportStatus.label === '运行中' ? 'pill-info' : 'pill-default'}">${escapeHtml(reportStatus.label)}</span>
+<span class="pill ${reportStatus.label === '成功' || reportStatus.label === '运行中' ? 'pill-success' : reportStatus.label === '失败' || reportStatus.label === '异常' ? 'pill-error' : 'pill-default'}">${escapeHtml(reportStatus.label)}</span>
       </div>
       <div class="hero-meta">
         <span>环境：${escapeHtml(environmentName)}</span>

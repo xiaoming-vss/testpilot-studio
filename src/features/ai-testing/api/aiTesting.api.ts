@@ -12,6 +12,8 @@ import type {
   ImportApiCaseGenerateTaskRunPayload,
   ImportApiCaseGenerateTaskRunResult,
   ImportUiCaseGenerateTaskRunPayload,
+  ImportFunctionalCaseGenerateTaskRunPayload,
+  ImportFunctionalCaseGenerateTaskRunResult,
   RequirementAnalysisTask,
   RequirementAnalysisTaskRun,
   ReviewApiCaseGenerateTaskRunPayload,
@@ -27,6 +29,7 @@ import type {
   UpdateApiCaseGenerateTaskRunResultPayload,
   UploadAiSkillPayload,
   UpdateFunctionalCaseGenerateTaskPayload,
+  UpdateFunctionalCaseGenerateTaskRunResultPayload,
   UpdateFunctionalCaseGenerateTaskRunStageOutputPayload,
   UpdateRequirementAnalysisTaskPayload,
   UpdateRequirementAnalysisTaskRunStageOutputPayload,
@@ -125,6 +128,14 @@ export const aiTestingApi = {
     request<ListResponse<FunctionalCaseGenerateTaskRun>>(`/v1/function-case-generate-tasks/${taskId}/runs`),
   getFunctionalCaseGenerateTaskRun: (runId: string) =>
     request<FunctionalCaseGenerateTaskRun>(`/v1/function-case-generate-task-runs/${runId}`),
+  updateFunctionalCaseGenerateTaskRunResult: (
+    runId: string,
+    body: UpdateFunctionalCaseGenerateTaskRunResultPayload,
+  ) =>
+    request<FunctionalCaseGenerateTaskRun>(`/v1/function-case-generate-task-runs/${runId}/result`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   updateFunctionalCaseGenerateTaskRunStageOutput: (
     runId: string,
     body: UpdateFunctionalCaseGenerateTaskRunStageOutputPayload,
@@ -151,6 +162,11 @@ export const aiTestingApi = {
     }),
   reviewFunctionalCaseGenerateTaskRun: (runId: string, body: ReviewFunctionalCaseGenerateTaskRunPayload) =>
     request<FunctionalCaseGenerateTaskRun>(`/v1/function-case-generate-task-runs/${runId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  importFunctionalCaseGenerateTaskRun: (runId: string, body: ImportFunctionalCaseGenerateTaskRunPayload) =>
+    request<ImportFunctionalCaseGenerateTaskRunResult>(`/v1/function-case-generate-task-runs/${runId}/import`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

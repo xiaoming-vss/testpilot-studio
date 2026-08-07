@@ -1,12 +1,17 @@
-import { ArrowLeftOutlined, CodeOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Popover, Segmented, Select, Switch, Tag, Tooltip, Typography, Upload } from 'antd'
+import { ArrowLeftOutlined, CodeOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, UnorderedListOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Empty, Form, Image, Input, Modal, Popconfirm, Popover, Segmented, Select, Switch, Tag, Tooltip, Typography, Upload } from 'antd'
 import type { InputRef } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
+import { UiTestPanelSplitter } from '../components/UiTestPanelSplitter'
+import { getNextEditorTopHeight } from '../utils/uiTestPanelResize'
 import {
   getUiStepFieldMeta,
+  isValidUiStepComparator,
+  isValidUiStepKeyword,
+  isValidUiStepLocatorType,
   requiresUiStepLocator,
   uiSuiteRunReportViewOptions,
   uiTestComparatorOptions,
@@ -14,7 +19,6 @@ import {
   uiTestLocatorTypeOptions,
   uiTestRunViewOptions,
   usesUiStepComparator,
-  usesUiStepExpect,
   usesUiStepOperation,
   type UiSuiteRunReportView,
   type UiTestRunView,
@@ -66,13 +70,16 @@ import {
 } from '../utils/runHelpers'
 
 const { Text, Title } = Typography
-type UiTemplateFieldKey = 'locatorValue' | 'operationValue' | 'expectValue'
+type UiTemplateFieldKey = 'locatorValue' | 'operationValue'
 type CaseImportMode = 'upload' | 'editor'
+
+const MIN_EDITOR_TOP_HEIGHT = 220
+const MIN_EDITOR_RESULT_HEIGHT = 48
+const EDITOR_SPLITTER_HEIGHT = 18
 
 const UI_TEMPLATE_FIELD_LABELS: Record<UiTemplateFieldKey, string> = {
   locatorValue: '定位值',
   operationValue: '操作值',
-  expectValue: '期望值',
 }
 
 function isYamlFileName(fileName: string) {
@@ -107,9 +114,11 @@ export function UiTestSuiteCasePage() {
   const [importYamlFile, setImportYamlFile] = useState<File | null>(null)
   const [importYamlText, setImportYamlText] = useState('')
   const [templatePickerOpenKey, setTemplatePickerOpenKey] = useState<string | null>(null)
+  const [editorTopHeight, setEditorTopHeight] = useState(520)
   const [caseForm] = Form.useForm<UiTestCaseFormValues>()
   const caseOrderRollbackRef = useRef<string[]>([])
   const templateInputRefs = useRef<Record<string, InputRef | null>>({})
+  const editorLayoutRef = useRef<HTMLDivElement | null>(null)
 
   const suiteQuery = useQuery({
     queryKey: ['uiTestSuite', suiteId],
@@ -190,6 +199,7 @@ export function UiTestSuiteCasePage() {
 
   const isCreatingCase = selectedCaseId === DRAFT_CASE_ID
   const watchedSteps = Form.useWatch('steps', { form: caseForm, preserve: true }) ?? []
+  const watchedEnabled = Form.useWatch('enabled', { form: caseForm, preserve: true }) ?? false
 
   function getCompleteCaseFormValues() {
     const allValues = caseForm.getFieldsValue(true) as Partial<UiTestCaseFormValues>
@@ -645,6 +655,31 @@ export function UiTestSuiteCasePage() {
   }, [activeCaseId, caseForm, selectedCaseDetailQuery.data])
 
   useEffect(() => {
+    if (!selectedRunId) return
+
+    function syncEditorTopHeight() {
+      const containerHeight = editorLayoutRef.current?.getBoundingClientRect().height ?? 0
+      if (containerHeight === 0) return
+
+      setEditorTopHeight((current) => getNextEditorTopHeight({
+        currentHeight: current,
+        deltaY: 0,
+        containerHeight,
+        minTopHeight: MIN_EDITOR_TOP_HEIGHT,
+        minResultHeight: MIN_EDITOR_RESULT_HEIGHT,
+        splitterHeight: EDITOR_SPLITTER_HEIGHT,
+      }))
+    }
+
+    syncEditorTopHeight()
+    window.addEventListener('resize', syncEditorTopHeight)
+
+    return () => {
+      window.removeEventListener('resize', syncEditorTopHeight)
+    }
+  }, [selectedRunId])
+
+  useEffect(() => {
     if (reorderCasesMutation.isPending) return
 
     const nextIds = sortUiTestCases(uiTestCases)
@@ -695,6 +730,20 @@ export function UiTestSuiteCasePage() {
     }
 
     debugRunMutation.mutate()
+  }
+
+  function handleEditorPanelResize(deltaY: number) {
+    const containerHeight = editorLayoutRef.current?.getBoundingClientRect().height ?? 0
+    if (containerHeight === 0) return
+
+    setEditorTopHeight((current) => getNextEditorTopHeight({
+      currentHeight: current,
+      deltaY,
+      containerHeight,
+      minTopHeight: MIN_EDITOR_TOP_HEIGHT,
+      minResultHeight: MIN_EDITOR_RESULT_HEIGHT,
+      splitterHeight: EDITOR_SPLITTER_HEIGHT,
+    }))
   }
 
   function handleRunSuite() {
@@ -909,15 +958,17 @@ export function UiTestSuiteCasePage() {
             <strong>实际值</strong>
             <span>{formatOptionalValue(stepResult.actualValue)}</span>
           </span>
-          <span className="api-case-run-result-meta-item">
-            <strong>截图</strong>
-            <span>{formatOptionalValue(stepResult.screenshotPath)}</span>
-          </span>
-          <span className="api-case-run-result-meta-item">
-            <strong>信息</strong>
-            <span>{formatOptionalValue(stepResult.errorMessage)}</span>
-          </span>
         </div>
+        {stepResult.screenshotPath ? (
+          <div className="ui-test-run-step-screenshot">
+            <strong>截图</strong>
+            <Image
+              src={stepResult.screenshotPath}
+              alt={`${stepResult.stepName?.trim() || `步骤 ${stepResult.orderNo ?? index + 1}`}截图`}
+              preview
+            />
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -1145,7 +1196,6 @@ export function UiTestSuiteCasePage() {
                       >
                         运行测试集
                       </Button>
-                      <Tag color="processing">{uiTestCases.length} 个用例</Tag>
                     </div>
                   </div>
                   <div className="api-detail-hover-body">
@@ -1167,8 +1217,8 @@ export function UiTestSuiteCasePage() {
               ) : null}
 
               <section className="workbench-panel api-case-editor-panel ui-suite-case-editor-panel">
-                <div className="api-case-editor-shell">
-                  <div className="api-case-editor-main">
+                <div className="api-case-editor-shell" ref={editorLayoutRef}>
+                  <div className="api-case-editor-main" style={selectedRunId ? { flex: `0 0 ${editorTopHeight}px` } : undefined}>
                     <div className="api-case-editor-main-scroll">
                       {!selectedCaseId ? (
                       <div className="ui-test-case-empty-editor">
@@ -1234,16 +1284,6 @@ export function UiTestSuiteCasePage() {
                               </Form.Item>
                             </div>
                             <div className="ui-test-case-toolbar-meta">
-                              <div className="ui-test-case-inline-stat switch">
-                                <span className="ui-test-case-inline-label">启用</span>
-                                <Form.Item name="enabled" valuePropName="checked">
-                                  <Switch />
-                                </Form.Item>
-                              </div>
-                              <div className="ui-test-case-inline-stat info">
-                                <span className="ui-test-case-inline-label">步骤</span>
-                                <strong>{watchedSteps.length} 步</strong>
-                              </div>
                               <Button
                                 className="action-btn-read"
                                 icon={<PlayCircleOutlined />}
@@ -1264,6 +1304,19 @@ export function UiTestSuiteCasePage() {
                               </Button>
                             </div>
                           </div>
+                          <div className="ui-test-case-secondary-meta" aria-live="polite">
+                            <div className="ui-test-case-enabled-meta">
+                              <Form.Item name="enabled" valuePropName="checked">
+                                <Switch size="small" aria-label="启用当前用例" />
+                              </Form.Item>
+                              <span>{watchedEnabled ? '当前用例已启用' : '当前用例已停用'}</span>
+                            </div>
+                            <span className="ui-test-case-meta-separator" aria-hidden="true">·</span>
+                            <span className="ui-test-case-step-count-meta">
+                              <UnorderedListOutlined aria-hidden="true" />
+                              包含 {watchedSteps.length} 个步骤
+                            </span>
+                          </div>
                         </div>
 
                         <div className="ui-test-case-step-section">
@@ -1271,9 +1324,6 @@ export function UiTestSuiteCasePage() {
                             <div className="ui-test-case-step-toolbar">
                               <div>
                                 <div className="ui-test-case-step-title">步骤编辑器</div>
-                                <div className="ui-test-case-step-subtitle">
-                                  本地编辑步骤数组，保存时会自动转成 `stepsJson` 提交给后端。
-                                </div>
                               </div>
                             </div>
 
@@ -1298,10 +1348,8 @@ export function UiTestSuiteCasePage() {
                                       const stepRequiresLocator = requiresUiStepLocator(stepKeyword)
                                       const stepUsesComparator = usesUiStepComparator(stepKeyword)
                                       const stepUsesOperation = usesUiStepOperation(stepKeyword)
-                                      const stepUsesExpect = usesUiStepExpect(stepKeyword)
                                       const showLocatorFields = stepRequiresLocator || Boolean(step?.locatorType?.trim() || step?.locatorValue?.trim())
                                       const showOperationField = stepUsesOperation || Boolean(step?.operationValue?.trim())
-                                      const showExpectField = stepUsesExpect || Boolean(step?.expectValue?.trim())
                                       const showLocatorTypeField = stepRequiresLocator || Boolean(step?.locatorType?.trim())
                                       const pairLocatorAndOperation = showLocatorFields && showOperationField
                                       const operationFieldLabel = stepMeta.operationLabel ? `操作值（${stepMeta.operationLabel}）` : '操作值'
@@ -1310,7 +1358,7 @@ export function UiTestSuiteCasePage() {
                                       const locatorValueFieldClass = pairLocatorAndOperation ? 'ui-test-case-step-field-half' : 'ui-test-case-step-field-wide'
                                       const operationValueFieldClass = pairLocatorAndOperation
                                         ? 'ui-test-case-step-field-half'
-                                        : stepUsesComparator || showExpectField
+                                        : stepUsesComparator
                                           ? 'ui-test-case-step-field-half'
                                           : 'ui-test-case-step-field-wide'
                                       const expanded = expandedStepIndexes.includes(index)
@@ -1364,7 +1412,12 @@ export function UiTestSuiteCasePage() {
                                                   onMouseDown={(event) => event.stopPropagation()}
                                                 >
                                                   <div className="ui-test-case-step-title-head">
-                                                    <Form.Item {...fieldProps} name={[field.name, 'stepName']} className="ui-test-case-step-title-item">
+                                                    <Form.Item
+                                                      {...fieldProps}
+                                                      name={[field.name, 'stepName']}
+                                                      className="ui-test-case-step-title-item"
+                                                      rules={[{ required: true, whitespace: true, message: '请输入步骤名称' }]}
+                                                    >
                                                       <Input
                                                         placeholder="点击输入步骤名称"
                                                         maxLength={120}
@@ -1395,7 +1448,15 @@ export function UiTestSuiteCasePage() {
                                                   {...fieldProps}
                                                   name={[field.name, 'keyword']}
                                                   label="关键字"
-                                                  rules={[{ required: true, message: '请选择步骤关键字' }]}
+                                                  rules={[
+                                                    { required: true, message: '请选择步骤关键字' },
+                                                    {
+                                                      validator(_, value: string | undefined) {
+                                                        if (!value || isValidUiStepKeyword(value)) return Promise.resolve()
+                                                        return Promise.reject(new Error('当前关键字不受支持，请重新选择'))
+                                                      },
+                                                    },
+                                                  ]}
                                                 >
                                                   <Select
                                                     showSearch
@@ -1414,10 +1475,16 @@ export function UiTestSuiteCasePage() {
                                                     ({ getFieldValue }) => ({
                                                       validator(_, value: string | undefined) {
                                                         const keyword = getFieldValue(['steps', field.name, 'keyword'])
-                                                        if (!requiresUiStepLocator(keyword) || value?.trim()) {
+                                                        if (!requiresUiStepLocator(keyword)) {
                                                           return Promise.resolve()
                                                         }
-                                                        return Promise.reject(new Error('当前关键字需要选择定位方式'))
+                                                        if (!value?.trim()) {
+                                                          return Promise.reject(new Error('当前关键字需要选择定位方式'))
+                                                        }
+                                                        if (!isValidUiStepLocatorType(value)) {
+                                                          return Promise.reject(new Error('当前定位方式不受支持，请重新选择'))
+                                                        }
+                                                        return Promise.resolve()
                                                       },
                                                     }),
                                                   ]}
@@ -1472,17 +1539,12 @@ export function UiTestSuiteCasePage() {
                                                   label={renderTemplatePickerLabel(field.name, 'operationValue', operationFieldLabel)}
                                                   hidden={!showOperationField}
                                                   className={`ui-test-case-step-field ${operationValueFieldClass}`}
-                                                  dependencies={[
-                                                    ['steps', field.name, 'keyword'],
-                                                    ['steps', field.name, 'expectValue'],
-                                                  ]}
+                                                  dependencies={[['steps', field.name, 'keyword']]}
                                                   rules={[
                                                     ({ getFieldValue }) => ({
                                                       validator(_, value: string | undefined) {
                                                         const keyword = getFieldValue(['steps', field.name, 'keyword'])
                                                         const trimmedValue = value?.trim()
-                                                        const expectValue = getFieldValue(['steps', field.name, 'expectValue']) as string | undefined
-                                                        const trimmedExpectValue = expectValue?.trim()
 
                                                         if (keyword === 'open') {
                                                           if (!trimmedValue) {
@@ -1494,26 +1556,25 @@ export function UiTestSuiteCasePage() {
                                                           return Promise.reject(new Error('open 步骤请填写完整 URL'))
                                                         }
 
-                                                        if (keyword === 'input' && !trimmedValue) {
-                                                          return Promise.reject(new Error('input 步骤请填写输入值'))
+                                                        const requiredValueLabels: Record<string, string> = {
+                                                          input: '输入值',
+                                                          press: '按键或组合键',
+                                                          wait_text: '等待文本',
+                                                          assert_text: '期望文本',
+                                                          assert_url: '期望 URL',
+                                                        }
+                                                        if (keyword && requiredValueLabels[keyword] && !trimmedValue) {
+                                                          return Promise.reject(new Error(`${keyword} 步骤请填写${requiredValueLabels[keyword]}`))
                                                         }
 
-                                                        if (keyword === 'press' && !trimmedValue) {
-                                                          return Promise.reject(new Error('press 步骤请填写按键名'))
-                                                        }
-
-                                                        if (keyword === 'sleep') {
+                                                        if (keyword === 'sleep' || keyword === 'assert_visible') {
                                                           if (!trimmedValue) {
-                                                            return Promise.reject(new Error('sleep 步骤请填写等待时长'))
+                                                            return Promise.reject(new Error(`${keyword} 步骤请填写毫秒数`))
                                                           }
                                                           if (/^\d+$/.test(trimmedValue)) {
                                                             return Promise.resolve()
                                                           }
-                                                          return Promise.reject(new Error('sleep 步骤请填写毫秒数'))
-                                                        }
-
-                                                        if (keyword === 'wait_text' && !trimmedValue && !trimmedExpectValue) {
-                                                          return Promise.reject(new Error('wait_text 需要填写期望文本或回退文本'))
+                                                          return Promise.reject(new Error(`${keyword} 步骤请填写非负整数毫秒数`))
                                                         }
 
                                                         if (!trimmedValue) {
@@ -1541,51 +1602,6 @@ export function UiTestSuiteCasePage() {
 
                                                 <Form.Item
                                                   {...fieldProps}
-                                                  name={[field.name, 'expectValue']}
-                                                  label={renderTemplatePickerLabel(field.name, 'expectValue', stepMeta.expectLabel || '期望值')}
-                                                  hidden={!showExpectField}
-                                                  className={`ui-test-case-step-field ${stepUsesComparator ? 'ui-test-case-step-field-half' : 'ui-test-case-step-field-wide'}`}
-                                                  dependencies={[
-                                                    ['steps', field.name, 'keyword'],
-                                                    ['steps', field.name, 'operationValue'],
-                                                  ]}
-                                                  rules={[
-                                                    ({ getFieldValue }) => ({
-                                                      validator(_, value: string | undefined) {
-                                                        const keyword = getFieldValue(['steps', field.name, 'keyword'])
-                                                        const trimmedValue = value?.trim()
-                                                        const operationValue = getFieldValue(['steps', field.name, 'operationValue']) as string | undefined
-                                                        const trimmedOperationValue = operationValue?.trim()
-
-                                                        if ((keyword === 'assert_text' || keyword === 'assert_url') && !trimmedValue) {
-                                                          return Promise.reject(new Error('当前断言步骤需要填写期望值'))
-                                                        }
-
-                                                        if (keyword === 'wait_text' && !trimmedValue && !trimmedOperationValue) {
-                                                          return Promise.reject(new Error('wait_text 需要填写期望文本或回退文本'))
-                                                        }
-
-                                                        return Promise.resolve()
-                                                      },
-                                                    }),
-                                                  ]}
-                                                >
-                                                  <Input
-                                                    ref={bindTemplateInputRef(field.name, 'expectValue')}
-                                                    placeholder={stepMeta.expectPlaceholder || '例如：登录成功'}
-                                                    maxLength={400}
-                                                  />
-                                                </Form.Item>
-
-                                                <div
-                                                  className="ui-test-case-step-field-note ui-test-case-step-field-wide"
-                                                  hidden={!showExpectField || !stepMeta.expectHint}
-                                                >
-                                                  {stepMeta.expectHint}
-                                                </div>
-
-                                                <Form.Item
-                                                  {...fieldProps}
                                                   name={[field.name, 'comparator']}
                                                   label="比较器"
                                                   hidden={!stepUsesComparator}
@@ -1595,10 +1611,16 @@ export function UiTestSuiteCasePage() {
                                                     ({ getFieldValue }) => ({
                                                       validator(_, value: string | undefined) {
                                                         const keyword = getFieldValue(['steps', field.name, 'keyword'])
-                                                        if (!usesUiStepComparator(keyword) || value?.trim()) {
+                                                        if (!usesUiStepComparator(keyword)) {
                                                           return Promise.resolve()
                                                         }
-                                                        return Promise.reject(new Error('当前断言步骤需要选择比较器'))
+                                                        if (!value?.trim()) {
+                                                          return Promise.reject(new Error('当前断言步骤需要选择比较器'))
+                                                        }
+                                                        if (!isValidUiStepComparator(value)) {
+                                                          return Promise.reject(new Error('当前比较器不受支持，请重新选择'))
+                                                        }
+                                                        return Promise.resolve()
                                                       },
                                                     }),
                                                   ]}
@@ -1610,15 +1632,6 @@ export function UiTestSuiteCasePage() {
                                               <div className="ui-test-case-step-footer">
                                                 <div className="ui-test-case-step-footer-grid">
                                                   <div className="ui-test-case-step-status-row">
-                                                  <Form.Item
-                                                    {...fieldProps}
-                                                    name={[field.name, 'timeoutMs']}
-                                                    label="超时(ms)"
-                                                    className="ui-test-case-step-timeout-item"
-                                                  >
-                                                    <InputNumber min={0} step={500} style={{ width: '100%' }} />
-                                                  </Form.Item>
-
                                                   <Form.Item
                                                     {...fieldProps}
                                                     name={[field.name, 'enabled']}
@@ -1639,15 +1652,6 @@ export function UiTestSuiteCasePage() {
                                                   </Form.Item>
                                                   </div>
                                                 </div>
-
-                                                <Form.Item
-                                                  {...fieldProps}
-                                                  name={[field.name, 'description']}
-                                                  label="说明"
-                                                  className="ui-test-case-step-description-item"
-                                                >
-                                                  <Input.TextArea rows={3} maxLength={300} placeholder="补充当前步骤的备注、前置条件或断言说明" />
-                                                </Form.Item>
                                               </div>
                                             </div>
                                         </div>
@@ -1676,10 +1680,7 @@ export function UiTestSuiteCasePage() {
                   </div>
                   {selectedRunId ? (
                     <>
-                      <div className="api-case-editor-splitter" role="separator" aria-orientation="horizontal">
-                        <span className="api-case-editor-splitter-line" />
-                        <span className="api-case-editor-splitter-grip">⋯</span>
-                      </div>
+                      <UiTestPanelSplitter onResize={handleEditorPanelResize} />
                       <div className="api-case-editor-result-pane">
                         <div className="api-case-editor-result-scroll">
                           <Card size="small" className="api-case-run-result-card">
@@ -1779,7 +1780,7 @@ export function UiTestSuiteCasePage() {
             ) : (
               <div className="api-case-import-editor">
                 <div className="api-case-import-hint">直接粘贴 YAML 内容，提交时前端会将文本包装成 `.yaml` 文件上传。</div>
-                <TextCodeEditor value={importYamlText} onChange={setImportYamlText} minHeight={280} />
+                <TextCodeEditor value={importYamlText} onChange={setImportYamlText} language="yaml" minHeight={280} />
               </div>
             )}
           </div>
@@ -1960,7 +1961,7 @@ export function UiTestSuiteCasePage() {
                             {expanded ? (
                               <div className="api-collection-run-report-item-body">
                                 <div className="api-collection-run-report-item-inline-meta">
-                                  <span>caseId：{item.caseId || '-'}</span>
+                                  <span>用例名称：{item.caseName || '-'}</span>
                                   <span>itemId：{item.itemId || '-'}</span>
                                   <span>当前 URL：{item.currentUrl || '-'}</span>
                                   <span>步骤数：{item.stepResults?.length ?? 0}</span>

@@ -42,14 +42,39 @@ function extraFields(record: Record<string, unknown>, knownFields: Set<string>) 
   return Object.fromEntries(Object.entries(record).filter(([key]) => !knownFields.has(key)))
 }
 
+function candidateCaseItems(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  const root = asRecord(value)
+  if (!root) return []
+
+  // UI 用例导入的标准结构允许最外层直接是一条用例对象。
+  if (Object.keys(root).some((key) => caseFieldNames.has(key))) return [root]
+
+  // 兼容生成任务历史上使用过的包装结构。
+  for (const key of ['cases', 'uiCases', 'items']) {
+    if (Array.isArray(root[key])) return root[key]
+  }
+  return []
+}
+
+function candidateSteps(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string' || !value.trim()) return []
+  try {
+    const parsedSteps = parse(value)
+    return Array.isArray(parsedSteps) ? parsedSteps : []
+  } catch {
+    return []
+  }
+}
+
 export function parseUiCaseCandidate(rawYaml: string): UiCandidateParseResult {
   try {
-    const root = asRecord(parse(rawYaml))
-    const rawCases = Array.isArray(root?.cases) ? root.cases : []
+    const rawCases = candidateCaseItems(parse(rawYaml))
     const cases = rawCases.flatMap((candidate): UiCandidateCaseView[] => {
       const caseRecord = asRecord(candidate)
       if (!caseRecord) return []
-      const rawSteps = Array.isArray(caseRecord.stepsJson) ? caseRecord.stepsJson : []
+      const rawSteps = candidateSteps(caseRecord.stepsJson)
       const steps = rawSteps.flatMap((step): UiCandidateStepView[] => {
         const stepRecord = asRecord(step)
         if (!stepRecord) return []

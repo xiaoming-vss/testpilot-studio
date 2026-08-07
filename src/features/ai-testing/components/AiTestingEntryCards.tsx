@@ -34,7 +34,7 @@ export function AiTestingEntryCards({ items, activeKey, onActiveKeyChange }: Pro
     <>
       <section className="workbench-project-toolbar ai-testing-overview-toolbar">
         <div className="ai-testing-overview-switcher-row">
-          <div className="ai-testing-overview-tab-switcher" role="tablist" aria-label="AI测试模块切换">
+          <div className="ai-testing-overview-tab-switcher" role="tablist" aria-label="测试设计模块切换">
             {items.map((item) => {
               const active = item.key === activeItem.key
 

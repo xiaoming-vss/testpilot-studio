@@ -80,8 +80,13 @@ export function pickUpdatedAt(entity?: { updatedAt?: string; updated_at?: string
 
 export function formatTime(value?: string) {
   if (!value) return '-'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
+  const isIsoDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value)
+  const normalizedValue = !hasTimezone && isIsoDateTime ? `${value.replace(' ', 'T')}Z` : value
+  const date = new Date(normalizedValue)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
 }
 
 export function getErrorMessage(error: unknown) {

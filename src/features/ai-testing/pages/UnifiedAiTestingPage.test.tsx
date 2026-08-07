@@ -72,6 +72,34 @@ afterEach(() => {
 })
 
 describe('统一任务列表中的 UI 用例生成', () => {
+  it('任务列表展示任务更新时间而不是最近运行时间', async () => {
+    const updatedAt = '2026-08-05T06:47:06.000Z'
+    installFetchHandler((url) => {
+      if (url.pathname === '/v1/projects/project-1/function-case-generate-tasks') {
+        return jsonResponse({
+          items: [{
+            taskId: 'functional-task-1',
+            taskType: 'functional_case_generate',
+            name: 'EGO本地Server',
+            projectId: 'project-1',
+            sprintId: 'sprint-1',
+            requirementId: 'requirement-1',
+            instruction: '生成功能测试',
+            createdAt: '2026-08-01T01:00:00.000Z',
+            updatedAt,
+          }],
+          total: 1,
+        })
+      }
+    })
+
+    renderPage()
+
+    expect(await screen.findByRole('columnheader', { name: '更新时间' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: '最近运行' })).not.toBeInTheDocument()
+    expect(await screen.findByText(new Date(updatedAt).toLocaleString())).toBeInTheDocument()
+  })
+
   it('创建 UI 任务后上传所选 ZIP 并进入详情', async () => {
     const requests: Array<{ path: string; method: string; body?: unknown }> = []
     installFetchHandler((url, init) => {
@@ -85,7 +113,6 @@ describe('统一任务列表中的 UI 用例生成', () => {
           sprintId: 'sprint-1',
           requirementId: 'requirement-1',
           sourceType: 'source_archive',
-          sourceContent: '',
           sourceArchive: null,
           instruction: '覆盖表单校验',
         })
@@ -189,7 +216,6 @@ const taskForUploadFailure = {
   sprintId: 'sprint-1',
   requirementId: 'requirement-1',
   sourceType: 'source_archive',
-  sourceContent: '',
   sourceArchive: null,
   instruction: '',
 }

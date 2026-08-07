@@ -3,16 +3,23 @@ import { Alert, Button, Card, Empty, Form, Input, Modal, Popconfirm, Popover, Se
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { parse } from 'yaml'
 import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '../components/ApiCaseGenerateTaskDrawer'
 import { ApiImportConflictModal } from '../components/ApiImportConflictModal'
-import { AiTaskQuickLinks } from '../components/AiTaskQuickLinks'
+import { ImportMigrationWarning } from '../components/ImportMigrationWarning'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
 import type {
   ApiCaseGenerateTaskRunImportConflict,
   ImportApiCaseGenerateTaskRunPayload,
   ReviewApiCaseGenerateTaskRunPayload,
 } from '../types'
-import { isRunnableApiCaseGenerateTaskRun, renderApiCaseGenerateTaskRunStatusTag } from '../utils/taskStatus'
+import {
+  isRunnableApiCaseGenerateTaskRun,
+  normalizeGenerateTaskReviewStatus,
+  renderApiCaseGenerateTaskRunStatusTag,
+  renderGenerateTaskImportStatusTag,
+  renderGenerateTaskReviewStatusTag,
+} from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser'
 import { useAuthStore } from '@/features/auth/store/auth.store'
@@ -68,17 +75,6 @@ type ApiConfigDiagramData = {
   authHeaderCount: number
 }
 
-const reviewStatusMetaMap: Record<string, { label: string; color: string }> = {
-  pending: { label: '待审核', color: 'gold' },
-  approved: { label: '已批准', color: 'success' },
-  rejected: { label: '已拒绝', color: 'default' },
-}
-
-const importStatusMetaMap: Record<string, { label: string; color: string }> = {
-  pending: { label: '待导入', color: 'gold' },
-  imported: { label: '已导入', color: 'success' },
-}
-
 function formatStructuredContent(value?: unknown) {
   if (value === undefined || value === null || value === '') return ''
   if (typeof value === 'string') {
@@ -93,34 +89,6 @@ function formatStructuredContent(value?: unknown) {
   } catch {
     return String(value)
   }
-}
-
-function formatDurationSeconds(durationMs?: number | null) {
-  if (durationMs === undefined || durationMs === null) return '-'
-  return `${(durationMs / 1000).toFixed(2)} s`
-}
-
-function normalizeReviewStatus(status?: string) {
-  return status ?? 'pending'
-}
-
-function renderReviewStatusTag(status?: string) {
-  const normalizedStatus = normalizeReviewStatus(status)
-  const meta = reviewStatusMetaMap[normalizedStatus] ?? {
-    label: normalizedStatus,
-    color: 'default',
-  }
-
-  return <Tag color={meta.color}>{meta.label}</Tag>
-}
-
-function renderImportStatusTag(status?: string) {
-  const normalizedStatus = status ?? 'pending'
-  const meta = importStatusMetaMap[normalizedStatus] ?? {
-    label: normalizedStatus,
-    color: 'default',
-  }
-  return <Tag color={meta.color}>{meta.label}</Tag>
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
@@ -216,7 +184,7 @@ function normalizeApiConfigCases(content?: string): ApiConfigDiagramData | null 
   if (!content?.trim()) return null
 
   try {
-    const parsed = JSON.parse(content)
+    const parsed = parse(content)
     const entries: Array<{ key: string; value: unknown; index: number }> = []
 
     if (Array.isArray(parsed)) {
@@ -337,8 +305,15 @@ function ApiConfigRuleList({ title, rules, emptyText }: { title: string; rules: 
   )
 }
 
-function ApiConfigDiagramView({ content }: { content: string }) {
+function ApiConfigDiagramView({ content, defaultCollapsed = false }: { content: string; defaultCollapsed?: boolean }) {
   const diagramData = useMemo(() => normalizeApiConfigCases(content), [content])
+  const [collapsedCaseKeys, setCollapsedCaseKeys] = useState<Set<string>>(
+    () => new Set(defaultCollapsed ? diagramData?.cases.map((apiCase) => apiCase.key) : []),
+  )
+
+  useEffect(() => {
+    setCollapsedCaseKeys(new Set(defaultCollapsed ? diagramData?.cases.map((apiCase) => apiCase.key) : []))
+  }, [defaultCollapsed, diagramData])
 
   if (!diagramData) {
     return <div className="ai-task-run-result-popover-empty">当前中间配置无法解析为 API 链路</div>
@@ -353,42 +328,67 @@ function ApiConfigDiagramView({ content }: { content: string }) {
         <Tag color="green">认证头 {diagramData.authHeaderCount}</Tag>
       </div>
       <div className="api-config-visual-chain">
-        {diagramData.cases.map((apiCase, index) => (
+        {diagramData.cases.map((apiCase, index) => {
+          const collapsed = collapsedCaseKeys.has(apiCase.key)
+          const toggleCase = () => {
+            setCollapsedCaseKeys((current) => {
+              const next = new Set(current)
+              if (next.has(apiCase.key)) next.delete(apiCase.key)
+              else next.add(apiCase.key)
+              return next
+            })
+          }
+
+          return (
           <div key={apiCase.key} className="api-config-visual-step">
-            <article className="api-config-visual-card">
-              <div className="api-config-visual-card-head">
+            <article className={`api-config-visual-card${collapsed ? ' collapsed' : ''}`}>
+              <button
+                type="button"
+                className="api-config-visual-card-head"
+                aria-expanded={!collapsed}
+                aria-label={`${collapsed ? '展开' : '折叠'} ${apiCase.method} ${apiCase.name}`}
+                onClick={toggleCase}
+              >
                 <div className="api-config-visual-method-line">
+                  <span className="api-config-visual-collapse-icon" aria-hidden>
+                    {collapsed ? <RightOutlined /> : <DownOutlined />}
+                  </span>
                   <Tag color={getMethodTagColor(apiCase.method)}>{apiCase.method}</Tag>
                   <strong>{apiCase.name}</strong>
                 </div>
                 {apiCase.orderNo ? <span className="api-config-visual-order">#{apiCase.orderNo}</span> : null}
-              </div>
-              <div className="api-config-visual-path">{apiCase.path}</div>
-              <div className="api-config-visual-variable-row">
-                {apiCase.usedVariables.map((variable) => (
-                  <Tag key={`used-${variable}`} color="gold">使用 {variable}</Tag>
-                ))}
-                {apiCase.extractedVariables.map((variable) => (
-                  <Tag key={`extract-${variable}`} color="success">提取 {variable}</Tag>
-                ))}
-                {apiCase.usedVariables.length === 0 && apiCase.extractedVariables.length === 0 ? (
-                  <span className="api-config-visual-muted">无变量依赖</span>
-                ) : null}
-              </div>
-              <div className="api-config-visual-grid">
-                <ApiConfigPreviewField label="Headers" value={apiCase.headers} />
-                <ApiConfigPreviewField label="Query" value={apiCase.query} />
-                <ApiConfigPreviewField label="Body" value={apiCase.body} />
-                <ApiConfigPreviewField label="Response" value={apiCase.response} />
-              </div>
-              <div className="api-config-visual-rules">
-                <ApiConfigRuleList title="提取规则" rules={apiCase.extractRules} emptyText="暂无提取规则" />
-                <ApiConfigRuleList title="断言规则" rules={apiCase.assertRules} emptyText="暂无断言规则" />
-              </div>
+              </button>
+              {!collapsed ? (
+                <div className="api-config-visual-card-body">
+                  <div className="api-config-visual-path">{apiCase.path}</div>
+                  <div className="api-config-visual-variable-row">
+                    {apiCase.usedVariables.map((variable) => (
+                      <Tag key={`used-${variable}`} color="gold">使用 {variable}</Tag>
+                    ))}
+                    {apiCase.extractedVariables.map((variable) => (
+                      <Tag key={`extract-${variable}`} color="success">提取 {variable}</Tag>
+                    ))}
+                    {apiCase.usedVariables.length === 0 && apiCase.extractedVariables.length === 0 ? (
+                      <span className="api-config-visual-muted">无变量依赖</span>
+                    ) : null}
+                  </div>
+                  <div className="api-config-visual-grid">
+                    <ApiConfigPreviewField label="Headers" value={apiCase.headers} />
+                    <ApiConfigPreviewField label="Query" value={apiCase.query} />
+                    <ApiConfigPreviewField label="Body" value={apiCase.body} />
+                    <ApiConfigPreviewField label="Response" value={apiCase.response} />
+                  </div>
+                  <div className="api-config-visual-rules">
+                    <ApiConfigRuleList title="提取规则" rules={apiCase.extractRules} emptyText="暂无提取规则" />
+                    <ApiConfigRuleList title="断言规则" rules={apiCase.assertRules} emptyText="暂无断言规则" />
+                  </div>
+                </div>
+              ) : null}
             </article>
             {index < diagramData.cases.length - 1 ? <div className="api-config-visual-connector" /> : null}
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -396,29 +396,67 @@ function ApiConfigDiagramView({ content }: { content: string }) {
 
 function ApiConfigResultView({ content }: { content: string }) {
   const canRenderDiagram = Boolean(normalizeApiConfigCases(content))
+  const [activeView, setActiveView] = useState<'diagram' | 'json'>('diagram')
 
   return (
-    <Tabs
-      className="api-config-result-tabs"
-      size="small"
-      items={[
-        {
-          key: 'json',
-          label: 'json',
-          children: <pre className="ai-task-code-block">{content}</pre>,
-        },
-        {
-          key: 'diagram',
-          label: '图像',
-          children: canRenderDiagram ? (
+    <div className="api-config-result-tabs">
+      <div className="api-config-result-tablist" role="tablist" aria-label="中间配置查看方式">
+        <button
+          id="api-config-preview-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeView === 'diagram'}
+          aria-controls="api-config-result-panel"
+          className={activeView === 'diagram' ? 'is-active' : undefined}
+          onClick={() => setActiveView('diagram')}
+        >
+          预览
+        </button>
+        <button
+          id="api-config-json-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeView === 'json'}
+          aria-controls="api-config-result-panel"
+          className={activeView === 'json' ? 'is-active' : undefined}
+          onClick={() => setActiveView('json')}
+        >
+          json
+        </button>
+      </div>
+      <div
+        id="api-config-result-panel"
+        className="api-config-result-panel"
+        role="tabpanel"
+        aria-labelledby={activeView === 'diagram' ? 'api-config-preview-tab' : 'api-config-json-tab'}
+      >
+        {activeView === 'diagram' ? (
+          canRenderDiagram ? (
             <ApiConfigDiagramView content={content} />
           ) : (
             <div className="ai-task-run-result-popover-empty">当前中间配置无法解析为 API 链路</div>
-          ),
-        },
-      ]}
-    />
+          )
+        ) : (
+          <TextCodeEditor
+            ariaLabel="中间配置 JSON"
+            value={content}
+            readOnly
+            language="json"
+            height="100%"
+            minHeight={0}
+          />
+        )}
+      </div>
+    </div>
   )
+}
+
+function ApiCandidateResultView({ content }: { content: string }) {
+  if (!normalizeApiConfigCases(content)) {
+    return <div className="ai-task-run-result-popover-empty">当前候选结果无法解析为 API 用例</div>
+  }
+
+  return <ApiConfigDiagramView content={content} defaultCollapsed />
 }
 
 export function ApiCaseGenerateTaskDetailPage() {
@@ -436,6 +474,7 @@ export function ApiCaseGenerateTaskDetailPage() {
   const [importModalRunId, setImportModalRunId] = useState<string | null>(null)
   const [importConflict, setImportConflict] = useState<ImportConflictState>(null)
   const [reviewSubmitAction, setReviewSubmitAction] = useState<'approve' | 'reject' | null>(null)
+  const [candidateModalView, setCandidateModalView] = useState<'preview' | 'edit'>('preview')
   const [candidateYaml, setCandidateYaml] = useState('')
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
   const [reviewForm] = Form.useForm<{ reviewComment?: string }>()
@@ -634,7 +673,7 @@ export function ApiCaseGenerateTaskDetailPage() {
     mutationFn: (payload: { runId: string } & ImportApiCaseGenerateTaskRunPayload) =>
       api.importApiCaseGenerateTaskRun(payload.runId, {
         collectionId: payload.collectionId,
-        ...(payload.confirmOverwrite ? { confirmOverwrite: true } : {}),
+        confirmOverwrite: payload.confirmOverwrite ?? false,
       }),
     onSuccess: (result, payload) => {
       queryClient.invalidateQueries({ queryKey: ['apiCaseGenerateTaskRuns', taskId] })
@@ -703,19 +742,26 @@ export function ApiCaseGenerateTaskDetailPage() {
     [selectedRunResultSections],
   )
   const runResultModalContent = runResultModal ? selectedRunResultSectionMap.get(runResultModal.key) : undefined
-  const selectedRunReviewStatus = normalizeReviewStatus(selectedRun?.reviewStatus)
+  const selectedRunReviewStatus = normalizeGenerateTaskReviewStatus(selectedRun?.reviewStatus)
   const canReviewSelectedRun = Boolean(selectedRun) && selectedRunReviewStatus === 'pending' && selectedRun?.status === 'success'
   const candidateDirty = candidateYaml !== (selectedRun?.resultYaml ?? '')
-  const selectedRunImportStatus = selectedRun?.importStatus ?? 'pending'
+  const selectedRunCandidateStats = useMemo(
+    () => normalizeApiConfigCases(selectedRun?.resultYaml)?.cases ?? [],
+    [selectedRun?.resultYaml],
+  )
+  const candidateRequirementName = task?.requirementId
+    ? requirementNameMap.get(task.requirementId) ?? task.requirementId
+    : '-'
+  const selectedRunImportStatus = selectedRun?.importStatus
   const canImportSelectedRun = Boolean(selectedRun)
     && selectedRun?.status === 'success'
     && selectedRunReviewStatus === 'approved'
     && selectedRunImportStatus === 'pending'
-  const selectedRunImportedCollectionId = selectedRun?.importedTargets?.find(
+  const selectedRunApiTargetId = selectedRun?.importedTargets.find(
     (target) => target.targetType === 'api_collection',
   )?.targetId ?? ''
-  const selectedRunImportedCollectionName = selectedRunImportedCollectionId
-    ? (apiCollectionNameMap.get(selectedRunImportedCollectionId) ?? selectedRunImportedCollectionId)
+  const selectedRunApiTargetName = selectedRunApiTargetId
+    ? (apiCollectionNameMap.get(selectedRunApiTargetId) ?? selectedRunApiTargetId)
     : ''
   const runHistoryRefreshing = runsQuery.isFetching || selectedRunQuery.isFetching
 
@@ -752,6 +798,7 @@ export function ApiCaseGenerateTaskDetailPage() {
     setCandidateYaml(selectedRun?.runId === runId ? (selectedRun.resultYaml ?? '') : '')
     setReviewModalRunId(runId)
     setReviewSubmitAction(null)
+    setCandidateModalView('preview')
   }
 
   function closeReviewModal() {
@@ -776,7 +823,11 @@ export function ApiCaseGenerateTaskDetailPage() {
   async function handleImportRun() {
     if (!importModalRunId) return
     const values = await importForm.validateFields()
-    importRunMutation.mutate({ runId: importModalRunId, collectionId: values.collectionId })
+    importRunMutation.mutate({
+      runId: importModalRunId,
+      collectionId: values.collectionId,
+      confirmOverwrite: false,
+    })
   }
 
   function handleConfirmImportOverwrite() {
@@ -873,7 +924,6 @@ export function ApiCaseGenerateTaskDetailPage() {
                 </div>
               ))}
               <div className="ai-task-detail-inline-actions">
-                <AiTaskQuickLinks />
                 <Button
                   className="action-btn-run"
                   icon={<CaretRightOutlined />}
@@ -982,8 +1032,13 @@ export function ApiCaseGenerateTaskDetailPage() {
                     <div className="ai-task-run-history-list single-list">
                       {runRecords.map((record, index) => {
                         const active = record.runId === selectedRunId
+                        const effectiveRun = active && selectedRun ? selectedRun : record
+                        const runSucceeded = String(effectiveRun.status ?? '').toLowerCase() === 'success'
+                    const runAwaitingReview = runSucceeded && normalizeGenerateTaskReviewStatus(effectiveRun.reviewStatus) === 'pending'
                         const visibleSections = runResultSectionDefinitions.filter(
-                          (section) => !(section.key === 'errorMessage' && String(record.status ?? '').toLowerCase() === 'success'),
+                          (section) =>
+                            !(section.key === 'errorMessage' && runSucceeded)
+                            && !(section.key === 'resultYaml' && runAwaitingReview),
                         )
 
                         return (
@@ -1009,15 +1064,16 @@ export function ApiCaseGenerateTaskDetailPage() {
                               </div>
                               <div className="ai-task-run-history-record-meta">
                                 <span className="ai-task-run-history-record-status">{renderApiCaseGenerateTaskRunStatusTag(record.status)}</span>
-                                <span className="ai-task-run-history-review-status">
-                                  {renderReviewStatusTag(active && selectedRun ? selectedRun.reviewStatus : record.reviewStatus)}
-                                </span>
-                                <span className="ai-task-run-history-review-status">
-                                  {renderImportStatusTag(active && selectedRun ? selectedRun.importStatus : record.importStatus)}
-                                </span>
-                                <span className="ai-task-run-history-record-field">开始：{formatTime(record.startedAt)}</span>
-                                <span className="ai-task-run-history-record-field">结束：{formatTime(record.finishedAt)}</span>
-                                <span className="ai-task-run-history-record-field">耗时：{formatDurationSeconds(record.durationMs)}</span>
+                                {runSucceeded ? (
+                                  <>
+                                    <span className="ai-task-run-history-review-status">
+                            {renderGenerateTaskReviewStatusTag(effectiveRun.reviewStatus)}
+                                    </span>
+                                    <span className="ai-task-run-history-review-status">
+                            {renderGenerateTaskImportStatusTag(effectiveRun.importStatus)}
+                                    </span>
+                                  </>
+                                ) : null}
                               </div>
                             </div>
                             <div className="ai-task-run-history-record-actions">
@@ -1041,14 +1097,9 @@ export function ApiCaseGenerateTaskDetailPage() {
                               })}
                               {active && selectedRun ? (
                                 <div className="ai-task-run-history-review-inline">
-                                  {selectedRunImportStatus === 'imported' && selectedRunImportedCollectionName ? (
-                                    <span className="ai-task-run-history-record-field">导入：{selectedRunImportedCollectionName}</span>
-                                  ) : null}
-                                  {selectedRun.reviewerUserId ? (
-                                    <span className="ai-task-run-history-record-field">审核人：{selectedRun.reviewerUserId}</span>
-                                  ) : null}
-                                  {selectedRun.reviewedAt ? (
-                                    <span className="ai-task-run-history-record-field">审核时间：{formatTime(selectedRun.reviewedAt)}</span>
+                                  <ImportMigrationWarning importMigrationComplete={selectedRun.importMigrationComplete} />
+                                  {selectedRunImportStatus === 'imported' && selectedRunApiTargetName ? (
+                                    <span className="ai-task-run-history-record-field">导入：{selectedRunApiTargetName}</span>
                                   ) : null}
                                   {selectedRun.importedAt ? (
                                     <span className="ai-task-run-history-record-field">导入时间：{formatTime(selectedRun.importedAt)}</span>
@@ -1080,17 +1131,6 @@ export function ApiCaseGenerateTaskDetailPage() {
                                       审核候选结果
                                     </Button>
                                   ) : null}
-                                  {!canReviewSelectedRun && selectedRun.status === 'success' && selectedRun.resultYaml ? (
-                                    <Button
-                                      size="small"
-                                      onClick={(event) => {
-                                        event.stopPropagation()
-                                        openReviewModal(record.runId)
-                                      }}
-                                    >
-                                      查看候选结果
-                                    </Button>
-                                  ) : null}
                                   {canImportSelectedRun ? (
                                     <Button
                                       size="small"
@@ -1103,12 +1143,12 @@ export function ApiCaseGenerateTaskDetailPage() {
                                       导入 API 集合
                                     </Button>
                                   ) : null}
-                                  {selectedRunImportStatus === 'imported' && selectedRunImportedCollectionId ? (
+                                  {selectedRunImportStatus === 'imported' && selectedRunApiTargetId ? (
                                     <Button
                                       size="small"
                                       onClick={(event) => {
                                         event.stopPropagation()
-                                        navigate(`/api-automation/collections/${selectedRunImportedCollectionId}`)
+                                        navigate(`/api-automation/collections/${selectedRunApiTargetId}`)
                                       }}
                                     >
                                       查看目标集合
@@ -1168,7 +1208,8 @@ export function ApiCaseGenerateTaskDetailPage() {
       />
 
       <Modal
-        title="候选结果审核"
+        className="ai-task-import-result-modal"
+        title={canReviewSelectedRun ? '审核候选结果' : 'API 用例候选结果'}
         open={Boolean(reviewModalRunId)}
         onCancel={requestCloseReviewModal}
         footer={
@@ -1185,7 +1226,7 @@ export function ApiCaseGenerateTaskDetailPage() {
                   disabled={candidateDirty || updateRunResultMutation.isPending || reviewRunMutation.isPending}
                   onClick={handleRejectReview}
                 >
-                  拒绝候选
+                  拒绝
                 </Button>,
                 <Button
                   key="approve"
@@ -1194,7 +1235,7 @@ export function ApiCaseGenerateTaskDetailPage() {
                   disabled={candidateDirty || updateRunResultMutation.isPending || reviewRunMutation.isPending}
                   onClick={handleApproveReview}
                 >
-                  批准候选
+                  批准
                 </Button>,
               ]
             : [
@@ -1204,51 +1245,90 @@ export function ApiCaseGenerateTaskDetailPage() {
               ]
         }
         destroyOnHidden
-        width={960}
+        width="min(1620px, calc(100vw - 72px))"
+        centered
       >
-        <Form form={reviewForm} layout="vertical">
-          <div className="ai-task-review-modal-content">
-            <div className="ai-task-review-modal-section">
-              <div className="ai-task-review-modal-label">生成结果 YAML</div>
-              <div className="ai-task-review-modal-preview">
-                {selectedRunQuery.isLoading ? (
-                  <div className="ai-task-run-result-popover-loading">
-                    <Spin />
+        <Form form={reviewForm} layout="vertical" className="ai-task-import-result-form">
+          <div className="ai-task-import-target-summary">
+            <div className="ai-task-import-target-copy">
+              <strong>候选结果</strong>
+              <span title={candidateRequirementName}>关联需求：{candidateRequirementName}</span>
+            </div>
+            <div className="ai-task-import-target-stats">
+              <Tag color="blue">接口 {selectedRunCandidateStats.length}</Tag>
+              <Tag color="cyan">
+                提取 {selectedRunCandidateStats.reduce((sum, item) => sum + item.extractRules.length, 0)}
+              </Tag>
+              <Tag color="purple">
+                断言 {selectedRunCandidateStats.reduce((sum, item) => sum + item.assertRules.length, 0)}
+              </Tag>
+            </div>
+          </div>
+          <Tabs
+            activeKey={candidateModalView}
+            onChange={(key) => setCandidateModalView(key as 'preview' | 'edit')}
+            items={[
+              {
+                key: 'preview',
+                label: '预览候选',
+                children: (
+                  <div className="ai-task-review-modal-content ai-task-result-preview-modal-content ai-task-import-result-preview-content single-column">
+                    <div className="ai-task-review-modal-section">
+                      <div className="ai-task-review-modal-preview ai-task-import-result-preview">
+                        {selectedRunQuery.isLoading ? (
+                          <div className="ai-task-run-result-popover-loading">
+                            <Spin />
+                          </div>
+                        ) : selectedRun?.resultYaml ? (
+                          <ApiCandidateResultView content={selectedRun.resultYaml} />
+                        ) : (
+                          <div className="ai-task-run-result-popover-empty">当前记录暂无结果</div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                ) : selectedRun ? (
-                  <>
+                ),
+              },
+              {
+                key: 'edit',
+                label: '编辑候选',
+                children: (
+                  <div className="ai-task-review-modal-content single-column">
                     <TextCodeEditor
                       ariaLabel="候选结果 YAML"
                       value={candidateYaml}
                       onChange={setCandidateYaml}
                       readOnly={!canReviewSelectedRun}
-                      minHeight={360}
+                      language="yaml"
+                      foldable
+                      minHeight={520}
                     />
                     {updateRunResultMutation.error ? (
                       <Alert showIcon type="error" title={getErrorMessage(updateRunResultMutation.error)} />
-                    ) : null}
-                    {reviewRunMutation.error ? (
-                      <Alert showIcon type="error" title={getErrorMessage(reviewRunMutation.error)} />
                     ) : null}
                     {canReviewSelectedRun ? (
                       <Button
                         type="primary"
                         loading={updateRunResultMutation.isPending}
-                        disabled={candidateYaml === (selectedRun.resultYaml ?? '')}
+                        disabled={!candidateDirty || reviewRunMutation.isPending}
                         onClick={handleSaveCandidateResult}
                       >
                         保存候选结果
                       </Button>
                     ) : null}
-                  </>
-                ) : (
-                  <div className="ai-task-run-result-popover-empty">当前记录暂无 YAML 结果</div>
-                )}
-              </div>
-            </div>
-          </div>
-          <Form.Item label="审核备注" name="reviewComment">
-            <Input.TextArea rows={4} placeholder="请输入审核备注或拒绝原因" disabled={!canReviewSelectedRun} />
+                  </div>
+                ),
+              },
+            ]}
+          />
+          {reviewRunMutation.error ? <Alert showIcon type="error" title={getErrorMessage(reviewRunMutation.error)} /> : null}
+          <Form.Item label="审核备注" name="reviewComment" htmlFor="api-review-comment">
+            <Input.TextArea
+              id="api-review-comment"
+              rows={4}
+              placeholder="请输入审核备注或拒绝原因"
+              disabled={!canReviewSelectedRun}
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -1328,8 +1408,9 @@ export function ApiCaseGenerateTaskDetailPage() {
         open={Boolean(runResultModal)}
         onCancel={() => setRunResultModal(null)}
         footer={null}
-        width="min(1180px, calc(100vw - 56px))"
+        width="min(1620px, calc(100vw - 72px))"
         className="ai-task-run-result-modal api-task-run-result-modal"
+        wrapClassName="api-task-run-result-modal-wrap"
         centered
         destroyOnHidden
       >

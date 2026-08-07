@@ -1,19 +1,21 @@
-import { ArrowLeftOutlined, CaretRightOutlined, EditOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Descriptions, Empty, Input, Modal, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from 'antd'
+import { ArrowLeftOutlined, CaretRightOutlined, DownOutlined, EditOutlined, ReloadOutlined, RightOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Descriptions, Empty, Input, Modal, Popconfirm, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
 import { UiImportConflictModal } from '../components/UiImportConflictModal'
+import { ImportMigrationWarning } from '../components/ImportMigrationWarning'
 import { validateUiSourceArchive } from '../utils/uiSourceArchive'
 import type { UiCaseGenerateTaskRun, UiCaseGenerateTaskRunImportConflict } from '../types'
 import { parseUiCaseCandidate } from '../utils/uiCaseCandidate'
+import { isGenerateTaskRunImportable, renderGenerateTaskImportStatusTag, renderGenerateTaskReviewStatusTag } from '../utils/taskStatus'
 import { TextCodeEditor } from '@/shared/components/TextCodeEditor/TextCodeEditor'
 import { api, ApiError, listItems, type ListResponse } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
 import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId } from '@/utils/format'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 const activeRunStatuses = new Set(['pending', 'claimed', 'running'])
 
 function formatBytes(value?: number) {
@@ -26,24 +28,12 @@ function formatBytes(value?: number) {
 function statusTag(status?: string) {
   const colors: Record<string, string> = {
     pending: 'gold',
-    claimed: 'processing',
-    running: 'processing',
+    claimed: 'green',
+    running: 'green',
     success: 'success',
     failed: 'error',
   }
   return <Tag color={colors[status ?? ''] ?? 'default'}>{status ?? '-'}</Tag>
-}
-
-function reviewTag(status?: string) {
-  if (status === 'approved') return <Tag color="success">已批准</Tag>
-  if (status === 'rejected') return <Tag>已拒绝</Tag>
-  return <Tag color="gold">待审核</Tag>
-}
-
-function importTag(status?: string) {
-  if (status === 'imported') return <Tag color="success">已导入</Tag>
-  if (status === 'pending') return <Tag color="gold">待导入</Tag>
-  return <Tag>{status ?? '未知'}</Tag>
 }
 
 function archiveErrorMessage(error: unknown) {
@@ -63,14 +53,9 @@ function uiImportErrorMessage(error: unknown) {
     : messageText
 }
 
-function isUiRunImportable(run?: UiCaseGenerateTaskRun) {
-  return run?.status === 'success'
-    && run.reviewStatus === 'approved'
-    && run.importStatus === 'pending'
-}
-
 function CandidatePreview({ yaml }: { yaml: string }) {
   const parsed = useMemo(() => parseUiCaseCandidate(yaml), [yaml])
+  const [expandedCases, setExpandedCases] = useState<Set<string>>(() => new Set())
   if (parsed.error) {
     return (
       <Space orientation="vertical" style={{ width: '100%' }}>
@@ -82,35 +67,64 @@ function CandidatePreview({ yaml }: { yaml: string }) {
   if (parsed.cases.length === 0) return <Empty description="候选结果中没有可预览的用例" />
   return (
     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-      {parsed.cases.map((candidate, caseIndex) => (
-        <Card
-          key={`${candidate.name ?? 'case'}-${caseIndex}`}
-          size="small"
-          title={candidate.name || `未命名用例 ${caseIndex + 1}`}
-          extra={<Space>{candidate.enabled === undefined ? null : <Tag>{candidate.enabled ? '启用' : '停用'}</Tag>}<Text type="secondary">顺序 {candidate.orderNo ?? '-'}</Text></Space>}
-        >
-          {Object.keys(candidate.extraFields).length ? (
-            <Descriptions size="small" column={1} items={Object.entries(candidate.extraFields).map(([key, value]) => ({ key, label: key, children: JSON.stringify(value) }))} />
-          ) : null}
-          <Table
+      {parsed.cases.map((candidate, caseIndex) => {
+        const caseName = candidate.name || `未命名用例 ${caseIndex + 1}`
+        const caseKey = `${caseName}-${caseIndex}`
+        const expanded = expandedCases.has(caseKey)
+
+        return (
+          <Card
+            key={caseKey}
+            className="ui-task-candidate-case-card"
             size="small"
-            pagination={false}
-            rowKey="__rowKey"
-            dataSource={candidate.steps.map((step, index) => ({ ...step, __rowKey: index }))}
-            columns={[
-              { title: '顺序', dataIndex: 'orderNo', width: 70 },
-              { title: '步骤名称', dataIndex: 'stepName' },
-              { title: '关键字', dataIndex: 'keyword', width: 110 },
-              { title: '定位类型', dataIndex: 'locatorType', width: 110 },
-              { title: '定位值', dataIndex: 'locatorValue' },
-              { title: '操作值', dataIndex: 'operationValue' },
-              { title: '失败继续', dataIndex: 'continueOnFailure', render: (value) => value === undefined ? '-' : value ? '是' : '否' },
-              { title: '启用', dataIndex: 'enabled', render: (value) => value === undefined ? '-' : value ? '是' : '否' },
-              { title: '其他字段', dataIndex: 'extraFields', render: (value) => Object.keys(value ?? {}).length ? JSON.stringify(value) : '-' },
-            ]}
-          />
-        </Card>
-      ))}
+            title={(
+              <button
+                type="button"
+                className="ui-task-candidate-case-trigger"
+                aria-expanded={expanded}
+                aria-label={`${caseName}，${expanded ? '收起' : '展开'}`}
+                onClick={() => {
+                  setExpandedCases((current) => {
+                    const next = new Set(current)
+                    if (next.has(caseKey)) next.delete(caseKey)
+                    else next.add(caseKey)
+                    return next
+                  })
+                }}
+              >
+                {expanded ? <DownOutlined aria-hidden /> : <RightOutlined aria-hidden />}
+                <span>{caseName}</span>
+              </button>
+            )}
+            extra={<Space>{candidate.enabled === undefined ? null : <Tag>{candidate.enabled ? '启用' : '停用'}</Tag>}<Text type="secondary">顺序 {candidate.orderNo ?? '-'}</Text></Space>}
+          >
+            {expanded ? (
+              <>
+                {Object.keys(candidate.extraFields).length ? (
+                  <Descriptions size="small" column={1} items={Object.entries(candidate.extraFields).map(([key, value]) => ({ key, label: key, children: JSON.stringify(value) }))} />
+                ) : null}
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey="__rowKey"
+                  dataSource={candidate.steps.map((step, index) => ({ ...step, __rowKey: index }))}
+                  columns={[
+                    { title: '顺序', dataIndex: 'orderNo', width: 70 },
+                    { title: '步骤名称', dataIndex: 'stepName' },
+                    { title: '关键字', dataIndex: 'keyword', width: 110 },
+                    { title: '定位类型', dataIndex: 'locatorType', width: 110 },
+                    { title: '定位值', dataIndex: 'locatorValue' },
+                    { title: '操作值', dataIndex: 'operationValue' },
+                    { title: '失败继续', dataIndex: 'continueOnFailure', render: (value) => value === undefined ? '-' : value ? '是' : '否' },
+                    { title: '启用', dataIndex: 'enabled', render: (value) => value === undefined ? '-' : value ? '是' : '否' },
+                    { title: '其他字段', dataIndex: 'extraFields', render: (value) => Object.keys(value ?? {}).length ? JSON.stringify(value) : '-' },
+                  ]}
+                />
+              </>
+            ) : null}
+          </Card>
+        )
+      })}
     </Space>
   )
 }
@@ -143,6 +157,10 @@ export function UiCaseGenerateTaskDetailPage() {
     conflicts: UiCaseGenerateTaskRunImportConflict[]
   } | null>(null)
   const [importConflictsChanged, setImportConflictsChanged] = useState(false)
+  const [expandedSection, setExpandedSection] = useState<'sourceArchive' | 'instruction' | 'runHistory'>('runHistory')
+  const [candidateModalOpen, setCandidateModalOpen] = useState(false)
+  const [candidateCloseConfirmOpen, setCandidateCloseConfirmOpen] = useState(false)
+  const [candidateEditorVersion, setCandidateEditorVersion] = useState(0)
 
   const taskQuery = useQuery({
     queryKey: ['uiCaseGenerateTask', taskId],
@@ -203,13 +221,19 @@ export function UiCaseGenerateTaskDetailPage() {
   }, [selectedRun?.resultYaml, selectedRun?.runId])
 
   const hasActiveRun = runs.some((run) => activeRunStatuses.has(run.status ?? ''))
-  const canEditCandidate = selectedRun?.status === 'success' && (selectedRun.reviewStatus ?? 'pending') === 'pending'
+  const canEditCandidate = selectedRun?.status === 'success' && selectedRun.reviewStatus === 'pending'
   const hasUnsavedChanges = draftYaml !== savedYaml
   const canReview = canEditCandidate && Boolean(savedYaml.trim()) && !hasUnsavedChanges
-  const canImport = isUiRunImportable(selectedRun)
+  const canImport = isGenerateTaskRunImportable(selectedRun)
+  const candidateStats = useMemo(() => {
+    const parsed = parseUiCaseCandidate(draftYaml)
+    return {
+      cases: parsed.cases.length,
+      steps: parsed.cases.reduce((total, candidate) => total + candidate.steps.length, 0),
+    }
+  }, [draftYaml])
   const selectedSuiteId = selectedRunId ? selectedSuiteIds[selectedRunId] : undefined
-  const importedSuiteId = selectedRun?.importedTargets?.find((target) => target.targetType === 'ui_suite')?.targetId
-  const importedSuiteName = listItems(suitesQuery.data).find((suite) => suite.suiteId === importedSuiteId)?.name ?? importedSuiteId
+  const importedSuiteId = selectedRun?.importedTargets.find((target) => target.targetType === 'ui_suite')?.targetId
   const conflictSuiteAvailable = !importConflict
     || listItems(suitesQuery.data).some((suite) => suite.suiteId === importConflict.suiteId)
 
@@ -232,17 +256,17 @@ export function UiCaseGenerateTaskDetailPage() {
     setImportConflictsChanged(false)
   }, [])
 
-  function navigateBack() {
-    if (!hasUnsavedChanges) {
-      navigate('/ai-testing/tasks')
-      return
-    }
+    function navigateBack() {
+      if (!hasUnsavedChanges) {
+        navigate('/ai-testing?tab=tasks')
+        return
+      }
     Modal.confirm({
       title: '放弃未保存的候选改动？',
       content: '离开页面后，本次未保存的 YAML 修改将丢失。',
       okText: '放弃并离开',
       okButtonProps: { danger: true },
-      onOk: () => navigate('/ai-testing/tasks'),
+        onOk: () => navigate('/ai-testing?tab=tasks'),
     })
   }
 
@@ -259,6 +283,14 @@ export function UiCaseGenerateTaskDetailPage() {
       okButtonProps: { danger: true },
       onOk: () => setSelectedRunId(runId),
     })
+  }
+
+  function closeCandidateModal() {
+    if (!hasUnsavedChanges) {
+      setCandidateModalOpen(false)
+      return
+    }
+    setCandidateCloseConfirmOpen(true)
   }
 
   const uploadMutation = useMutation({
@@ -294,6 +326,13 @@ export function UiCaseGenerateTaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['uiCaseGenerateTaskRuns', taskId] })
       message.success('任务已加入执行队列')
     },
+  })
+  const deleteTaskMutation = useMutation({
+    mutationFn: () => api.deleteUiCaseGenerateTask(taskId),
+      onSuccess: () => {
+        message.success('任务已删除')
+        navigate('/ai-testing?tab=tasks')
+      },
   })
   const saveMutation = useMutation({
     mutationFn: () => api.updateUiCaseGenerateTaskRunResult(selectedRunId!, { resultYaml: draftYaml }),
@@ -353,7 +392,7 @@ export function UiCaseGenerateTaskDetailPage() {
       message.info('该运行已由其他操作完成导入')
       return
     }
-    if (isUiRunImportable(latestRun)) {
+    if (isGenerateTaskRunImportable(latestRun)) {
       setImportModalOpen(true)
     }
   }
@@ -389,99 +428,263 @@ export function UiCaseGenerateTaskDetailPage() {
 
   const archiveValidationError = validateUiSourceArchive(archiveFile)
   const replacementBlocked = hasActiveRun
+  const toggleSection = (section: 'sourceArchive' | 'instruction' | 'runHistory') => {
+    setExpandedSection((current) => current === section ? 'runHistory' : section)
+  }
 
   return (
     <div className="workbench-page ai-testing-page">
-      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={navigateBack}>返回任务列表</Button>
-            <div><Title level={3} style={{ margin: 0 }}>{task.name}</Title><Text type="secondary">UI 用例生成 · ZIP 源码包</Text></div>
-          </Space>
-          <Space>
-            <Button icon={<EditOutlined />} onClick={() => {
-              setEditName(task.name)
-              setEditInstruction(task.instruction)
-              setEditSprintId(task.sprintId)
-              setEditRequirementId(task.requirementId)
-              setEditModalOpen(true)
-            }}>编辑任务</Button>
-            <Tooltip title={!task.sourceArchive ? '请先上传源码 ZIP' : hasActiveRun ? '任务执行中，暂时不能重复运行' : '运行任务'}>
-              <span><Button type="primary" icon={<CaretRightOutlined />} disabled={!task.sourceArchive || hasActiveRun} onClick={() => setLlmModalOpen(true)}>运行任务</Button></span>
-            </Tooltip>
-            <Button icon={<ReloadOutlined />} onClick={() => { taskQuery.refetch(); runsQuery.refetch(); selectedRunQuery.refetch() }}>刷新</Button>
-          </Space>
-        </Space>
-
+      <div className="workbench-tabs">
         {runMutation.error ? <Alert showIcon type="error" title={getErrorMessage(runMutation.error)} /> : null}
-
-        <Card title="源码包" extra={<Tooltip title={replacementBlocked ? '存在执行中的运行，完成后才能替换源码包' : undefined}><span><Button icon={task.sourceArchive ? <EditOutlined /> : <UploadOutlined />} disabled={replacementBlocked} onClick={() => setArchiveModalOpen(true)}>{task.sourceArchive ? '替换源码包' : '上传源码包'}</Button></span></Tooltip>}>
-          {task.sourceArchive ? (
-            <Descriptions column={2} items={[
-              { key: 'filename', label: '文件名', children: task.sourceArchive.filename },
-              { key: 'size', label: '大小', children: formatBytes(task.sourceArchive.sizeBytes) },
-              { key: 'uploadedAt', label: '上传时间', children: formatTime(task.sourceArchive.uploadedAt) },
-              { key: 'sha256', label: 'SHA256', children: <Text code copyable>{task.sourceArchive.sha256}</Text> },
-            ]} />
-          ) : <Alert showIcon type="info" title="请先上传源码 ZIP" description="没有有效源码包时不能运行任务。" />}
-        </Card>
-
-        <Card title="运行记录">
-          {runsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(runsQuery.error)} /> : null}
-          <Table<UiCaseGenerateTaskRun>
-            size="small"
-            loading={runsQuery.isLoading}
-            pagination={false}
-            rowKey={(item) => item.runId ?? ''}
-            dataSource={runs}
-            rowSelection={{ type: 'radio', selectedRowKeys: selectedRunId ? [selectedRunId] : [], onChange: (keys) => selectRun(String(keys[0])) }}
-            onRow={(item) => ({ onClick: () => selectRun(item.runId) })}
-            columns={[
-              { title: '状态', dataIndex: 'status', render: (value) => statusTag(value) },
-              { title: '审核', dataIndex: 'reviewStatus', render: (value) => reviewTag(value) },
-              { title: '导入', dataIndex: 'importStatus', render: (value) => importTag(value) },
-              { title: '开始时间', dataIndex: 'startedAt', render: (value, item) => formatTime(value ?? item.createdAt) },
-              { title: '完成时间', dataIndex: 'finishedAt', render: (value) => formatTime(value) },
-              { title: '错误', dataIndex: 'errorMessage', render: (value) => value || '-' },
-            ]}
-          />
-        </Card>
-
         {selectedRunQuery.error ? (
-          <Card title="候选结果">
-            <Alert showIcon type="error" title={getErrorMessage(selectedRunQuery.error)} description="无法访问该运行详情，候选内容已隐藏。" />
+          <Alert
+            showIcon
+            type="error"
+            title={getErrorMessage(selectedRunQuery.error)}
+            description="无权访问该运行，候选内容已隐藏。"
+          />
+        ) : null}
+        <div className="ai-task-detail-layout ui-case-task-detail-layout">
+          <Card className="ai-task-detail-summary-card">
+            <div className="ai-task-detail-inline-meta">
+              <Button aria-label="返回生成任务" icon={<ArrowLeftOutlined aria-hidden />} onClick={navigateBack}>返回生成任务</Button>
+              {[
+                ['任务名称', task.name], ['迭代', task.sprintId || '-'], ['需求', 'UI 用例生成'],
+                ['来源类型', '源码包'], ['创建人', task.creatorUserId || '-'], ['更新时间', formatTime(task.updatedAt)],
+              ].map(([label, value]) => <div key={label} className="ai-task-detail-inline-item"><span className="ai-task-detail-inline-label">{label}</span><span className="ai-task-detail-inline-value">{value}</span></div>)}
+              <div className="ai-task-detail-inline-actions">
+                <Tooltip title={!task.sourceArchive ? '请先上传源码 ZIP' : hasActiveRun ? '任务执行中，暂时不能重复运行' : '运行任务'}><span><Button aria-label="运行任务" className="action-btn-run" icon={<CaretRightOutlined aria-hidden />} disabled={!task.sourceArchive || hasActiveRun} onClick={() => setLlmModalOpen(true)}>运行</Button></span></Tooltip>
+                <Button aria-label="编辑任务" className="action-btn-update" icon={<EditOutlined aria-hidden />} onClick={() => { setEditName(task.name); setEditInstruction(task.instruction); setEditSprintId(task.sprintId); setEditRequirementId(task.requirementId); setEditModalOpen(true) }}>编辑</Button>
+                <Popconfirm title="确认删除该任务？" onConfirm={() => deleteTaskMutation.mutate()}><Button danger className="action-btn-delete" loading={deleteTaskMutation.isPending}>删除</Button></Popconfirm>
+              </div>
+            </div>
           </Card>
+
+          <div className={`ai-task-detail-fold-group${expandedSection === 'runHistory' ? ' run-history-expanded' : ''}`}>
+            <Card className={`ai-task-detail-card ai-task-detail-fold-card${expandedSection === 'sourceArchive' ? ' expanded' : ' collapsed'}`} title={<button type="button" className="ai-task-detail-fold-trigger" onClick={() => toggleSection('sourceArchive')}>{expandedSection === 'sourceArchive' ? <DownOutlined /> : <RightOutlined />}<span>源码包</span></button>} extra={<Tooltip title={replacementBlocked ? '存在执行中的运行，完成后才能替换源码包' : undefined}><span><Button size="small" icon={task.sourceArchive ? <EditOutlined /> : <UploadOutlined />} disabled={replacementBlocked} onClick={() => setArchiveModalOpen(true)}>{task.sourceArchive ? '替换源码包' : '上传源码包'}</Button></span></Tooltip>}>
+              {task.sourceArchive ? <Descriptions column={2} items={[{ key: 'filename', label: '文件名', children: task.sourceArchive.filename }, { key: 'size', label: '大小', children: formatBytes(task.sourceArchive.sizeBytes) }, { key: 'uploadedAt', label: '上传时间', children: formatTime(task.sourceArchive.uploadedAt) }, { key: 'sha256', label: 'SHA256', children: <Text code copyable>{task.sourceArchive.sha256}</Text> }]} /> : <Alert showIcon type="info" title="请先上传源码 ZIP" description="没有有效源码包时不能运行任务。" />}
+            </Card>
+            <Card className={`ai-task-detail-card ai-task-detail-fold-card${expandedSection === 'instruction' ? ' expanded' : ' collapsed'}`} title={<button type="button" className="ai-task-detail-fold-trigger" onClick={() => toggleSection('instruction')}>{expandedSection === 'instruction' ? <DownOutlined /> : <RightOutlined />}<span>生成指令</span></button>}>
+              <pre className="ai-task-code-block">{task.instruction || '-'}</pre>
+            </Card>
+            <Card className={`ai-task-detail-card ai-task-detail-fold-card ai-task-detail-fold-card-history${expandedSection === 'runHistory' ? ' expanded' : ' collapsed'}`} title={<button type="button" className="ai-task-detail-fold-trigger" onClick={() => toggleSection('runHistory')}>{expandedSection === 'runHistory' ? <DownOutlined /> : <RightOutlined />}<span>运行记录</span></button>} extra={<div className="ai-task-run-history-toolbar"><span className="ai-task-run-history-auto-refresh">每 5 秒自动刷新</span><Button size="small" icon={<ReloadOutlined />} onClick={() => { runsQuery.refetch(); selectedRunQuery.refetch() }}>刷新</Button></div>}>
+              {runsQuery.error ? <Alert showIcon type="error" title={getErrorMessage(runsQuery.error)} /> : null}
+              {runsQuery.isLoading ? <Spin /> : runs.length ? <div className="ai-task-run-history-list single-list">{runs.map((record, index) => {
+                const active = record.runId === selectedRunId
+                const displayedRun = active && selectedRun ? selectedRun : record
+                const recordSucceeded = displayedRun.status === 'success'
+                const displayedImportedSuiteId = displayedRun.importedTargets.find((target) => target.targetType === 'ui_suite')?.targetId
+                return <div key={record.runId} className={`ai-task-run-history-record-row${active ? ' active' : ''}`} role="button" tabIndex={0} onClick={() => selectRun(record.runId)} onKeyDown={(event) => { if (event.key === 'Enter') selectRun(record.runId) }}>
+                  <div className="ai-task-run-history-record-main"><div className="ai-task-run-history-record-identity"><span className="ai-task-run-history-record-index">#{index + 1}</span><span className="ai-task-run-history-record-name">{record.runId}</span></div><div className="ai-task-run-history-record-meta"><span className="ai-task-run-history-record-status">{statusTag(displayedRun.status)}</span>{recordSucceeded ? <span className="ai-task-run-history-review-status">{renderGenerateTaskReviewStatusTag(displayedRun.reviewStatus)}</span> : null}{recordSucceeded ? <span className="ai-task-run-history-review-status">{renderGenerateTaskImportStatusTag(displayedRun.importStatus)}</span> : null}</div></div>
+                  <div className="ai-task-run-history-record-actions">
+                    <button
+                      type="button"
+                      className="ai-task-run-result-popover-btn"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        selectRun(record.runId)
+                        setCandidateModalOpen(true)
+                      }}
+                    >
+                      结果 YAML
+                    </button>
+                    {active && selectedRun ? (
+                      <>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setCandidateModalOpen(true)
+                          }}
+                        >
+                          {canEditCandidate ? '审核候选结果' : '查看候选结果'}
+                        </Button>
+                        {isGenerateTaskRunImportable(selectedRun) ? (
+                          <Button
+                            size="small"
+                            type="primary"
+                            aria-label="导入正式 UI 套件"
+                            disabled={importMutation.isPending}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              openImportModal()
+                            }}
+                          >
+                            导入 UI 用例集
+                          </Button>
+                        ) : null}
+                        {displayedRun.importStatus === 'imported' && displayedImportedSuiteId ? (
+                          <Button
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              navigate(`/ui-automation/suites/${displayedImportedSuiteId}`)
+                            }}
+                          >
+                            查看正式套件
+                          </Button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              })}</div> : <Empty description="当前还没有运行记录" />}
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      <Modal
+        className="ai-task-import-result-modal ui-task-candidate-result-modal"
+        title={canEditCandidate ? '审核候选结果' : 'UI 用例候选结果'}
+        open={candidateModalOpen}
+        onCancel={closeCandidateModal}
+        footer={[
+          <Button
+            key="close"
+            aria-label={canEditCandidate ? '取消' : '关闭'}
+            onClick={closeCandidateModal}
+          >
+            {canEditCandidate ? '取消' : '关闭'}
+          </Button>,
+          ...(canEditCandidate ? [
+            <Button
+              key="save"
+              disabled={!hasUnsavedChanges}
+              loading={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              保存候选结果
+            </Button>,
+            <Button
+              key="reject"
+              danger
+              ghost
+              disabled={!canReview}
+              loading={reviewMutation.isPending}
+              onClick={() => reviewMutation.mutate('reject')}
+            >
+              拒绝候选
+            </Button>,
+            <Button
+              key="approve"
+              type="primary"
+              disabled={!canReview}
+              loading={reviewMutation.isPending}
+              onClick={() => reviewMutation.mutate('approve')}
+            >
+              批准候选
+            </Button>,
+          ] : []),
+          ...(canImport ? [
+            <Button key="import" type="primary" aria-label="导入正式 UI 套件" onClick={openImportModal}>
+              导入正式 UI 套件
+            </Button>,
+          ] : []),
+          ...(selectedRun?.importStatus === 'imported' && importedSuiteId ? [
+            <Button key="view-suite" type="primary" onClick={() => navigate(`/ui-automation/suites/${importedSuiteId}`)}>
+              查看正式套件
+            </Button>,
+          ] : []),
+        ]}
+        destroyOnHidden
+        width="min(1620px, calc(100vw - 72px))"
+        centered
+      >
+        {selectedRunQuery.error ? (
+          <Alert showIcon type="error" title={getErrorMessage(selectedRunQuery.error)} />
         ) : selectedRun ? (
-          <Card title={<Space>候选结果 {statusTag(selectedRun.status)} {reviewTag(selectedRun.reviewStatus)} {selectedRun.reviewStatus === 'approved' ? importTag(selectedRun.importStatus) : null}</Space>}>
-            {saveMutation.error ? <Alert showIcon type="error" title={getErrorMessage(saveMutation.error)} style={{ marginBottom: 12 }} /> : null}
-            {reviewMutation.error ? <Alert showIcon type="error" title={getErrorMessage(reviewMutation.error)} style={{ marginBottom: 12 }} /> : null}
-            <Tabs items={[
-              { key: 'preview', label: '结构化预览', children: <CandidatePreview yaml={draftYaml} /> },
-              { key: 'yaml', label: '编辑 YAML', children: <TextCodeEditor value={draftYaml} onChange={setDraftYaml} readOnly={!canEditCandidate} ariaLabel="候选结果 YAML" minHeight={320} /> },
-            ]} />
-            <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
-              {hasUnsavedChanges ? <Alert showIcon type="warning" title="存在未保存改动，保存或还原后才能审核" /> : null}
-              <Space wrap>
-                <Button type="primary" disabled={!canEditCandidate || !hasUnsavedChanges} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>保存候选结果</Button>
-                <Button disabled={!hasUnsavedChanges} onClick={() => setDraftYaml(savedYaml)}>还原未保存改动</Button>
-                <Input aria-label="审核备注" placeholder="审核备注（可选）" value={reviewComment} disabled={!canEditCandidate} onChange={(event) => setReviewComment(event.target.value)} style={{ width: 260 }} />
-                <Button disabled={!canReview} loading={reviewMutation.isPending} onClick={() => reviewMutation.mutate('approve')}>批准候选</Button>
-                <Button danger disabled={!canReview} loading={reviewMutation.isPending} onClick={() => reviewMutation.mutate('reject')}>拒绝候选</Button>
-                {canImport ? <Button type="primary" disabled={importMutation.isPending} onClick={openImportModal}>导入正式 UI 套件</Button> : null}
-                {selectedRun.importStatus === 'imported' && importedSuiteId ? (
-                  <Button onClick={() => navigate(`/ui-automation/suites/${importedSuiteId}`)}>查看正式套件</Button>
-                ) : null}
-              </Space>
-              {selectedRun.importStatus === 'imported' ? (
-                <Descriptions size="small" column={2} items={[
-                  { key: 'importedAt', label: '导入时间', children: formatTime(selectedRun.importedAt ?? undefined) },
-                  { key: 'importedTarget', label: '目标套件', children: importedSuiteName ?? '-' },
-                ]} />
-              ) : null}
-            </Space>
-          </Card>
-        ) : <Card><Empty description="请选择一条运行记录查看候选结果" /></Card>}
-      </Space>
+          <div className="ai-task-import-result-form">
+            <ImportMigrationWarning importMigrationComplete={selectedRun.importMigrationComplete} />
+            <div className="ai-task-import-target-summary">
+              <div className="ai-task-import-target-copy">
+                <strong>候选结果</strong>
+                <span title={taskQuery.data?.requirementId ?? undefined}>
+                  关联需求：{taskQuery.data?.requirementId || '-'}
+                </span>
+              </div>
+              <div className="ai-task-import-target-stats">
+                <Tag color="blue">用例 {candidateStats.cases}</Tag>
+                <Tag color="purple">步骤 {candidateStats.steps}</Tag>
+              </div>
+            </div>
+            <Tabs
+              items={[
+                {
+                  key: 'preview',
+                  label: '结构化预览',
+                  children: (
+                    <div className="ai-task-review-modal-content ai-task-result-preview-modal-content ai-task-import-result-preview-content single-column">
+                      <div className="ai-task-review-modal-section">
+                        <div className="ai-task-review-modal-preview ai-task-import-result-preview ui-task-candidate-preview">
+                          <CandidatePreview yaml={draftYaml} />
+                        </div>
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'yaml',
+                  label: '编辑 YAML',
+                  children: (
+                    <div className="ai-task-review-modal-content single-column ui-task-candidate-yaml-pane">
+                      <TextCodeEditor
+                        key={candidateEditorVersion}
+                        value={draftYaml}
+                        onChange={setDraftYaml}
+                        readOnly={!canEditCandidate}
+                        ariaLabel="候选结果 YAML"
+                        language="yaml"
+                        foldable
+                        height="100%"
+                        minHeight={0}
+                      />
+                      {saveMutation.error ? (
+                        <Alert showIcon type="error" title={getErrorMessage(saveMutation.error)} />
+                      ) : null}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+            {reviewMutation.error ? (
+              <Alert showIcon type="error" title={getErrorMessage(reviewMutation.error)} />
+            ) : null}
+            <div className="ui-task-candidate-review-note">
+              <label htmlFor="ui-review-comment">审核备注</label>
+              <Input.TextArea
+                id="ui-review-comment"
+                aria-label="审核备注"
+                rows={3}
+                placeholder="请输入审核备注或拒绝原因"
+                value={reviewComment}
+                disabled={!canEditCandidate}
+                onChange={(event) => setReviewComment(event.target.value)}
+              />
+            </div>
+          </div>
+        ) : (
+          <Empty description="请选择一条运行记录查看候选结果" />
+        )}
+      </Modal>
+
+      <Modal
+        title="放弃未保存的候选改动？"
+        open={candidateCloseConfirmOpen}
+        okText="放弃修改"
+        cancelText="继续编辑"
+        okButtonProps={{ danger: true }}
+        onCancel={() => setCandidateCloseConfirmOpen(false)}
+        onOk={() => {
+          setDraftYaml(savedYaml)
+          setCandidateEditorVersion((current) => current + 1)
+          setCandidateCloseConfirmOpen(false)
+          setCandidateModalOpen(false)
+        }}
+      >
+        关闭弹窗后，本次未保存的 YAML 修改将丢失。
+      </Modal>
 
       <Modal
         title="导入正式 UI 套件"

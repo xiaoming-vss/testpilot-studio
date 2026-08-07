@@ -27,11 +27,73 @@ import {
 } from 'recharts'
 import dayjs, { type Dayjs } from 'dayjs'
 import { api, listItems, type SprintDailyMetricsSnapshot, type SprintDailyMetricsTestStats, type TestReportGenerateRun } from '@/services/api'
+import { useThemeStore } from '@/shared/store/theme.store'
 import { message } from '@/shared/utils/feedback'
 import { getErrorMessage, statusTag } from '@/utils/format'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
+
+const sprintChartThemes = {
+  light: {
+    grid: '#edf1f7',
+    axis: '#7b8395',
+    tooltipBackground: '#ffffff',
+    tooltipBorder: '#e5e7eb',
+    tooltipText: '#262626',
+    total: '#1677ff',
+    positive: '#52c41a',
+    pending: '#faad14',
+    success: '#13c2c2',
+    negative: '#ff4d4f',
+    empty: '#e8edf5',
+  },
+  dark: {
+    grid: 'rgba(139, 148, 158, 0.22)',
+    axis: '#8b949e',
+    tooltipBackground: '#161b22',
+    tooltipBorder: '#30363d',
+    tooltipText: '#f0f6fc',
+    total: '#58a6ff',
+    positive: '#7ee787',
+    pending: '#e3b341',
+    success: '#39c5cf',
+    negative: '#ff7b72',
+    empty: '#30363d',
+  },
+} as const
+
+type SprintChartTheme = (typeof sprintChartThemes)[keyof typeof sprintChartThemes]
+
+function useSprintChartTheme() {
+  const mode = useThemeStore((state) => state.mode)
+  return sprintChartThemes[mode]
+}
+
+function SprintChartTooltip({ chartTheme }: { chartTheme: SprintChartTheme }) {
+  return (
+    <RechartsTooltip
+      contentStyle={{
+        backgroundColor: chartTheme.tooltipBackground,
+        borderColor: chartTheme.tooltipBorder,
+        borderRadius: 8,
+        color: chartTheme.tooltipText,
+      }}
+      labelStyle={{ color: chartTheme.tooltipText, fontWeight: 600 }}
+    />
+  )
+}
+
+function SprintChartLegend({ chartTheme }: { chartTheme: SprintChartTheme }) {
+  return (
+    <Legend
+      verticalAlign="bottom"
+      height={32}
+      iconType="circle"
+      formatter={(value) => <span style={{ color: chartTheme.axis }}>{value}</span>}
+    />
+  )
+}
 
 function numberValue(...values: Array<number | undefined>) {
   return values.find((value) => typeof value === 'number' && Number.isFinite(value)) ?? 0
@@ -288,15 +350,16 @@ function SeverityLine({
 }
 
 function BugRiskOverviewCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
+  const chartTheme = useSprintChartTheme()
   const chartData = [
-    { name: '已解决', value: bug.resolved, color: '#52c41a' },
-    { name: '已关闭', value: bug.closed, color: '#1677ff' },
-    { name: '未解决', value: bug.unresolved, color: '#ff4d4f' },
+    { name: '已解决', value: bug.resolved, color: chartTheme.positive },
+    { name: '已关闭', value: bug.closed, color: chartTheme.total },
+    { name: '未解决', value: bug.unresolved, color: chartTheme.negative },
   ].filter((item) => item.value > 0)
   const metricData = [
-    { name: '已解决', value: bug.resolved, color: '#52c41a' },
-    { name: '已关闭', value: bug.closed, color: '#1677ff' },
-    { name: '未解决', value: bug.unresolved, color: '#ff4d4f' },
+    { name: '已解决', value: bug.resolved, color: chartTheme.positive },
+    { name: '已关闭', value: bug.closed, color: chartTheme.total },
+    { name: '未解决', value: bug.unresolved, color: chartTheme.negative },
   ]
   const severityData = [
     { name: '致命', value: bug.fatal, color: '#ff4d4f' },
@@ -320,12 +383,12 @@ function BugRiskOverviewCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
             <div className="sprint-overview-mini-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={chartData.length ? chartData : [{ name: '暂无数据', value: 1, color: '#e8edf5' }]} dataKey="value" innerRadius="62%" outerRadius="86%" paddingAngle={4}>
-                    {(chartData.length ? chartData : [{ color: '#e8edf5' }]).map((item) => (
+                  <Pie data={chartData.length ? chartData : [{ name: '暂无数据', value: 1, color: chartTheme.empty }]} dataKey="value" innerRadius="62%" outerRadius="86%" paddingAngle={4}>
+                    {(chartData.length ? chartData : [{ color: chartTheme.empty }]).map((item) => (
                       <Cell key={item.color} fill={item.color} />
                     ))}
                   </Pie>
-                  <RechartsTooltip />
+                  <SprintChartTooltip chartTheme={chartTheme} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="sprint-overview-donut-center">{bug.total}</div>
@@ -356,6 +419,7 @@ function BugRiskOverviewCard({ bug }: { bug: NormalizedDailyMetrics['bug'] }) {
 type NormalizedDailyMetrics = ReturnType<typeof normalizeDailyMetrics>
 
 function TrendLineChart({ data }: { data: NormalizedDailyMetrics[] }) {
+  const chartTheme = useSprintChartTheme()
   const chartData = data.map((item) => ({
     date: dayjs(item.snapshotDate).isValid() ? dayjs(item.snapshotDate).format('MM-DD') : item.snapshotDate,
     total: item.totalCases,
@@ -369,16 +433,16 @@ function TrendLineChart({ data }: { data: NormalizedDailyMetrics[] }) {
     <div className="sprint-overview-chart-host">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} syncId="sprint-trend-history" margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
-          <CartesianGrid stroke="#edf1f7" vertical={false} />
-          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} />
-          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} allowDecimals={false} />
-          <RechartsTooltip />
-          <Legend verticalAlign="bottom" height={32} iconType="circle" />
-          <Line name="总数" type="monotone" dataKey="total" stroke="#1677ff" strokeWidth={2.4} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-          <Line name="已执行" type="monotone" dataKey="executed" stroke="#52c41a" strokeWidth={2.2} dot={{ r: 3 }} />
-          <Line name="未执行" type="monotone" dataKey="pending" stroke="#faad14" strokeWidth={2.2} dot={{ r: 3 }} />
-          <Line name="成功" type="monotone" dataKey="success" stroke="#13c2c2" strokeWidth={2.2} dot={{ r: 3 }} />
-          <Line name="失败" type="monotone" dataKey="failed" stroke="#ff4d4f" strokeWidth={2.2} dot={{ r: 3 }} />
+          <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axis, fontSize: 12 }} />
+          <YAxis axisLine={false} tickLine={false} tick={{ fill: chartTheme.axis, fontSize: 12 }} allowDecimals={false} />
+          <SprintChartTooltip chartTheme={chartTheme} />
+          <SprintChartLegend chartTheme={chartTheme} />
+          <Line name="总数" type="monotone" dataKey="total" stroke={chartTheme.total} strokeWidth={2.4} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+          <Line name="已执行" type="monotone" dataKey="executed" stroke={chartTheme.positive} strokeWidth={2.2} dot={{ r: 3 }} />
+          <Line name="未执行" type="monotone" dataKey="pending" stroke={chartTheme.pending} strokeWidth={2.2} dot={{ r: 3 }} />
+          <Line name="成功" type="monotone" dataKey="success" stroke={chartTheme.success} strokeWidth={2.2} dot={{ r: 3 }} />
+          <Line name="失败" type="monotone" dataKey="failed" stroke={chartTheme.negative} strokeWidth={2.2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -386,6 +450,7 @@ function TrendLineChart({ data }: { data: NormalizedDailyMetrics[] }) {
 }
 
 function TrendBarChart({ data }: { data: NormalizedDailyMetrics[] }) {
+  const chartTheme = useSprintChartTheme()
   const chartData = data.map((item) => ({
     date: dayjs(item.snapshotDate).isValid() ? dayjs(item.snapshotDate).format('MM-DD') : item.snapshotDate,
     total: item.bug.total,
@@ -398,15 +463,15 @@ function TrendBarChart({ data }: { data: NormalizedDailyMetrics[] }) {
     <div className="sprint-overview-chart-host">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} syncId="sprint-trend-history" margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
-          <CartesianGrid stroke="#edf1f7" vertical={false} />
-          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} />
-          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7b8395', fontSize: 12 }} allowDecimals={false} />
-          <RechartsTooltip />
-          <Legend verticalAlign="bottom" height={32} iconType="circle" />
-          <Line name="Bug 总数" type="monotone" dataKey="total" stroke="#1677ff" strokeWidth={2.4} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-          <Line name="已解决" type="monotone" dataKey="resolved" stroke="#52c41a" strokeWidth={2.2} dot={{ r: 3 }} />
-          <Line name="已关闭" type="monotone" dataKey="closed" stroke="#13c2c2" strokeWidth={2.2} dot={{ r: 3 }} />
-          <Line name="未解决" type="monotone" dataKey="unresolved" stroke="#ff4d4f" strokeWidth={2.2} dot={{ r: 3 }} />
+          <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: chartTheme.axis, fontSize: 12 }} />
+          <YAxis axisLine={false} tickLine={false} tick={{ fill: chartTheme.axis, fontSize: 12 }} allowDecimals={false} />
+          <SprintChartTooltip chartTheme={chartTheme} />
+          <SprintChartLegend chartTheme={chartTheme} />
+          <Line name="Bug 总数" type="monotone" dataKey="total" stroke={chartTheme.total} strokeWidth={2.4} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+          <Line name="已解决" type="monotone" dataKey="resolved" stroke={chartTheme.positive} strokeWidth={2.2} dot={{ r: 3 }} />
+          <Line name="已关闭" type="monotone" dataKey="closed" stroke={chartTheme.success} strokeWidth={2.2} dot={{ r: 3 }} />
+          <Line name="未解决" type="monotone" dataKey="unresolved" stroke={chartTheme.negative} strokeWidth={2.2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -424,7 +489,7 @@ function getRunStatusMeta(status?: TestReportGenerateRun['status']) {
   const meta: Record<string, { label: string; color: string }> = {
     pending: { label: '待执行', color: 'gold' },
     claimed: { label: '已领取', color: 'cyan' },
-    running: { label: '执行中', color: 'processing' },
+    running: { label: '执行中', color: 'green' },
     waiting_review: { label: '待审核', color: 'gold' },
     success: { label: '成功', color: 'success' },
     failed: { label: '失败', color: 'error' },

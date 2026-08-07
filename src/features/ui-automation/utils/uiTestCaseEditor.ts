@@ -2,7 +2,7 @@ import type { CreateUiTestCasePayload, UiTestCase } from '@/services/api'
 import { moveArrayItem } from '@/shared/utils/array'
 import { formatOptionalValue, prettyPrintValue } from '@/shared/utils/value'
 import { normalizeUiTestCaseId, pickCreatedAt } from '@/utils/format'
-import { usesUiStepComparator } from '../config/stepConfig'
+import { requiresUiStepLocator, usesUiStepComparator, usesUiStepOperation } from '../config/stepConfig'
 
 export const DRAFT_CASE_ID = '__draft_ui_test_case__'
 export const EMPTY_UI_TEST_CASES: UiTestCase[] = []
@@ -38,14 +38,21 @@ export function createDefaultUiTestCaseFormValues(): UiTestCaseFormValues {
 
 function normalizeStepValue(step: Partial<UiTestStepFormValue>, index: number): UiTestStepFormValue {
   const orderNo = typeof step.orderNo === 'number' && Number.isFinite(step.orderNo) ? step.orderNo : index + 1
+  const keyword = step.keyword ?? ''
+  const legacyOperationValue = ['wait_text', 'assert_text', 'assert_url'].includes(keyword)
+    ? step.expectValue
+    : keyword === 'assert_visible' && typeof step.timeoutMs === 'number'
+      ? String(step.timeoutMs)
+      : undefined
+  const operationValue = step.operationValue?.trim() ? step.operationValue : legacyOperationValue ?? step.operationValue ?? ''
 
   return {
     orderNo,
     stepName: step.stepName ?? '',
-    keyword: step.keyword ?? '',
+    keyword,
     locatorType: step.locatorType ?? '',
     locatorValue: step.locatorValue ?? '',
-    operationValue: step.operationValue ?? '',
+    operationValue,
     expectValue: step.expectValue ?? '',
     comparator: step.comparator ?? '',
     timeoutMs: typeof step.timeoutMs === 'number' && Number.isFinite(step.timeoutMs) ? step.timeoutMs : undefined,
@@ -55,11 +62,11 @@ function normalizeStepValue(step: Partial<UiTestStepFormValue>, index: number): 
   }
 }
 
-export function parseStepsJson(value?: string) {
+export function parseStepsJson(value?: UiTestCase['stepsJson']) {
   if (!value) return []
 
   try {
-    const parsed = JSON.parse(value) as unknown
+    const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value
     if (!Array.isArray(parsed)) return []
 
     return parsed
@@ -77,9 +84,8 @@ function hasMeaningfulStepContent(step: UiTestStepFormValue) {
       step.locatorType?.trim() ||
       step.locatorValue?.trim() ||
       step.operationValue?.trim() ||
-      step.expectValue?.trim() ||
       step.comparator?.trim() ||
-      step.description?.trim() ||
+      step.expectValue?.trim() ||
       step.timeoutMs,
   )
 }
@@ -92,15 +98,12 @@ export function serializeSteps(steps?: UiTestStepFormValue[]) {
       orderNo: index + 1,
       ...(step.stepName?.trim() ? { stepName: step.stepName.trim() } : {}),
       ...(step.keyword?.trim() ? { keyword: step.keyword.trim() } : {}),
-      ...(step.locatorType?.trim() ? { locatorType: step.locatorType.trim() } : {}),
-      ...(step.locatorValue?.trim() ? { locatorValue: step.locatorValue.trim() } : {}),
-      ...(step.operationValue?.trim() ? { operationValue: step.operationValue.trim() } : {}),
-      ...(step.expectValue?.trim() ? { expectValue: step.expectValue.trim() } : {}),
+      ...(requiresUiStepLocator(step.keyword?.trim()) && step.locatorType?.trim() ? { locatorType: step.locatorType.trim() } : {}),
+      ...(requiresUiStepLocator(step.keyword?.trim()) && step.locatorValue?.trim() ? { locatorValue: step.locatorValue.trim() } : {}),
+      ...(usesUiStepOperation(step.keyword?.trim()) && step.operationValue?.trim() ? { operationValue: step.operationValue.trim() } : {}),
       ...(usesUiStepComparator(step.keyword?.trim()) && step.comparator?.trim() ? { comparator: step.comparator.trim() } : {}),
-      ...(typeof step.timeoutMs === 'number' && Number.isFinite(step.timeoutMs) ? { timeoutMs: step.timeoutMs } : {}),
       continueOnFailure: Boolean(step.continueOnFailure),
       enabled: step.enabled ?? true,
-      ...(step.description?.trim() ? { description: step.description.trim() } : {}),
     }))
 
   return JSON.stringify(normalizedSteps)

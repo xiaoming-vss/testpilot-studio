@@ -38,7 +38,11 @@ export const uiAutomationApi = {
   getUiTestSuiteRuns: (suiteId: string) => request<ListResponse<UiTestSuiteRunSummary>>(`/v1/ui-test-suites/${suiteId}/runs`),
   getUiTestSuiteRun: (suiteRunId: string) => request<UiTestSuiteRunSummary>(`/v1/ui-test-suite-runs/${suiteRunId}`),
   getUiTestSuiteRunReport: (suiteRunId: string) =>
-    request<UiTestSuiteRunReport>(`/v1/ui-test-suite-runs/${suiteRunId}/report`),
+    request<UiTestSuiteRunReport>(
+      `/v1/ui-test-suite-runs/${suiteRunId}/report`,
+      {},
+      { normalizeListResponse: false },
+    ),
   getUiTestCases: (suiteId: string) => request<ListResponse<UiTestCase>>(`/v1/ui-test-suites/${suiteId}/cases`),
   importUiTestCases: (suiteId: string, file: Blob, filename = 'import.yaml') => {
     const formData = new FormData()

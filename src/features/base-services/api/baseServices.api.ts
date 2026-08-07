@@ -1,9 +1,13 @@
 import { request, type ListResponse } from '@/shared/api/request'
 import type {
   CreateLlmConnectionPayload,
+  CreateGitlabConnectionPayload,
   CreateZentaoBindingPayload,
   CreateZentaoConnectionPayload,
   LlmConnection,
+  GitlabConnection,
+  ReauthGitlabConnectionPayload,
+  UpdateGitlabConnectionPayload,
   UpdateLlmConnectionPayload,
   UpdateZentaoConnectionPayload,
   ZentaoBinding,
@@ -12,11 +16,11 @@ import type {
   ZentaoRemoteOption,
 } from '../types'
 
-function integrationPath(projectId: string, provider: 'llm' | 'zentao') {
+function integrationPath(projectId: string, provider: 'llm' | 'zentao' | 'gitlab') {
   return `/v1/projects/${encodeURIComponent(projectId)}/integrations/${provider}/connections`
 }
 
-function integrationConnectionPath(projectId: string, provider: 'llm' | 'zentao', connectionId: string) {
+function integrationConnectionPath(projectId: string, provider: 'llm' | 'zentao' | 'gitlab', connectionId: string) {
   return `${integrationPath(projectId, provider)}/${encodeURIComponent(connectionId)}`
 }
 
@@ -36,6 +40,29 @@ export const baseServicesApi = {
     }),
   deleteLlmConnection: (projectId: string, connectionId: string) =>
     request<Record<string, never>>(integrationConnectionPath(projectId, 'llm', connectionId), {
+      method: 'DELETE',
+    }),
+  getGitlabConnections: (projectId: string) =>
+    request<ListResponse<GitlabConnection>>(integrationPath(projectId, 'gitlab')),
+  getGitlabConnection: (projectId: string, connectionId: string) =>
+    request<GitlabConnection>(integrationConnectionPath(projectId, 'gitlab', connectionId)),
+  createGitlabConnection: (projectId: string, body: CreateGitlabConnectionPayload) =>
+    request<GitlabConnection>(integrationPath(projectId, 'gitlab'), {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateGitlabConnection: (projectId: string, connectionId: string, body: UpdateGitlabConnectionPayload) =>
+    request<GitlabConnection>(integrationConnectionPath(projectId, 'gitlab', connectionId), {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  reauthGitlabConnection: (projectId: string, connectionId: string, body?: ReauthGitlabConnectionPayload) =>
+    request<GitlabConnection>(integrationConnectionPath(projectId, 'gitlab', connectionId) + '/reauth', {
+      method: 'POST',
+      ...(body?.accessToken ? { body: JSON.stringify(body) } : {}),
+    }),
+  deleteGitlabConnection: (projectId: string, connectionId: string) =>
+    request<Record<string, never>>(integrationConnectionPath(projectId, 'gitlab', connectionId), {
       method: 'DELETE',
     }),
   getZentaoConnections: (projectId: string) => request<ListResponse<ZentaoConnection>>(integrationPath(projectId, 'zentao')),

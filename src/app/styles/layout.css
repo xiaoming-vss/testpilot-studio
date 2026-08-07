@@ -63,11 +63,23 @@
 
 :root[data-theme='dark'] .mtx-logo {
   color: #7aa7ff;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.24));
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.28));
+}
+
+:root[data-theme='dark'] .mtx-logo__plate-start {
+  stop-color: #252d39;
+}
+
+:root[data-theme='dark'] .mtx-logo__plate-end {
+  stop-color: #171d27;
 }
 
 :root[data-theme='dark'] .mtx-logo__plate {
-  stroke: rgba(148, 163, 184, 0.22);
+  stroke: rgba(148, 163, 184, 0.28);
+}
+
+:root[data-theme='dark'] .mtx-logo__model {
+  stroke: #7aa7ff;
 }
 
 :root[data-theme='dark'] .mtx-logo__test {

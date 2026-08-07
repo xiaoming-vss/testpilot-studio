@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, DeleteOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { Alert, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Progress, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -501,8 +501,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
       key: 'name',
       width: '30%',
       render: (name: FunctionTestSuite['name']) => (
-        <Space size={10} className="functional-suite-list-name">
-          <span className="functional-suite-list-status-dot" />
+        <Space size={0} className="functional-suite-list-name">
           <Tooltip title={name}>
             <Text ellipsis>{name}</Text>
           </Tooltip>
@@ -525,9 +524,15 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
       },
     },
     {
+      title: '创建时间',
+      key: 'createdAt',
+      width: 180,
+      render: (_, suite) => <Text type="secondary">{formatTime(pickCreatedAt(suite))}</Text>,
+    },
+    {
       title: '最近更新',
       key: 'updatedAt',
-      width: 190,
+      width: 180,
       render: (_, suite) => <Text type="secondary">{formatTime(pickUpdatedAt(suite))}</Text>,
     },
     {
@@ -538,7 +543,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
         const { suiteDescription } = getSuiteRowContext(suite)
         return (
           <Tooltip title={suiteDescription}>
-            <Text type="secondary" ellipsis>
+            <Text className="functional-suite-list-description" type="secondary" ellipsis>
               {suiteDescription}
             </Text>
           </Tooltip>
@@ -548,27 +553,17 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
     {
       title: '操作',
       key: 'actions',
-      width: 188,
+      width: 138,
       align: 'right',
       render: (_, suite) => {
         const { suiteId } = getSuiteRowContext(suite)
         return (
           <Space
-            size={6}
+            size={8}
             className="functional-suite-list-actions"
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Tooltip title="查看详情">
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-read"
-                icon={<EyeOutlined />}
-                aria-label="查看功能测试集"
-                onClick={() => handleOpenSuite(suite)}
-              />
-            </Tooltip>
             <Tooltip title="导入禅道">
               <Button
                 type="text"
@@ -579,7 +574,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
                 onClick={() => openZentaoImportModal(suite)}
               />
             </Tooltip>
-            <Tooltip title="编辑">
+            <Tooltip title="编辑测试集">
               <Button
                 type="text"
                 shape="circle"
@@ -590,7 +585,7 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
               />
             </Tooltip>
             <Popconfirm title="确认删除该功能测试集？" onConfirm={() => deleteSuiteMutation.mutate(suiteId)}>
-              <Tooltip title="删除">
+              <Tooltip title="删除测试集">
                 <Button
                   danger
                   type="text"
@@ -858,5 +853,3 @@ export function TestCasePage({ scope }: { scope?: TestCasePageScope }) {
     </div>
   )
 }
-
-

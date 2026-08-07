@@ -116,12 +116,16 @@ export type {
   RequirementUpdatePayload,
 } from '@/features/requirements/types'
 export type {
+  CreateGitlabConnectionPayload,
   CreateZentaoBindingPayload,
   CreateZentaoConnectionPayload,
+  GitlabConnection,
   IntegrationConnectionStatus,
   LlmConnection,
   CreateLlmConnectionPayload,
   UpdateLlmConnectionPayload,
+  ReauthGitlabConnectionPayload,
+  UpdateGitlabConnectionPayload,
   UpdateZentaoConnectionPayload,
   ZentaoBindingTargetType,
   ZentaoBinding,

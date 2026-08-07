@@ -1523,6 +1523,57 @@ body,
   color: rgba(10, 96, 190, 0.86) !important;
 }
 
+/* Semantic task-status palette. These selectors intentionally override the generic tag treatment above. */
+.app-shell.app-shell-macos .ant-tag.ant-tag-default {
+  border-color: rgba(89, 89, 89, 0.18) !important;
+  background: #fafafa !important;
+  color: #595959 !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-gold,
+.app-shell.app-shell-macos .ant-tag.ant-tag-warning {
+  border-color: rgba(173, 104, 0, 0.2) !important;
+  background: #fffbe6 !important;
+  color: #ad6800 !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-cyan {
+  border-color: rgba(8, 151, 156, 0.2) !important;
+  background: #e6fffb !important;
+  color: #08979c !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-purple {
+  border-color: rgba(109, 90, 158, 0.18) !important;
+  background: #f4f1fb !important;
+  color: #6d5a9e !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-green,
+.app-shell.app-shell-macos .ant-tag.ant-tag-processing {
+  border-color: rgba(61, 122, 87, 0.2) !important;
+  background: #edf7ef !important;
+  color: #3d7a57 !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-success {
+  border-color: rgba(37, 111, 75, 0.2) !important;
+  background: #e5f4eb !important;
+  color: #256f4b !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-error {
+  border-color: rgba(207, 19, 34, 0.2) !important;
+  background: #fff1f0 !important;
+  color: #cf1322 !important;
+}
+
+.app-shell.app-shell-macos .ant-tag.ant-tag-volcano {
+  border-color: rgba(212, 107, 8, 0.2) !important;
+  background: #fff7e6 !important;
+  color: #d46b08 !important;
+}
+
 .app-shell.app-shell-macos .sprint-card-actions .ant-btn,
 .app-shell.app-shell-macos .project-actions .ant-btn-text,
 .app-shell.app-shell-macos .project-actions .action-btn-read {
@@ -1598,17 +1649,20 @@ body,
 
 .app-shell.app-shell-macos .project-overview-page .workbench-board-switcher {
   width: fit-content;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none !important;
+}
+
+.app-shell.app-shell-macos .project-overview-page .workbench-board-switcher .ant-segmented {
   padding: 4px;
   border: 1px solid rgba(15, 23, 42, 0.055) !important;
   border-radius: 14px;
   background: rgba(248, 250, 252, 0.68) !important;
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76) !important;
-}
-
-.app-shell.app-shell-macos .project-overview-page .workbench-board-switcher .ant-segmented {
-  background: transparent !important;
 }
 
 .app-shell.app-shell-macos .project-overview-page .workbench-board-switcher .ant-segmented-item {
@@ -1627,9 +1681,7 @@ body,
   color: var(--project-overview-text) !important;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.94) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 6px 14px rgba(31, 41, 55, 0.06) !important;
+  box-shadow: none !important;
 }
 
 .app-shell.app-shell-macos .project-overview-page .workbench-board-panel {
@@ -1811,7 +1863,7 @@ body,
 .project-requirement-list-name .ant-typography {
   max-width: 100%;
   color: rgba(31, 41, 55, 0.88) !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 400 !important;
   line-height: 20px;
 }
@@ -2027,6 +2079,167 @@ body,
 :root[data-theme='dark'] .project-requirement-list-actions .ant-btn:hover {
   color: var(--github-dark-blue, #58a6ff);
   background: rgba(56, 139, 253, 0.16) !important;
+}
+
+/* Project requirement list: align with the shared flat-list visual language. */
+.project-overview-page .project-requirement-list-table .ant-table {
+  border-collapse: separate;
+}
+
+.project-overview-page .project-requirement-list-table .ant-table-thead {
+  overflow: hidden;
+  border-radius: 8px;
+  clip-path: inset(0 round 8px);
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table {
+  border-spacing: 0;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell,
+:root:not([data-theme='dark']) .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell {
+  height: 42px;
+  padding: 0 16px;
+  color: #7b8494 !important;
+  background: #f7f9fc !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid #e8ecf2 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell:first-child {
+  border-left: 0 !important;
+  border-start-start-radius: 8px !important;
+  border-end-start-radius: 8px !important;
+  border-top-left-radius: 8px !important;
+  border-bottom-left-radius: 8px !important;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell:last-child {
+  border-right: 0 !important;
+  border-start-end-radius: 8px !important;
+  border-end-end-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+  border-bottom-right-radius: 8px !important;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell::before {
+  display: none;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-tbody > tr > td,
+:root:not([data-theme='dark']) .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .ant-table-tbody > tr > td {
+  height: 48px;
+  padding: 8px 16px;
+  color: #697386 !important;
+  background: #fff !important;
+  border-bottom: 1px solid #edf0f5 !important;
+  box-shadow: none !important;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-tbody > tr:hover > td,
+:root:not([data-theme='dark']) .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .ant-table-tbody > tr:hover > td {
+  background: #f5f8ff !important;
+}
+
+:root[data-theme='dark'] .project-overview-page .project-requirement-list-table .ant-table {
+  border-spacing: 0;
+}
+
+:root[data-theme='dark'] .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell,
+:root[data-theme='dark'] .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell {
+  height: 42px;
+  padding: 0 16px;
+  color: rgba(203, 213, 225, 0.62) !important;
+  background: #1d2432 !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-theme='dark'] .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell:first-child {
+  border-left: 0 !important;
+  border-start-start-radius: 8px !important;
+  border-end-start-radius: 8px !important;
+  border-top-left-radius: 8px !important;
+  border-bottom-left-radius: 8px !important;
+}
+
+:root[data-theme='dark'] .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell:last-child {
+  border-right: 0 !important;
+  border-start-end-radius: 8px !important;
+  border-end-end-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+  border-bottom-right-radius: 8px !important;
+}
+
+:root[data-theme='dark'] .project-overview-page .project-requirement-list-table .ant-table-thead > tr > th.ant-table-cell::before {
+  display: none;
+}
+
+:root[data-theme='dark'] .project-overview-page .project-requirement-list-table .ant-table-tbody > tr > td,
+:root[data-theme='dark'] .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .ant-table-tbody > tr > td {
+  height: 48px;
+  padding: 8px 16px;
+  color: rgba(226, 232, 240, 0.7) !important;
+  background: #171d29 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.project-overview-page .project-requirement-list-status-dot {
+  display: none;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .project-requirement-list-name .ant-typography,
+:root:not([data-theme='dark']) .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .project-requirement-list-name .ant-typography {
+  color: #3f6fc6 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+:root:not([data-theme='dark']) .project-overview-page .project-requirement-list-table .ant-table-tbody > tr:hover .project-requirement-list-name .ant-typography {
+  color: #2859b3 !important;
+  text-decoration: underline;
+}
+
+.project-requirement-list-actions .project-requirement-primary-action.ant-btn {
+  height: 28px;
+  padding-inline: 12px;
+  border-color: #e1e6ee;
+  border-radius: 7px;
+  color: #667085;
+  background: #fff;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.project-requirement-list-actions .project-requirement-primary-action.ant-btn:hover {
+  border-color: #b8cdf6;
+  color: #3f6fc6;
+  background: #f7f9ff;
+}
+
+.project-requirement-list-actions .project-requirement-more-action.ant-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  color: #98a2b3;
+  background: transparent;
+}
+
+.project-requirement-list-actions .project-requirement-more-action.ant-btn:hover {
+  color: #3f6fc6;
+  background: #f0f4ff !important;
 }
 /* macOS simple-white button system for Project Overview, Testing, AI Testing, and Base Services. */
 .app-shell.app-shell-macos :is(
@@ -2759,7 +2972,7 @@ body,
 }
 
 :root[data-theme='dark'] .ant-drawer-content,
-:root[data-theme='dark'] .ant-modal-content {
+:root[data-theme='dark'] :is(.ant-modal-container, .ant-modal-content) {
   border-color: rgba(48, 54, 61, 0.86) !important;
   background: rgba(22, 27, 34, 0.92) !important;
   color: #f0f6fc !important;
@@ -3253,6 +3466,21 @@ body,
 .app-shell.app-shell-macos .project-overview-page .project-requirement-list-actions .ant-btn:not(.action-btn-delete):hover {
   color: rgba(72, 86, 150, 0.78) !important;
   background: rgba(255, 255, 255, 0.62) !important;
+}
+
+/* Requirement names use the same clickable-name treatment as task-list names. */
+:root[data-theme='dark'] .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .project-requirement-list-name .ant-typography {
+  color: #78aef2 !important;
+  font-weight: 500 !important;
+  line-height: 22px !important;
+  cursor: pointer;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+:root[data-theme='dark'] .app-shell.app-shell-macos .project-overview-page .project-requirement-list-table .ant-table-tbody > tr:hover .project-requirement-list-name .ant-typography {
+  color: #9bc4f5 !important;
+  text-decoration: underline;
 }
 .ui-import-conflict-comparison {
   display: grid;

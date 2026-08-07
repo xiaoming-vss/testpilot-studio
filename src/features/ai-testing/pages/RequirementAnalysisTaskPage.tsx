@@ -1,17 +1,18 @@
 import {
-  CaretRightOutlined,
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
+  MoreOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
 import {
   Alert,
   Button,
+  Dropdown,
   Empty,
   Form,
+  Modal,
   Pagination,
-  Popconfirm,
   Space,
   Table,
   Tag,
@@ -75,7 +76,7 @@ function normalizeTaskInstruction(instruction?: string) {
 }
 
 function renderLatestRunStatus(status?: RequirementAnalysisTaskRun['status']) {
-  if (!status) return <Tag>未运行</Tag>
+  if (!status) return <Tag className="ai-task-status-idle">未运行</Tag>
   const meta = getApiCaseGenerateTaskRunStatusMeta(status)
   return <Tag color={meta.color}>{meta.label}</Tag>
 }
@@ -383,7 +384,7 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
     {
       title: '操作',
       key: 'actions',
-      width: 178,
+      width: 138,
       align: 'right',
       render: (_, task) => {
         const { detailPath, runState, runnableTask, taskId } = getTaskRowContext(task)
@@ -394,54 +395,67 @@ export function RequirementAnalysisTaskPage({ embedded = false }: { embedded?: b
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Tooltip title={runState?.isLoading ? '运行记录加载中' : '运行任务'}>
+            <Tooltip title={runState?.isLoading ? '运行记录加载中' : undefined}>
               <span>
                 <Button
-                  type="text"
-                  shape="circle"
-                  className="action-btn-run"
-                  icon={<CaretRightOutlined />}
+                  size="small"
+                  autoInsertSpace={false}
+                  className="ai-task-run-button"
                   aria-label="运行任务"
                   disabled={!runnableTask}
                   onClick={() => handleRunTask(task)}
-                />
+                >
+                  运行
+                </Button>
               </span>
             </Tooltip>
-            <Tooltip title="查看详情">
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              classNames={{ root: 'ai-task-more-dropdown' }}
+              menu={{
+                items: [
+                  { key: 'view', icon: <EyeOutlined />, label: '查看详情' },
+                  { key: 'edit', icon: <EditOutlined />, label: '编辑任务' },
+                  { type: 'divider' },
+                  {
+                    key: 'delete',
+                    danger: true,
+                    icon: <DeleteOutlined />,
+                    label: '删除任务',
+                    disabled: deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId,
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'view') {
+                    navigate(detailPath)
+                    return
+                  }
+                  if (key === 'edit') {
+                    openEditDrawer(task)
+                    return
+                  }
+                  Modal.confirm({
+                    title: '确认删除该任务？',
+                    content: '删除后无法恢复，请谨慎操作。',
+                    okText: '删除',
+                    okButtonProps: { danger: true },
+                    cancelText: '取消',
+                    onOk: () => deleteTaskMutation.mutateAsync(taskId),
+                  })
+                },
+              }}
+            >
               <Button
                 type="text"
-                shape="circle"
-                className="action-btn-read"
-                icon={<EyeOutlined />}
-                aria-label="查看详情"
-                onClick={() => navigate(detailPath)}
+                size="small"
+                className="ai-task-more-button"
+                icon={<MoreOutlined />}
+                aria-label="更多操作"
+                loading={deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId}
+                onClick={(event) => event.stopPropagation()}
               />
-            </Tooltip>
-            <Tooltip title="编辑任务">
-              <span>
-                <Button
-                  type="text"
-                  shape="circle"
-                  className="action-btn-update"
-                  icon={<EditOutlined />}
-                  aria-label="编辑任务"
-                  onClick={() => openEditDrawer(task)}
-                />
-              </span>
-            </Tooltip>
-            <Popconfirm title="确认删除该任务？" onConfirm={() => deleteTaskMutation.mutate(taskId)}>
-              <Tooltip title="删除任务">
-                <Button
-                  danger
-                  type="text"
-                  shape="circle"
-                  className="action-btn-delete"
-                  icon={<DeleteOutlined />}
-                  aria-label="删除任务"
-                  loading={deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId}
-                />
-              </Tooltip>
-            </Popconfirm>
+            </Dropdown>
           </Space>
         )
       },

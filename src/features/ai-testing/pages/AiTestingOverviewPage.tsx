@@ -1,9 +1,8 @@
-import { AppstoreOutlined, FileSearchOutlined, RobotOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, RobotOutlined } from '@ant-design/icons'
 import { Alert } from 'antd'
 import { useMemo } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { AiSkillLibraryPage } from './AiSkillLibraryPage'
-import { RequirementAnalysisTaskPage } from './RequirementAnalysisTaskPage'
 import { UnifiedAiTestingPage } from './UnifiedAiTestingPage'
 import '@/features/ai-testing/styles/index.css'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
@@ -13,9 +12,9 @@ export function AiTestingOverviewPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { projectsQuery } = useActiveProject()
   const legacyTab = searchParams.get('tab')
-  const activeEntryKey = useMemo<'skills' | 'tasks' | 'analysis'>(() => {
+  const activeEntryKey = useMemo<'skills' | 'tasks'>(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'tasks' || tab === 'analysis') return tab
+    if (tab === 'tasks' || tab === 'analysis') return 'tasks'
     return 'skills'
   }, [searchParams])
 
@@ -24,20 +23,11 @@ export function AiTestingOverviewPage() {
   }
 
   const overviewItems = [
+    { key: 'tasks', title: '任务', icon: <AppstoreOutlined /> },
     {
       key: 'skills',
       title: 'Skill库',
       icon: <RobotOutlined />,
-    },
-    {
-      key: 'tasks',
-      title: '生成任务',
-      icon: <AppstoreOutlined />,
-    },
-    {
-      key: 'analysis',
-      title: '需求分析',
-      icon: <FileSearchOutlined />,
     },
   ] as const
 
@@ -49,7 +39,7 @@ export function AiTestingOverviewPage() {
 
       <section className="workbench-project-toolbar base-services-toolbar ai-testing-overview-toolbar">
         <div className="ai-testing-overview-switcher-row">
-          <div className="ai-testing-overview-tab-switcher" role="tablist" aria-label="AI测试模块切换">
+          <div className="ai-testing-overview-tab-switcher" role="tablist" aria-label="测试设计模块切换">
             {overviewItems.map((item) => {
               const active = item.key === activeEntryKey
 
@@ -75,13 +65,7 @@ export function AiTestingOverviewPage() {
         </div>
       </section>
 
-      {activeEntryKey === 'tasks' ? (
-        <UnifiedAiTestingPage embedded />
-      ) : activeEntryKey === 'analysis' ? (
-        <RequirementAnalysisTaskPage embedded />
-      ) : (
-        <AiSkillLibraryPage embedded />
-      )}
+      {activeEntryKey === 'tasks' ? <UnifiedAiTestingPage embedded /> : <AiSkillLibraryPage embedded />}
     </div>
   )
 }

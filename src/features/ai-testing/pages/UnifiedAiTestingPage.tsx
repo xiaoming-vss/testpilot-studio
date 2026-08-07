@@ -1,23 +1,23 @@
 import {
   ApiOutlined,
   BugOutlined,
-  CaretRightOutlined,
   CheckOutlined,
   DeleteOutlined,
   EditOutlined,
   ExperimentOutlined,
   EyeOutlined,
+  FileSearchOutlined,
+  MoreOutlined,
   PlusOutlined,
-  RightOutlined,
 } from '@ant-design/icons'
 import {
   Alert,
   Button,
+  Dropdown,
   Empty,
   Form,
   Modal,
   Pagination,
-  Popconfirm,
   Space,
   Table,
   Tag,
@@ -33,18 +33,20 @@ import { ApiCaseGenerateTaskDrawer, type ApiCaseGenerateTaskFormValues } from '.
 import { FunctionalCaseGenerateTaskDrawer, type FunctionalCaseGenerateTaskFormValues } from '../components/FunctionalCaseGenerateTaskDrawer'
 import { UiCaseGenerateTaskDrawer, type UiCaseGenerateTaskFormValues } from '../components/UiCaseGenerateTaskDrawer'
 import { LlmConnectionSelectModal } from '../components/LlmConnectionSelectModal'
-import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun, FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun, UiCaseGenerateTask, UiCaseGenerateTaskRun } from '../types'
+import { RequirementAnalysisTaskDrawer, type RequirementAnalysisTaskFormValues } from '../components/RequirementAnalysisTaskDrawer'
+import { RequirementAnalysisRunModal, type RequirementAnalysisRunFormValues } from '../components/RequirementAnalysisRunModal'
+import type { ApiCaseGenerateTask, ApiCaseGenerateTaskRun, FunctionalCaseGenerateTask, FunctionalCaseGenerateTaskRun, RequirementAnalysisTask, RequirementAnalysisTaskRun, UiCaseGenerateTask, UiCaseGenerateTaskRun } from '../types'
 import { getApiCaseGenerateTaskRunStatusMeta, isRunnableApiCaseGenerateTaskRun } from '../utils/taskStatus'
 import '@/features/ai-testing/styles/index.css'
 import { useActiveProject } from '@/features/projects/hooks/useActiveProject'
 import { hasRequirementDocument } from '@/features/requirements/utils/requirementDocument'
 import { api, listItems } from '@/services/api'
 import { message } from '@/shared/utils/feedback'
-import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickCreatedAt } from '@/utils/format'
+import { formatTime, getErrorMessage, normalizeRequirementId, normalizeSprintId, pickCreatedAt, pickUpdatedAt } from '@/utils/format'
 
 const { Text } = Typography
 
-type AiTaskKind = 'api' | 'functional' | 'ui'
+type AiTaskKind = 'api' | 'functional' | 'ui' | 'analysis'
 
 type UnifiedAiTask =
   | {
@@ -58,6 +60,10 @@ type UnifiedAiTask =
   | {
       kind: 'ui'
       task: UiCaseGenerateTask
+    }
+  | {
+      kind: 'analysis'
+      task: RequirementAnalysisTask
     }
 
 const createKindOptions: Array<{
@@ -85,6 +91,12 @@ const createKindOptions: Array<{
     description: '上传 ZIP 源码包生成可编辑、可审核的 UI 候选用例。',
     icon: <BugOutlined />,
   },
+  {
+    key: 'analysis',
+    title: '需求分析',
+    description: '分析需求中的场景、歧义和风险点。',
+    icon: <FileSearchOutlined />,
+  },
 ]
 
 function getTaskId(task: ApiCaseGenerateTask) {
@@ -99,10 +111,15 @@ function getUiTaskId(task: UiCaseGenerateTask) {
   return task.taskId ?? ''
 }
 
+function getRequirementAnalysisTaskId(task: RequirementAnalysisTask) {
+  return task.taskId ?? ''
+}
+
 function getUnifiedTaskKey(item: UnifiedAiTask) {
   if (item.kind === 'api') return `api:${getTaskId(item.task)}`
   if (item.kind === 'functional') return `functional:${getFunctionalTaskId(item.task)}`
-  return `ui:${getUiTaskId(item.task)}`
+  if (item.kind === 'ui') return `ui:${getUiTaskId(item.task)}`
+  return `analysis:${getRequirementAnalysisTaskId(item.task)}`
 }
 
 function getUnifiedTaskTime(item: UnifiedAiTask) {
@@ -117,12 +134,12 @@ function footerRange(total: number, page: number, pageSize: number) {
   return `显示第 ${start} 条 - 第 ${end} 条，共 ${total} 条`
 }
 
-function getRunSortTime(run: ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun | UiCaseGenerateTaskRun) {
+function getRunSortTime(run: ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun | UiCaseGenerateTaskRun | RequirementAnalysisTaskRun) {
   const time = new Date(run.createdAt || run.startedAt || run.updatedAt || '').getTime()
   return Number.isNaN(time) ? 0 : time
 }
 
-function getLatestRun<T extends ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun | UiCaseGenerateTaskRun>(runs?: T[]) {
+function getLatestRun<T extends ApiCaseGenerateTaskRun | FunctionalCaseGenerateTaskRun | UiCaseGenerateTaskRun | RequirementAnalysisTaskRun>(runs?: T[]) {
   return [...(runs ?? [])].sort((left, right) => getRunSortTime(right) - getRunSortTime(left))[0]
 }
 
@@ -131,19 +148,33 @@ function sourceTypeLabel(item: UnifiedAiTask) {
     return item.task.sourceType === 'swagger' ? 'Swagger导入' : 'OpenAPI导入'
   }
   if (item.kind === 'ui') return 'ZIP 源码包'
+  if (item.kind === 'analysis') return '需求文档'
   return '需求分析'
 }
 
 function taskKindTag(kind: AiTaskKind) {
-  if (kind === 'api') return <Tag color="blue">API测试</Tag>
-  if (kind === 'functional') return <Tag color="purple">功能测试</Tag>
-  return <Tag>UI测试</Tag>
+  if (kind === 'api') return <Tag className="ai-task-kind-tag ai-task-kind-api">API测试</Tag>
+  if (kind === 'functional') return <Tag className="ai-task-kind-tag ai-task-kind-functional">功能测试</Tag>
+  if (kind === 'analysis') return <Tag className="ai-task-kind-tag ai-task-kind-analysis">需求分析</Tag>
+  return <Tag className="ai-task-kind-tag ai-task-kind-ui">UI测试</Tag>
 }
 
 function renderLatestRunStatus(status?: ApiCaseGenerateTaskRun['status']) {
-  if (!status) return <Tag>未运行</Tag>
+  if (!status) {
+    return (
+      <Tag className="ai-task-status-tag ai-task-status-idle">
+        <span className="ai-task-status-indicator" />
+        未运行
+      </Tag>
+    )
+  }
   const meta = getApiCaseGenerateTaskRunStatusMeta(status)
-  return <Tag color={meta.color}>{meta.label}</Tag>
+  return (
+    <Tag className={`ai-task-status-tag ai-task-status-${meta.value}`}>
+      <span className="ai-task-status-indicator" />
+      {meta.label}
+    </Tag>
+  )
 }
 
 export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean }) {
@@ -164,11 +195,16 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   const [functionalCheckpointEnabled, setFunctionalCheckpointEnabled] = useState(false)
   const [uiDrawerOpen, setUiDrawerOpen] = useState(false)
   const [uiDrawerSprintId, setUiDrawerSprintId] = useState<string | undefined>(undefined)
+  const [analysisDrawerOpen, setAnalysisDrawerOpen] = useState(false)
+  const [editingAnalysisTask, setEditingAnalysisTask] = useState<RequirementAnalysisTask | null>(null)
+  const [analysisDrawerSprintId, setAnalysisDrawerSprintId] = useState<string | undefined>(undefined)
+  const [analysisRunTask, setAnalysisRunTask] = useState<RequirementAnalysisTask | null>(null)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [form] = Form.useForm<ApiCaseGenerateTaskFormValues>()
   const [functionalForm] = Form.useForm<FunctionalCaseGenerateTaskFormValues>()
   const [uiForm] = Form.useForm<UiCaseGenerateTaskFormValues>()
+  const [analysisForm] = Form.useForm<RequirementAnalysisTaskFormValues>()
 
   const tasksQuery = useQuery({
     queryKey: ['apiCaseGenerateTasks', activeProjectId],
@@ -183,6 +219,11 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   const uiTasksQuery = useQuery({
     queryKey: ['uiCaseGenerateTasks', activeProjectId],
     queryFn: () => api.getUiCaseGenerateTasks(activeProjectId!),
+    enabled: Boolean(activeProjectId),
+  })
+  const analysisTasksQuery = useQuery({
+    queryKey: ['requirementAnalysisTasks', activeProjectId],
+    queryFn: () => api.getRequirementAnalysisTasks(activeProjectId!),
     enabled: Boolean(activeProjectId),
   })
   const sprintsQuery = useQuery({
@@ -242,6 +283,13 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       })),
     [uiRequirementOptionsQuery.data],
   )
+  const analysisRequirementOptions = useMemo(
+    () =>
+      listItems(allRequirementsQuery.data)
+        .filter((requirement) => !analysisDrawerSprintId || requirement.sprintId === analysisDrawerSprintId)
+        .map((requirement) => ({ label: requirement.name, value: normalizeRequirementId(requirement) })),
+    [allRequirementsQuery.data, analysisDrawerSprintId],
+  )
   const sprintNameMap = useMemo(
     () => new Map(listItems(sprintsQuery.data).map((sprint) => [normalizeSprintId(sprint), sprint.name])),
     [sprintsQuery.data],
@@ -261,8 +309,9 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
         ...listItems(tasksQuery.data).map((task) => ({ kind: 'api' as const, task })),
         ...listItems(functionalTasksQuery.data).map((task) => ({ kind: 'functional' as const, task })),
         ...listItems(uiTasksQuery.data).map((task) => ({ kind: 'ui' as const, task })),
+        ...listItems(analysisTasksQuery.data).map((task) => ({ kind: 'analysis' as const, task })),
       ].sort((left, right) => getUnifiedTaskTime(right) - getUnifiedTaskTime(left)),
-    [functionalTasksQuery.data, tasksQuery.data, uiTasksQuery.data],
+    [analysisTasksQuery.data, functionalTasksQuery.data, tasksQuery.data, uiTasksQuery.data],
   )
   const pagedTasks = useMemo(
     () => unifiedTasks.slice((page - 1) * pageSize, page * pageSize),
@@ -281,6 +330,10 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
   )
   const pagedUiTasks = useMemo(
     () => pagedTasks.filter((item): item is Extract<UnifiedAiTask, { kind: 'ui' }> => item.kind === 'ui').map((item) => item.task),
+    [pagedTasks],
+  )
+  const pagedAnalysisTasks = useMemo(
+    () => pagedTasks.filter((item): item is Extract<UnifiedAiTask, { kind: 'analysis' }> => item.kind === 'analysis').map((item) => item.task),
     [pagedTasks],
   )
   const apiTaskRunQueries = useQueries({
@@ -309,6 +362,16 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       return {
         queryKey: ['uiCaseGenerateTaskRuns', taskId],
         queryFn: () => api.getUiCaseGenerateTaskRuns(taskId),
+        enabled: Boolean(taskId),
+      }
+    }),
+  })
+  const analysisTaskRunQueries = useQueries({
+    queries: pagedAnalysisTasks.map((task) => {
+      const taskId = getRequirementAnalysisTaskId(task)
+      return {
+        queryKey: ['requirementAnalysisTaskRuns', taskId],
+        queryFn: () => api.getRequirementAnalysisTaskRuns(taskId),
         enabled: Boolean(taskId),
       }
     }),
@@ -343,6 +406,16 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     ] as const)
     return new Map(entries)
   }, [pagedUiTasks, uiTaskRunQueries])
+  const latestAnalysisRunMap = useMemo(() => {
+    const entries = pagedAnalysisTasks.map((task, index) => [
+      getRequirementAnalysisTaskId(task),
+      {
+        isLoading: analysisTaskRunQueries[index]?.isLoading ?? false,
+        latestRun: getLatestRun(analysisTaskRunQueries[index]?.data),
+      },
+    ] as const)
+    return new Map(entries)
+  }, [analysisTaskRunQueries, pagedAnalysisTasks])
   const selectedCreateKindOption = useMemo(
     () => createKindOptions.find((option) => option.key === selectedCreateKind),
     [selectedCreateKind],
@@ -484,6 +557,41 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     },
   })
 
+  const createAnalysisTaskMutation = useMutation({
+    mutationFn: (values: RequirementAnalysisTaskFormValues) => api.createRequirementAnalysisTask(activeProjectId!, values),
+    onSuccess: () => {
+      message.success('需求分析任务已创建')
+      closeAnalysisDrawer()
+      queryClient.invalidateQueries({ queryKey: ['requirementAnalysisTasks', activeProjectId] })
+    },
+  })
+  const updateAnalysisTaskMutation = useMutation({
+    mutationFn: (values: RequirementAnalysisTaskFormValues) =>
+      api.updateRequirementAnalysisTask(getRequirementAnalysisTaskId(editingAnalysisTask!), values),
+    onSuccess: () => {
+      message.success('需求分析任务已更新')
+      closeAnalysisDrawer()
+      queryClient.invalidateQueries({ queryKey: ['requirementAnalysisTasks', activeProjectId] })
+    },
+  })
+  const deleteAnalysisTaskMutation = useMutation({
+    mutationFn: (taskId: string) => api.deleteRequirementAnalysisTask(taskId),
+    onSuccess: () => {
+      message.success('需求分析任务已删除')
+      queryClient.invalidateQueries({ queryKey: ['requirementAnalysisTasks', activeProjectId] })
+    },
+  })
+  const runAnalysisTaskMutation = useMutation({
+    mutationFn: ({ taskId, values }: { taskId: string; values: RequirementAnalysisRunFormValues }) =>
+      api.runRequirementAnalysisTask(taskId, { ...values, triggerType: 'manual', configJson: '{}' }),
+    onSuccess: (run) => {
+      message.success('需求分析任务已加入执行队列')
+      setAnalysisRunTask(null)
+      queryClient.invalidateQueries({ queryKey: ['requirementAnalysisTaskRuns', run.taskId] })
+      queryClient.invalidateQueries({ queryKey: ['requirementAnalysisTasks', activeProjectId] })
+    },
+  })
+
   function openCreateDrawer() {
     setEditingTask(null)
     const defaultSprintId = sprintOptions[0]?.value
@@ -571,6 +679,28 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     uiForm.resetFields()
   }
 
+  function openCreateAnalysisDrawer() {
+    setEditingAnalysisTask(null)
+    const defaultSprintId = sprintOptions[0]?.value
+    setAnalysisDrawerSprintId(defaultSprintId)
+    analysisForm.setFieldsValue({ name: '需求分析', sprintId: defaultSprintId, requirementId: undefined, instruction: '' })
+    setAnalysisDrawerOpen(true)
+  }
+
+  function openEditAnalysisDrawer(task: RequirementAnalysisTask) {
+    setEditingAnalysisTask(task)
+    setAnalysisDrawerSprintId(task.sprintId)
+    analysisForm.setFieldsValue({ name: task.name, sprintId: task.sprintId, requirementId: task.requirementId, instruction: task.instruction })
+    setAnalysisDrawerOpen(true)
+  }
+
+  function closeAnalysisDrawer() {
+    setAnalysisDrawerOpen(false)
+    setEditingAnalysisTask(null)
+    setAnalysisDrawerSprintId(undefined)
+    analysisForm.resetFields()
+  }
+
   function openCreateKindModal() {
     setSelectedCreateKind('api')
     setCreateKindModalOpen(true)
@@ -593,6 +723,11 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     if (selectedCreateKind === 'functional') {
       setCreateKindModalOpen(false)
       openCreateFunctionalDrawer()
+      return
+    }
+    if (selectedCreateKind === 'analysis') {
+      setCreateKindModalOpen(false)
+      openCreateAnalysisDrawer()
       return
     }
     setCreateKindModalOpen(false)
@@ -675,6 +810,15 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
     setUiLlmSelectTaskId(taskId)
   }
 
+  function handleRunAnalysisTask(task: RequirementAnalysisTask) {
+    const latestRun = latestAnalysisRunMap.get(getRequirementAnalysisTaskId(task))?.latestRun
+    if (!isRunnableApiCaseGenerateTaskRun(latestRun?.status)) {
+      message.warning('任务执行中，暂时不能重复运行')
+      return
+    }
+    setAnalysisRunTask(task)
+  }
+
   function getUnifiedTaskContext(item: UnifiedAiTask) {
     if (item.kind === 'api') {
       const task = item.task
@@ -701,6 +845,26 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       return { detailPath, latestRun, requirementName, runState, runnableTask, source: sourceTypeLabel(item), sprintName, taskId }
     }
 
+    if (item.kind === 'analysis') {
+      const task = item.task
+      const taskId = getRequirementAnalysisTaskId(task)
+      const runState = latestAnalysisRunMap.get(taskId)
+      const latestRun = runState?.latestRun
+      const runnableTask = !runState?.isLoading && isRunnableApiCaseGenerateTaskRun(latestRun?.status)
+      const sprintName = sprintNameMap.get(task.sprintId ?? '') ?? task.sprintId ?? '-'
+      const requirementName = requirementNameMap.get(task.requirementId ?? '') ?? task.requirementId ?? '-'
+      return {
+        detailPath: `/ai-testing/requirement-analysis-tasks/${taskId}`,
+        latestRun,
+        requirementName,
+        runState,
+        runnableTask,
+        source: sourceTypeLabel(item),
+        sprintName,
+        taskId,
+      }
+    }
+
     const task = item.task
     const taskId = getFunctionalTaskId(task)
     const runState = latestFunctionalRunMap.get(taskId)
@@ -719,27 +883,26 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       key: 'name',
       width: '25%',
       render: (_, item) => (
-        <Space size={10} className="ai-task-list-name">
-          <span className="ai-task-list-status-dot" />
+        <div className="ai-task-list-name">
           <Tooltip title={item.task.name || '未命名任务'}>
             <Text ellipsis>{item.task.name || '未命名任务'}</Text>
           </Tooltip>
-        </Space>
+        </div>
       ),
     },
     {
-      title: '任务类型/状态',
+      title: '任务类型',
+      key: 'kind',
+      width: 120,
+      render: (_, item) => <div className="ai-task-list-tags">{taskKindTag(item.kind)}</div>,
+    },
+    {
+      title: '状态',
       key: 'status',
-      width: 190,
-      render: (_, item) => {
-        const { latestRun } = getUnifiedTaskContext(item)
-        return (
-          <Space size={6} className="ai-task-list-tags">
-            {taskKindTag(item.kind)}
-            {renderLatestRunStatus(latestRun?.status)}
-          </Space>
-        )
-      },
+      width: 104,
+      render: (_, item) => (
+        <div className="ai-task-list-tags">{renderLatestRunStatus(getUnifiedTaskContext(item).latestRun?.status)}</div>
+      ),
     },
     {
       title: '所属迭代/需求',
@@ -769,25 +932,73 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       render: (_, item) => <Text type="secondary">{formatTime(pickCreatedAt(item.task))}</Text>,
     },
     {
-      title: '最近运行',
-      key: 'latestRun',
+      title: '更新时间',
+      key: 'updatedAt',
       width: 180,
-      render: (_, item) => {
-        const { latestRun, runState } = getUnifiedTaskContext(item)
-        if (runState?.isLoading) return <Text type="secondary">加载中...</Text>
-        const time = formatTime(latestRun?.startedAt || latestRun?.createdAt || latestRun?.updatedAt)
-        return <Text type="secondary">{time}</Text>
-      },
+      render: (_, item) => <Text type="secondary">{formatTime(pickUpdatedAt(item.task) || pickCreatedAt(item.task))}</Text>,
     },
     {
       title: '操作',
       key: 'actions',
-      width: 178,
+      width: 138,
       align: 'right',
       render: (_, item) => {
         const { detailPath, runState, runnableTask, taskId } = getUnifiedTaskContext(item)
         const isApiTask = item.kind === 'api'
         const isUiTask = item.kind === 'ui'
+        const isAnalysisTask = item.kind === 'analysis'
+        const runTask = () => {
+          if (isApiTask) {
+            handleRunTask(item.task)
+            return
+          }
+          if (isUiTask) {
+            handleRunUiTask(item.task)
+            return
+          }
+          if (isAnalysisTask) {
+            handleRunAnalysisTask(item.task)
+            return
+          }
+          handleRunFunctionalTask(item.task)
+        }
+        const editTask = () => {
+          if (isApiTask) {
+            openEditDrawer(item.task)
+            return
+          }
+          if (isUiTask) {
+            navigate(detailPath)
+            return
+          }
+          if (isAnalysisTask) {
+            openEditAnalysisDrawer(item.task)
+            return
+          }
+          openEditFunctionalDrawer(item.task)
+        }
+        const deleteTask = () => {
+          if (isApiTask) {
+            deleteTaskMutation.mutate(taskId)
+            return
+          }
+          if (isUiTask) {
+            deleteUiTaskMutation.mutate(taskId)
+            return
+          }
+          if (isAnalysisTask) {
+            deleteAnalysisTaskMutation.mutate(taskId)
+            return
+          }
+          deleteFunctionalTaskMutation.mutate(taskId)
+        }
+        const deleting = isApiTask
+          ? deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId
+          : isUiTask
+            ? deleteUiTaskMutation.isPending && deleteUiTaskMutation.variables === taskId
+            : isAnalysisTask
+              ? deleteAnalysisTaskMutation.isPending && deleteAnalysisTaskMutation.variables === taskId
+              : deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId
         return (
           <Space
             size={6}
@@ -795,93 +1006,61 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Tooltip title={runState?.isLoading ? '运行记录加载中' : '运行任务'}>
+            <Tooltip title={runState?.isLoading ? '运行记录加载中' : undefined}>
               <span>
                 <Button
-                  type="text"
-                  shape="circle"
-                  className="action-btn-run"
-                  icon={<CaretRightOutlined />}
+                  size="small"
+                  autoInsertSpace={false}
+                  className="ai-task-run-button"
                   aria-label="运行任务"
                   disabled={!runnableTask}
-                  onClick={() => {
-                    if (isApiTask) {
-                      handleRunTask(item.task)
-                      return
-                    }
-                    if (isUiTask) {
-                      handleRunUiTask(item.task)
-                      return
-                    }
-                    handleRunFunctionalTask(item.task)
-                  }}
-                />
+                  onClick={runTask}
+                >
+                  运行
+                </Button>
               </span>
             </Tooltip>
-            <Tooltip title="查看详情">
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-read"
-                icon={<EyeOutlined />}
-                aria-label="查看详情"
-                onClick={() => navigate(detailPath)}
-              />
-            </Tooltip>
-            <Tooltip title="编辑任务">
-              <span>
-                <Button
-                  type="text"
-                  shape="circle"
-                  className="action-btn-update"
-                  icon={<EditOutlined />}
-                  aria-label="编辑任务"
-                  onClick={() => {
-                    if (isApiTask) {
-                      openEditDrawer(item.task)
-                      return
-                    }
-                    if (isUiTask) {
-                      navigate(detailPath)
-                      return
-                    }
-                    openEditFunctionalDrawer(item.task)
-                  }}
-                />
-              </span>
-            </Tooltip>
-            <Popconfirm
-              title="确认删除该任务？"
-              onConfirm={() => {
-                if (isApiTask) {
-                  deleteTaskMutation.mutate(taskId)
-                  return
-                }
-                if (isUiTask) {
-                  deleteUiTaskMutation.mutate(taskId)
-                  return
-                }
-                deleteFunctionalTaskMutation.mutate(taskId)
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              classNames={{ root: 'ai-task-more-dropdown' }}
+              menu={{
+                items: [
+                  { key: 'view', icon: <EyeOutlined />, label: '查看详情' },
+                  { key: 'edit', icon: <EditOutlined />, label: '编辑任务' },
+                  { type: 'divider' },
+                  { key: 'delete', danger: true, icon: <DeleteOutlined />, label: '删除任务', disabled: deleting },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'view') {
+                    navigate(detailPath)
+                    return
+                  }
+                  if (key === 'edit') {
+                    editTask()
+                    return
+                  }
+                  Modal.confirm({
+                    title: '确认删除该任务？',
+                    content: '删除后无法恢复，请谨慎操作。',
+                    okText: '删除',
+                    okButtonProps: { danger: true },
+                    cancelText: '取消',
+                    onOk: deleteTask,
+                  })
+                },
               }}
             >
-              <Tooltip title="删除任务">
-                <Button
-                  danger
-                  type="text"
-                  shape="circle"
-                  className="action-btn-delete"
-                  icon={<DeleteOutlined />}
-                  aria-label="删除任务"
-                  loading={
-                    isApiTask
-                      ? deleteTaskMutation.isPending && deleteTaskMutation.variables === taskId
-                      : isUiTask
-                        ? deleteUiTaskMutation.isPending && deleteUiTaskMutation.variables === taskId
-                        : deleteFunctionalTaskMutation.isPending && deleteFunctionalTaskMutation.variables === taskId
-                  }
-                />
-              </Tooltip>
-            </Popconfirm>
+              <Button
+                type="text"
+                size="small"
+                className="ai-task-more-button"
+                icon={<MoreOutlined />}
+                aria-label="更多操作"
+                loading={deleting}
+                onClick={(event) => event.stopPropagation()}
+              />
+            </Dropdown>
           </Space>
         )
       },
@@ -893,7 +1072,7 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
       <div className="workbench-tabs">
         <section className="workbench-panel workbench-board-panel ai-testing-task-panel">
           <div className="panel-header ai-task-panel-header">
-            <Text strong>AI 用例生成任务</Text>
+            <Text strong>测试设计</Text>
             <Space wrap size={8} className="ai-task-panel-tools">
               <Button
                 type="primary"
@@ -913,19 +1092,20 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
             <Alert showIcon type="error" title={getErrorMessage(functionalTasksQuery.error)} style={{ margin: '12px 18px 0' }} />
           ) : null}
           {uiTasksQuery.error ? <Alert showIcon type="error" title={getErrorMessage(uiTasksQuery.error)} style={{ margin: '12px 18px 0' }} /> : null}
+          {analysisTasksQuery.error ? <Alert showIcon type="error" title={getErrorMessage(analysisTasksQuery.error)} style={{ margin: '12px 18px 0' }} /> : null}
 
           <div className="table-body-scroll ai-testing-card-scroll">
             {!activeProjectId ? (
               <div className="sprint-card-loading ai-testing-empty-shell">
                 <Empty description="请先选择项目" />
               </div>
-            ) : tasksQuery.isLoading || functionalTasksQuery.isLoading || uiTasksQuery.isLoading ? (
+            ) : tasksQuery.isLoading || functionalTasksQuery.isLoading || uiTasksQuery.isLoading || analysisTasksQuery.isLoading ? (
               <div className="sprint-card-loading ai-testing-empty-shell">
                 <Empty description="任务加载中..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
               </div>
             ) : unifiedTasks.length === 0 ? (
               <div className="ai-testing-empty-shell">
-                <Empty description="当前项目下暂无生成任务">
+                <Empty description="当前项目下暂无任务">
                   <Button type="primary" icon={<PlusOutlined />} onClick={openCreateKindModal}>
                     创建第一条任务
                   </Button>
@@ -1007,11 +1187,6 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
                     <CheckOutlined />
                   </span>
                 ) : null}
-                {!option.disabled && !selected ? (
-                  <span className="ai-task-kind-arrow" aria-hidden="true">
-                    <RightOutlined />
-                  </span>
-                ) : null}
               </button>
             )
           })}
@@ -1076,6 +1251,38 @@ export function UnifiedAiTestingPage({ embedded = false }: { embedded?: boolean 
         }}
         onClose={closeUiDrawer}
         onFinish={(values) => createUiTaskMutation.mutate(values)}
+      />
+
+      <RequirementAnalysisTaskDrawer
+        title={editingAnalysisTask ? '编辑需求分析任务' : '新建需求分析任务'}
+        open={analysisDrawerOpen}
+        form={analysisForm}
+        loading={createAnalysisTaskMutation.isPending || updateAnalysisTaskMutation.isPending}
+        error={createAnalysisTaskMutation.error ?? updateAnalysisTaskMutation.error}
+        sprintOptions={sprintOptions}
+        requirementOptions={analysisRequirementOptions}
+        onSprintChange={(value) => {
+          setAnalysisDrawerSprintId(value)
+          analysisForm.setFieldValue('requirementId', undefined)
+        }}
+        onClose={closeAnalysisDrawer}
+        onFinish={(values) => {
+          if (editingAnalysisTask) {
+            updateAnalysisTaskMutation.mutate({ ...values, sprintId: analysisDrawerSprintId })
+            return
+          }
+          createAnalysisTaskMutation.mutate({ ...values, sprintId: analysisDrawerSprintId })
+        }}
+      />
+
+      <RequirementAnalysisRunModal
+        open={Boolean(analysisRunTask)}
+        projectId={activeProjectId}
+        loading={runAnalysisTaskMutation.isPending}
+        onClose={() => setAnalysisRunTask(null)}
+        onConfirm={(values) => {
+          if (analysisRunTask) runAnalysisTaskMutation.mutate({ taskId: getRequirementAnalysisTaskId(analysisRunTask), values })
+        }}
       />
 
       <LlmConnectionSelectModal

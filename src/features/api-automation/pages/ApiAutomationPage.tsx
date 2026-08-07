@@ -1,4 +1,4 @@
-import { CaretRightOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import { CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Form, Pagination, Popconfirm, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,6 +16,7 @@ import {
   normalizeEnvironmentId,
   normalizeRequirementId,
   normalizeSprintId,
+  pickCreatedAt,
   pickUpdatedAt,
 } from '@/utils/format'
 import { buildApiCollectionUpdatePayload } from '@/utils/updatePayload'
@@ -294,12 +295,9 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
       key: 'name',
       width: '30%',
       render: (name: ApiCollection['name']) => (
-        <Space size={10} className="functional-suite-list-name">
-          <span className="functional-suite-list-status-dot" />
+        <Space size={0} className="functional-suite-list-name">
           <Tooltip title={name}>
-            <Text className="functional-suite-list-name-text" ellipsis>
-              {name}
-            </Text>
+            <Text ellipsis>{name}</Text>
           </Tooltip>
         </Space>
       ),
@@ -320,9 +318,15 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
       },
     },
     {
+      title: '创建时间',
+      key: 'createdAt',
+      width: 180,
+      render: (_, collection) => <Text type="secondary">{formatTime(pickCreatedAt(collection))}</Text>,
+    },
+    {
       title: '最近更新',
       key: 'updatedAt',
-      width: 190,
+      width: 180,
       render: (_, collection) => <Text type="secondary">{formatTime(pickUpdatedAt(collection))}</Text>,
     },
     {
@@ -343,27 +347,17 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
     {
       title: '操作',
       key: 'actions',
-      width: 188,
+      width: 138,
       align: 'right',
       render: (_, collection) => {
         const { collectionId } = getCollectionRowContext(collection)
         return (
           <Space
-            size={6}
+            size={8}
             className="functional-suite-list-actions"
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Tooltip title="查看详情">
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-read"
-                icon={<EyeOutlined />}
-                aria-label="查看API测试集"
-                onClick={() => openCollectionDetail(collectionId)}
-              />
-            </Tooltip>
             <Tooltip title={resolvedEnvironmentId ? '运行API测试集' : '请先选择环境'}>
               <Button
                 type="text"
@@ -376,7 +370,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
                 onClick={(event) => handleRunCollection(event, collectionId)}
               />
             </Tooltip>
-            <Tooltip title="编辑">
+            <Tooltip title="编辑测试集">
               <Button
                 type="text"
                 shape="circle"
@@ -387,7 +381,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
               />
             </Tooltip>
             <Popconfirm title="确认删除该API测试集？" onConfirm={() => deleteCollectionMutation.mutate(collectionId)}>
-              <Tooltip title="删除">
+              <Tooltip title="删除测试集">
                 <Button
                   danger
                   type="text"
@@ -395,7 +389,7 @@ export function ApiAutomationPage({ scope }: { scope?: ApiAutomationPageScope })
                   className="action-btn-delete"
                   icon={<DeleteOutlined />}
                   aria-label="删除API测试集"
-                  loading={deleteCollectionMutation.isPending}
+                  loading={deleteCollectionMutation.isPending && deleteCollectionMutation.variables === collectionId}
                 />
               </Tooltip>
             </Popconfirm>

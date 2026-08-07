@@ -50,9 +50,9 @@ export function getExecutionStatusMeta(status?: string) {
     case 'pending':
       return { color: 'default' as const, label: '等待中' }
     case 'claimed':
-      return { color: 'processing' as const, label: '准备中' }
+      return { color: 'green' as const, label: '准备中' }
     case 'running':
-      return { color: 'processing' as const, label: '运行中' }
+      return { color: 'green' as const, label: '运行中' }
     case 'success':
       return { color: 'success' as const, label: '成功' }
     case 'failed':

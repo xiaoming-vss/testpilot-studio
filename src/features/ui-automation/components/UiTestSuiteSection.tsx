@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, CaretRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Form, Pagination, Popconfirm, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -248,12 +248,9 @@ export const UiTestSuiteSection = forwardRef<
       key: 'name',
       width: '30%',
       render: (name: UiTestSuite['name']) => (
-        <Space size={10} className="functional-suite-list-name">
-          <span className="functional-suite-list-status-dot" />
+        <Space size={0} className="functional-suite-list-name">
           <Tooltip title={name}>
-            <Text className="functional-suite-list-name-text" ellipsis>
-              {name}
-            </Text>
+            <Text ellipsis>{name}</Text>
           </Tooltip>
         </Space>
       ),
@@ -274,9 +271,15 @@ export const UiTestSuiteSection = forwardRef<
       },
     },
     {
+      title: '创建时间',
+      key: 'createdAt',
+      width: 180,
+      render: (_, suite) => <Text type="secondary">{formatTime(pickCreatedAt(suite))}</Text>,
+    },
+    {
       title: '最近更新',
       key: 'updatedAt',
-      width: 190,
+      width: 180,
       render: (_, suite) => <Text type="secondary">{formatTime(pickUpdatedAt(suite))}</Text>,
     },
     {
@@ -287,7 +290,7 @@ export const UiTestSuiteSection = forwardRef<
         const { suiteRunConfig } = getSuiteRowContext(suite)
         return (
           <Tooltip title={suiteRunConfig}>
-            <Text type="secondary" ellipsis>
+            <Text className="functional-suite-list-meta" type="secondary" ellipsis>
               {suiteRunConfig}
             </Text>
           </Tooltip>
@@ -312,39 +315,29 @@ export const UiTestSuiteSection = forwardRef<
     {
       title: '操作',
       key: 'actions',
-      width: 188,
+      width: 138,
       align: 'right',
       render: (_, suite) => {
         const { suiteId } = getSuiteRowContext(suite)
         return (
           <Space
-            size={6}
+            size={8}
             className="functional-suite-list-actions"
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <Tooltip title="查看详情">
-              <Button
-                type="text"
-                shape="circle"
-                className="action-btn-read"
-                icon={<EyeOutlined />}
-                aria-label="查看 UI测试集"
-                onClick={() => openSuiteCasePage(suiteId)}
-              />
-            </Tooltip>
             <Tooltip title="运行测试集">
               <Button
                 type="text"
                 shape="circle"
                 className="action-btn-read"
-                icon={<PlayCircleOutlined />}
+                icon={<CaretRightOutlined />}
                 aria-label="运行 UI测试集"
                 loading={runSuiteMutation.isPending && runSuiteMutation.variables === suite}
                 onClick={() => runSuiteMutation.mutate(suite)}
               />
             </Tooltip>
-            <Tooltip title="编辑">
+            <Tooltip title="编辑测试集">
               <Button
                 type="text"
                 shape="circle"
@@ -355,7 +348,7 @@ export const UiTestSuiteSection = forwardRef<
               />
             </Tooltip>
             <Popconfirm title="确认删除该 UI测试集？" onConfirm={() => deleteSuiteMutation.mutate(suiteId)}>
-              <Tooltip title="删除">
+              <Tooltip title="删除测试集">
                 <Button
                   danger
                   type="text"
@@ -363,7 +356,7 @@ export const UiTestSuiteSection = forwardRef<
                   className="action-btn-delete"
                   icon={<DeleteOutlined />}
                   aria-label="删除 UI测试集"
-                  loading={deleteSuiteMutation.isPending}
+                  loading={deleteSuiteMutation.isPending && deleteSuiteMutation.variables === suiteId}
                 />
               </Tooltip>
             </Popconfirm>

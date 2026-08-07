@@ -142,6 +142,7 @@ export function ApiCaseGenerateTaskDrawer({
               <TextCodeEditor
                 value={sourceContentValue ?? ''}
                 onChange={(value) => form.setFieldValue('sourceContent', value)}
+                language="auto"
                 height={300}
                 minHeight={300}
               />

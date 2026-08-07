@@ -420,7 +420,7 @@
 
 .ui-test-case-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
   padding-top: 2px;
 }
@@ -445,45 +445,40 @@
 .ui-test-case-toolbar-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex: 0 0 auto;
 }
 
-.ui-test-case-inline-stat {
-  min-width: 110px;
-  border: 1px solid var(--tp-border-soft);
-  border-radius: 10px;
-  background: #fff;
-  padding: 8px 12px;
-}
-
-.ui-test-case-inline-stat .ant-form-item {
-  margin-bottom: 0;
-}
-
-.ui-test-case-inline-stat.switch {
+.ui-test-case-secondary-meta {
+  min-height: 22px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.ui-test-case-inline-stat.switch .ui-test-case-inline-label,
-.ui-test-case-inline-stat.info .ui-test-case-inline-label {
-  margin-bottom: 0;
-}
-
-.ui-test-case-inline-stat.info {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-}
-
-.ui-test-case-inline-stat.info strong {
-  color: var(--tp-text);
-  font-size: 13px;
+  gap: 9px;
+  color: var(--tp-text-secondary);
+  font-size: 12px;
   line-height: 18px;
+}
+
+.ui-test-case-enabled-meta,
+.ui-test-case-step-count-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ui-test-case-enabled-meta .ant-form-item {
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+.ui-test-case-meta-separator {
+  color: var(--tp-text-muted);
+}
+
+.ui-test-case-step-count-meta .anticon {
+  color: var(--tp-text-muted);
+  font-size: 12px;
 }
 
 .ui-test-case-step-section {
@@ -984,17 +979,28 @@
   min-height: auto;
 }
 
-.ui-test-case-step-description-item {
-  margin-bottom: 0;
-}
-
-.ui-test-case-step-description-item .ant-input-textarea textarea {
-  min-height: 72px;
-}
-
 .ui-test-case-step-add-row {
   display: flex;
   justify-content: flex-start;
+}
+
+.ui-test-run-step-screenshot {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin-top: 10px;
+}
+
+.ui-test-run-step-screenshot .ant-image {
+  max-width: min(480px, 100%);
+}
+
+.ui-test-run-step-screenshot .ant-image-img {
+  display: block;
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--tp-border-soft);
+  border-radius: 8px;
 }
 
 .ui-test-run-inline-actions {

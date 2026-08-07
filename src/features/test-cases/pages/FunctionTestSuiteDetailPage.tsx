@@ -900,7 +900,7 @@ export function FunctionTestSuiteDetailPage() {
         ) : (
           <div className="api-case-import-editor">
             <div className="api-case-import-hint">直接粘贴 JSON 内容，提交时前端会将文本包装成 `.json` 文件上传。</div>
-            <TextCodeEditor value={importJsonText} onChange={setImportJsonText} minHeight={280} />
+            <TextCodeEditor value={importJsonText} onChange={setImportJsonText} language="json" minHeight={280} />
           </div>
         )}
       </div>

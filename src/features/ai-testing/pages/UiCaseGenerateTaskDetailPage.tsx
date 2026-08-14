@@ -244,7 +244,7 @@ export function UiCaseGenerateTaskDetailPage() {
       const items = listItems(current).map((item) => (
         item.runId === updatedRun.runId ? updatedRun : item
       )) as ListResponse<UiCaseGenerateTaskRun>
-      items.items = items
+      items.items = items.slice()
       items.total = current.total
       return items
     })

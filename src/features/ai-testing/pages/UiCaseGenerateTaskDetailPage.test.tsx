@@ -89,6 +89,7 @@ function renderPage() {
       </QueryClientProvider>
     </ThemeProvider>,
   )
+  return queryClient
 }
 
 afterEach(() => {
@@ -279,7 +280,7 @@ describe('UI 用例生成任务详情', () => {
       }
     })
     const user = userEvent.setup()
-    renderPage()
+    const queryClient = renderPage()
 
     await user.click(await screen.findByRole('button', { name: '导入正式 UI 套件' }))
     const suiteSearch = await screen.findByLabelText('目标 UI 套件')
@@ -292,6 +293,12 @@ describe('UI 用例生成任务详情', () => {
     await waitFor(() => expect(importBody).toEqual({ suiteId: 'suite-1', confirmOverwrite: false }))
     expect((await screen.findAllByText('已导入')).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: '导入正式 UI 套件' })).not.toBeInTheDocument()
+    const cachedRuns = queryClient.getQueryData<{ items: typeof run[]; total: number }>([
+      'uiCaseGenerateTaskRuns',
+      'ui-task-1',
+    ])
+    expect(cachedRuns?.items).not.toBe(cachedRuns)
+    expect(cachedRuns?.items[0]).toMatchObject({ runId: 'ui-run-1', importStatus: 'imported' })
     await user.click(screen.getByRole('button', { name: '查看正式套件' }))
     expect(await screen.findByText('正式 UI 套件详情')).toBeInTheDocument()
   })

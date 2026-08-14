@@ -38,6 +38,32 @@ npm run build
 npm run verify
 ```
 
+## Docker 运行
+
+构建生产镜像：
+
+```bash
+docker build -t testpilot-studio .
+```
+
+启动容器，并将 API 请求代理到宿主机的 `8080` 端口：
+
+```bash
+docker run --rm -p 8081:80 \
+  -e API_UPSTREAM=http://host.docker.internal:8080 \
+  testpilot-studio
+```
+
+浏览器访问 `http://localhost:8081`。在 Docker Compose 或同一容器网络中，`API_UPSTREAM` 可改为后端服务名，例如 `http://api:8080`。
+
+默认使用同源代理，前端构建产物不会固化后端地址。如果浏览器必须直接访问独立 API 域名，可在构建时传入：
+
+```bash
+docker build \
+  --build-arg VITE_API_BASE_URL=https://api.example.com \
+  -t testpilot-studio .
+```
+
 说明：
 
 - `npm run build` 会先执行 TypeScript 构建，再执行 Vite 构建。
